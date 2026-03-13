@@ -1,0 +1,248 @@
+package com.alexbar3073.bluetoothcar.ui.viewmodels
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.alexbar3073.bluetoothcar.core.AppController
+import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
+import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
+import com.alexbar3073.bluetoothcar.data.logging.AppLogger
+import com.alexbar3073.bluetoothcar.data.models.AppSettings
+import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
+import com.alexbar3073.bluetoothcar.data.models.CarData
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+
+/**
+ * ФАЙЛ: ui/viewmodels/SharedViewModel.kt
+ * МЕСТОНАХОЖДЕНИЕ: ui/viewmodels/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * ViewModel для UI согласно MVVM. Является ТОЛЬКО посредником между UI и AppController.
+ * НЕ содержит бизнес-логики, только передачу данных для отображения.
+ *
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Получает ВСЕ данные исключительно из AppController
+ * 2. Передает ВСЕ команды исключительно в AppController
+ * 3. Преобразует данные для удобства UI (минимальные преобразования)
+ * 4. Предоставляет потоки данных для Compose UI
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП:
+ * - Все данные получает из AppController
+ * - Все команды передает в AppController
+ * - Не имеет собственной бизнес-логики
+ * - ТОЛЬКО методы, которые есть в AppController
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * 1. Получает данные от: AppController.kt
+ * 2. Предоставляет данные для: HomeScreen.kt, SettingsScreen.kt
+ * 3. Использует: ConnectionStatusInfo из data/bluetooth/
+ */
+
+class SharedViewModel(
+    private val appController: AppController
+) : ViewModel() {
+
+    companion object {
+        /** Тег для логирования */
+        private const val TAG = "SharedViewModel"
+
+        /**
+         * Вспомогательная функция для логирования сообщений ViewModel.
+         * Используется для отслеживания взаимодействий UI с ViewModel.
+         */
+        private fun log(message: String) {
+            AppLogger.logInfo("[$TAG] $message", TAG)
+        }
+    }
+
+    // ========== ДАННЫЕ ИЗ APPCONTROLLER (БЕЗ ПРЕОБРАЗОВАНИЙ) ==========
+
+    /** Полная структура статуса подключения, полученная из AppController.
+     *  Используется UI для отображения всей информации о состоянии подключения.
+     *  Гарантированно не null - AppController всегда возвращает актуальный статус. */
+    val connectionStatusInfo: StateFlow<ConnectionStatusInfo> = appController.connectionStatusInfo
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = ConnectionState.UNDEFINED.toStatusInfo()
+        )
+
+    /** Данные от БК, полученные из AppController */
+    val carData: StateFlow<CarData> = appController.carData
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = CarData() // Всегда CarData, никогда null
+        )
+
+    /** Настройки приложения, полученные из AppController.
+     *  Используется UI для отображения и изменения настроек. */
+    val appSettings: StateFlow<AppSettings?> = appController.appSettings
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = AppSettings()
+        )
+
+    // ========== ПРОИЗВОДНЫЕ ПОТОКИ ДЛЯ УДОБСТВА (МИНИМАЛЬНЫЕ) ==========
+
+    /** Состояние подключения как ConnectionState enum.
+     *  Используется для обратной совместимости в существующем коде UI. */
+    val connectionState: StateFlow<ConnectionState> = connectionStatusInfo
+        .map { statusInfo ->
+            statusInfo.state
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = ConnectionState.UNDEFINED
+        )
+
+    /** Выбранное Bluetooth устройство из настроек.
+     *  Используется UI для отображения информации о текущем устройстве. */
+    val selectedDevice: StateFlow<BluetoothDeviceData?> = appSettings
+        .map { settings ->
+            settings?.selectedDevice
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = null
+        )
+
+    /** Флаг подключения, вычисленный из статуса.
+     *  Используется UI для индикации активного соединения. */
+    val isConnected: StateFlow<Boolean> = connectionStatusInfo
+        .map { statusInfo ->
+            statusInfo.isActive
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = false
+        )
+
+    // ========== МЕТОДЫ (ТОЧНО КАК В APPCONTROLLER) ==========
+
+    /**
+     * Получить список сопряженных Bluetooth устройств.
+     * Делегирует вызов AppController.
+     * Используется в SettingsScreen для отображения списка устройств.
+     */
+    fun getPairedDevices(): List<BluetoothDeviceData>? {
+        return appController.getPairedDevices()
+    }
+
+    /**
+     * Проверить, включен ли Bluetooth адаптер.
+     * Делегирует вызов AppController.
+     * Используется в UI для отображения состояния Bluetooth.
+     */
+    fun isBluetoothEnabled(): Boolean {
+        return appController.isBluetoothEnabled()
+    }
+
+    /**
+     * Выбрать Bluetooth устройство для подключения.
+     * Обновляет настройки приложения с новым устройством.
+     * Вызывается из UI при выборе устройства в настройках.
+     */
+    fun selectBluetoothDevice(deviceData: BluetoothDeviceData) {
+        log("UI: Выбор устройства ${deviceData.name}")
+        val currentSettings = getCurrentSettings()
+        if (currentSettings != null) {
+            val updatedSettings = currentSettings.copy(selectedDevice = deviceData)
+            updateSettings(updatedSettings)
+        } else {
+            AppLogger.logError("Нельзя выбрать устройство: настройки не загружены", TAG)
+        }
+    }
+
+    /**
+     * Обновить настройки приложения.
+     * Делегирует вызов AppController.
+     * Вызывается из UI при изменении любых настроек.
+     */
+    fun updateSettings(settings: AppSettings) {
+        log("UI: Обновление настроек")
+        appController.updateSettings(settings)
+    }
+
+    /**
+     * Отключиться от устройства.
+     * Делегирует вызов AppController.
+     * Вызывается из UI при нажатии кнопки отключения.
+     */
+    fun disconnectFromDevice() {
+        log("UI: Отключение от устройства")
+        appController.disconnectFromDevice()
+    }
+
+    /**
+     * Очистить выбранное устройство.
+     * Делегирует вызов AppController.
+     * Вызывается из UI при очистке выбора устройства.
+     */
+    fun clearSelectedDevice() {
+        log("UI: Очистка выбранного устройства")
+        appController.clearSelectedDevice()
+    }
+
+    /**
+     * Ручное переподключение к устройству.
+     * Делегирует вызов AppController.
+     * Вызывается из UI при нажатии кнопки "Повторить подключение".
+     */
+    fun retryConnection() {
+        log("UI: Ручное переподключение")
+        appController.retryConnection()
+    }
+
+    /**
+     * Получить статистику подключения.
+     * Делегирует вызов AppController.
+     * Используется для отладки и диагностики.
+     */
+    fun getConnectionStatistics(): String {
+        return appController.getConnectionStatistics()
+    }
+
+    /**
+     * Сбросить статистику подключения.
+     * Делегирует вызов AppController.
+     * Используется для очистки статистики.
+     */
+    fun resetConnectionStatistics() {
+        log("UI: Сброс статистики подключения")
+        appController.resetConnectionStatistics()
+    }
+
+    /**
+     * Получить текущие данные от БК.
+     * Делегирует вызов AppController.
+     * Используется для получения данных вне потока.
+     */
+    fun getCurrentCarData(): CarData {
+        return appController.getCurrentCarData()
+    }
+
+    /**
+     * Получить текущие настройки.
+     * Делегирует вызов AppController.
+     * Используется для получения настроек вне потока.
+     */
+    fun getCurrentSettings(): AppSettings? {
+        return appController.getCurrentSettings()
+    }
+
+    /**
+     * Очистка ресурсов ViewModel.
+     * Вызывается системой при завершении жизненного цикла ViewModel.
+     */
+    override fun onCleared() {
+        super.onCleared()
+        log("Очистка SharedViewModel")
+    }
+}

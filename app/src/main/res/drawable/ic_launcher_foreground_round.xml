@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Круглый фон (используем path для круга) -->
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M54,0c29.82,0 54,24.18 54,54s-24.18,54 -54,54S0,83.82 0,54S24.18,0 54,0Z" />
+
+    <!-- Уменьшенный автомобиль для круглой иконки -->
+    <path
+        android:fillColor="#3DDC84"
+        android:pathData="M54,25C37.98,25 25,37.98 25,54C25,70.02 37.98,83 54,83C70.02,83 83,70.02 83,54C83,37.98 70.02,25 54,25Z" />
+
+    <!-- Упрощенный автомобиль -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,48L68,48C69.1,48 70,48.9 70,50L70,62C70,63.1 69.1,64 68,64L40,64C38.9,64 38,63.1 38,62L38,50C38,48.9 38.9,48 40,48Z" />
+
+    <!-- Bluetooth символ -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M54,33L57,36L54,39L51,36Z" />
+    <path
+        android:strokeColor="#2196F3"
+        android:strokeWidth="2"
+        android:pathData="M54,36L54,42" />
+</vector>

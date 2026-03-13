@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Цвет фона адаптивной иконки -->
+    <color name="ic_launcher_background">#1A237E</color>
+
+    <!-- Альтернативный вариант для светлой темы -->
+    <color name="ic_launcher_background_light">#2196F3</color>
+</resources>

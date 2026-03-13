@@ -1,0 +1,215 @@
+// Файл: ui/screens/devices/components/DeviceCardPairable.kt
+package com.alexbar3073.bluetoothcar.ui.screens.devices.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Speaker
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.alexbar3073.bluetoothcar.data.models.BluetoothDevice
+import com.alexbar3073.bluetoothcar.data.models.DeviceType
+import com.alexbar3073.bluetoothcar.ui.theme.AppColors
+
+/**
+ * ФАЙЛ: ui/screens/devices/components/DeviceCardPairable.kt
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/devices/components/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Компонент для отображения карточки Bluetooth устройства, доступного для сопряжения.
+ * Используется на экране выбора устройств для показа списка доступных для подключения
+ * Bluetooth устройств. Карточка содержит информацию об устройстве (имя, адрес, тип)
+ * и визуальные элементы для идентификации типа устройства.
+ *
+ * АРХИТЕКТУРНАЯ РОЛЬ:
+ * Компонент пользовательского интерфейса (View) в архитектуре MVVM.
+ * Используется в рамках экрана устройств для отображения списка доступных устройств.
+ * Не содержит бизнес-логики, только отображение и обработку пользовательских жестов.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
+ * 1. Использует:
+ *    - BluetoothDevice.kt (модель данных устройства)
+ *    - DeviceType.kt (перечисление типов устройств)
+ *    - AppColors.kt (цветовая тема приложения)
+ *    - Material Design компоненты Compose
+ *
+ * 2. Используется в:
+ *    - DevicesScreen.kt (экран списка устройств)
+ *    - DevicesViewModel.kt (через родительские компоненты)
+ *
+ * 3. Работает с:
+ *    - SharedViewModel.kt (для выбора устройства для подключения)
+ *
+ * ИСТОРИЯ ИЗМЕНЕНИЙ:
+ * - 2026.02.02 14:30 UTC: СОЗДАНИЕ ФАЙЛА И ИСПРАВЛЕНИЕ ОШИБКИ
+ *   1. Исправлена ошибка "Unresolved reference 'DeviceType'"
+ *   2. Добавлен импорт DeviceType из data.models
+ *   3. Обновлены when-выражения для использования DeviceType вместо BluetoothDevice.DeviceType
+ *   4. Добавлена полная документация и комментарии
+ *   5. Проверена совместимость с Android 7+ (Compose поддерживается с Android 5.0)
+ */
+
+/**
+ * Карточка Bluetooth устройства для экрана сопряжения.
+ * Отображает информацию об устройстве, доступном для подключения,
+ * с соответствующей иконкой типа устройства и действием по нажатию.
+ *
+ * @param device Модель Bluetooth устройства для отображения
+ * @param onCardClick Обработчик нажатия на карточку (для инициации сопряжения)
+ * @param modifier Модификатор Compose для настройки внешнего вида
+ *
+ * @throws Нет явных исключений, безопасен для использования в UI
+ *
+ * Особенности реализации:
+ * - Использует Material Design 3 Card для современного вида
+ * - Автоматически определяет тип устройства для выбора правильной иконки
+ * - Поддерживает анонимные устройства (без имени)
+ * - Оптимизирован для производительности (стабильные лямбда-выражения)
+ *
+ * Совместимость с Android 7+:
+ * - Использует только API, доступные в Android 5.0+
+ * - Material Design 3 поддерживается через библиотеку Compose
+ * - Не требует специфичных разрешений в этом компоненте
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeviceCardPairable(
+    device: BluetoothDevice,
+    onCardClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Определяем тип устройства для выбора соответствующей иконки
+    val deviceType = device.getDeviceType()
+
+    // Выбираем иконку в зависимости от типа устройства
+    val icon = when (deviceType) {
+        DeviceType.CAR_AUDIO -> Icons.Default.DirectionsCar
+        DeviceType.HEADSET -> Icons.Default.Headset
+        DeviceType.HEADPHONES -> Icons.Default.Headphones
+        DeviceType.PHONE -> Icons.Default.Phone
+        DeviceType.COMPUTER -> Icons.Default.Computer
+        DeviceType.AUDIO_VIDEO -> Icons.Default.Speaker
+        DeviceType.PERIPHERAL -> Icons.Default.Bluetooth
+        DeviceType.UNKNOWN -> Icons.Default.Bluetooth
+    }
+
+    // Получаем читаемое название типа устройства для отображения
+    val deviceTypeName = when (deviceType) {
+        DeviceType.CAR_AUDIO -> "Автомобиль"
+        DeviceType.HEADSET -> "Гарнитура"
+        DeviceType.HEADPHONES -> "Наушники"
+        DeviceType.PHONE -> "Телефон"
+        DeviceType.COMPUTER -> "Компьютер"
+        DeviceType.AUDIO_VIDEO -> "Аудио/Видео"
+        DeviceType.PERIPHERAL -> "Периферия"
+        DeviceType.UNKNOWN -> "Устройство"
+    }
+
+    // Основная карточка устройства
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(64.dp),
+        onClick = onCardClick,
+        colors = CardDefaults.cardColors(
+            containerColor = AppColors.SurfaceLight
+        ),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        // Внутренний макет карточки
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Иконка типа устройства
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(
+                        AppColors.SurfaceMedium,
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = deviceTypeName,
+                    tint = AppColors.TextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Текстовая информация об устройстве
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Имя устройства или заглушка для анонимных устройств
+                val deviceName = device.name.ifEmpty { "Неизвестное устройство" }
+                Text(
+                    text = deviceName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = AppColors.TextPrimary.copy(alpha = 0.9f)
+                )
+                // Адрес устройства и его тип
+                Text(
+                    text = "${device.address} • $deviceTypeName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.TextTertiary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            // Иконка Bluetooth для индикации возможности сопряжения
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(
+                        AppColors.TransparentPrimary,
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Bluetooth,
+                    contentDescription = "Сопрячь",
+                    tint = AppColors.PrimaryBlue,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
+}
