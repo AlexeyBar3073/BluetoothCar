@@ -20,6 +20,7 @@ kotlinxSerialization = "1.10.0"
 composeBom = "2026.02.01"
 uiGraphics = "1.10.4"
 foundationLayout = "1.10.4"
+uiGeometry = "1.10.5"
 
 [libraries]
 # AndroidX Core (без BOM)
@@ -64,6 +65,7 @@ androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "uiGraphics" }
 androidx-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
+androidx-compose-ui-geometry = { group = "androidx.compose.ui", name = "ui-geometry", version.ref = "uiGeometry" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

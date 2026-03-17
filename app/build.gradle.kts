@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.foundation.layout)
+    implementation(libs.androidx.compose.ui.geometry)
 
     // 6. Testing
     testImplementation(libs.junit)
