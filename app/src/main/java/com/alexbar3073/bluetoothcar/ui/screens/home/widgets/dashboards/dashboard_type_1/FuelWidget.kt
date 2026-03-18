@@ -179,17 +179,10 @@ internal fun FuelWidget(
                         this.textSize = geometry.textSizePx
                         isAntiAlias = true
                     }
-                    val textRadius = tickRadius - tickLength - geometry.textOffsetFromTick * 1.5f
+                    // Исправлен отступ: теперь как в спидометре (geometry.textOffsetFromTick без множителя)
+                    val textRadius = tickRadius - tickLength - geometry.textOffsetFromTick
                     val textX = geometry.center.x + textRadius * cosA
                     val textY = geometry.center.y + textRadius * sinA
-
-                    // Лог для проверки координат цифр
-                    if (percent == 0f) {
-                        AppLogger.logInfo("FuelWidget: 0 text at ($textX, $textY)", "FuelWidget")
-                    }
-                    if (percent == 100f) {
-                        AppLogger.logInfo("FuelWidget: 1 text at ($textX, $textY)", "FuelWidget")
-                    }
 
                     drawContext.canvas.nativeCanvas.apply {
                         save()
@@ -203,12 +196,11 @@ internal fun FuelWidget(
 
                 // Иконка заправки на месте 50%
                 if (abs(percent - 50f) < 0.1f) {
+                    // Отступ между иконкой и риской оставляем как был (1.25f), так как исправлять не нужно
                     val iconRadius = tickRadius - tickLength - geometry.textOffsetFromTick * 1.25f
                     val iconX = geometry.center.x + iconRadius * cosA
                     val iconY = geometry.center.y + iconRadius * sinA
                     val iconSize = geometry.textSizePx * 1.2f
-
-                    AppLogger.logInfo("FuelWidget: icon at ($iconX, $iconY)", "FuelWidget")
 
                     translate(left = iconX - iconSize / 2f, top = iconY - iconSize / 2f) {
                         with(fuelIcon) {
@@ -222,22 +214,21 @@ internal fun FuelWidget(
             }
 
             // === 3. GLOW ===
-            val speedoOuterRadius = geometry.outerRingRadius
-            val fuelOuterRadius = outerRadius
-            val edgeRadius = (speedoOuterRadius + fuelOuterRadius) / 2f
+            // Выравниваем разницу между шкалой и началом свечения так же, как в спидометре
+            val speedoDiff = geometry.scaleRadius - geometry.ringRadius
+            val edgeRadius = tickRadius - speedoDiff
+            
             val glowDepth = geometry.glowWidth * 1.3f
             val gradientOuterRadius = edgeRadius + glowDepth
             val edgeStop = edgeRadius / gradientOuterRadius
-            val range = 1f - edgeStop
-
-            AppLogger.logInfo("FuelWidget: edgeRadius=$edgeRadius, glowDepth=$glowDepth", "FuelWidget")
+            val rangeGlow = 1f - edgeStop
 
             val gradientBrush = Brush.radialGradient(
                 colorStops = arrayOf(
                     0f to Color.Transparent,
                     edgeStop to geometry.ringColor,
-                    (edgeStop + range * 0.25f) to geometry.ringColor.copy(alpha = 0.6f),
-                    (edgeStop + range * 0.6f) to geometry.ringColor.copy(alpha = 0.25f),
+                    (edgeStop + rangeGlow * 0.25f) to geometry.ringColor.copy(alpha = 0.6f),
+                    (edgeStop + rangeGlow * 0.6f) to geometry.ringColor.copy(alpha = 0.25f),
                     1f to Color.Transparent
                 ),
                 center = geometry.center,
@@ -261,26 +252,33 @@ internal fun FuelWidget(
             // === 4. ТЕКСТ С ОСТАТКОМ ТОПЛИВА ===
             val fuelText = "${currentFuel.toInt()} л"
 
-// Тестовый круг - ярко-красный, чтобы точно увидеть
-            drawCircle(
-                color = Color.Red,
-                radius = 20f,
-                center = Offset(geometry.center.x, geometry.center.y - 100f)
-            )
-
-// Сам текст
-            val textPaint = android.graphics.Paint().apply {
-                color = Color.White.toArgb()
-                textAlign = android.graphics.Paint.Align.CENTER
-                textSize = geometry.textSizePx * 1.5f
+            val fuelPaint = android.graphics.Paint().apply {
+                // Цвет как у единиц измерения скорости (км/ч) - Color.Gray
+                color = Color.Gray.toArgb()
+                textAlign = android.graphics.Paint.Align.LEFT
+                textSize = geometry.textSizePx
                 isAntiAlias = true
-                isFakeBoldText = true
             }
+
+            // Координаты центра цифры "1"
+            val angle1 = endAngleDeg
+            val rad1 = Math.toRadians(angle1.toDouble()).toFloat()
+            // Исправлен отступ: теперь совпадает с цифрой 1
+            val r1 = tickRadius - geometry.tickLarge - geometry.textOffsetFromTick
+            val x1 = geometry.center.x + r1 * cos(rad1)
+            val y1 = geometry.center.y + r1 * sin(rad1)
+
+            // Позиционируем на том же вертикальном уровне (Y) как и цифра "1"
+            val targetY = y1
+            // Сдвигаем вправо, чтобы не перекрывать цифру "1" (этот отступ не меняем)
+            val targetX = x1 + geometry.textSizePx * 0.8f
 
             drawContext.canvas.nativeCanvas.apply {
                 save()
-                translate(geometry.center.x, geometry.center.y - 150f)
-                drawText(fuelText, 0f, 0f, textPaint)
+                val fm = fuelPaint.fontMetrics
+                // Центрируем текст по вертикали относительно targetY (так же как и цифру "1")
+                val baseline = targetY - (fm.ascent + fm.descent) / 2f
+                drawText(fuelText, targetX, baseline, fuelPaint)
                 restore()
             }
 

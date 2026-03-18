@@ -42,14 +42,12 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.alexbar3073.bluetoothcar.R
 import com.alexbar3073.bluetoothcar.data.models.CarData
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -58,19 +56,6 @@ import kotlin.math.sin
 
 /**
  * Виджет спидометра с интегрированным вольтметром для дашборда Type 1.
- * Выполняет однократную стартовую анимацию (развертка приборов) при первом запуске.
- *
- * ОПТИМИЗАЦИИ:
- *   1. Мутация состояния вынесена из Canvas (ringRotation обновляется в LaunchedEffect)
- *   2. Bitmap'ы привязаны к размеру Canvas (пересоздаются только при изменении размера)
- *   3. Paint объекты кэшируются (не создаются каждый кадр)
- *   4. Кэширование Path для хвоста и окна вольтметра
- *   5. Вынос размера текста из цикла рисования
- *   6. Трафарет (clipPath) для вольтметра вместо закрашивания фоном
- *
- * @param modifier Модификатор для настройки размера и позиции
- * @param carData Данные автомобиля
- * @param geometry Геометрические параметры дашборда (содержит размеры, цвет и лог-тег)
  */
 @Composable
 internal fun SpeedometerWidget(
@@ -85,7 +70,7 @@ internal fun SpeedometerWidget(
     val startupFallDuration = 5000
     val transitionDuration = 1500
 
-    // ========== УПРАВЛЕНИЕ СТАРТОВОЙ АНИМАЦИЕЙ ==========
+    // ========== УПРАВЛЕНИЕ СТАРТОВАЯ АНИМАЦИЯ ==========
     var startupFinished by rememberSaveable { mutableStateOf(false) }
     val startupAnim = remember { Animatable(0f) }
     val transitionAnim = remember { Animatable(0f) }
@@ -199,7 +184,6 @@ internal fun SpeedometerWidget(
     }
 
     // ========== КЭШИРОВАНИЕ СПЕЦИФИЧНЫХ ДЛЯ ВИДЖЕТА ДАННЫХ =====
-    // ИСПРАВЛЕНИЕ: ключ для битмапов — привязка к размеру Canvas
     val bitmapKey = remember(geometry.width, geometry.height) {
         Pair(geometry.width, geometry.height)
     }
@@ -208,15 +192,14 @@ internal fun SpeedometerWidget(
     var needleBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
     var ringBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
 
-    // ИСПРАВЛЕНИЕ: кэш для хвоста (Path и innerRadius)
     val trailCache = rememberTrailCache(geometry)
-
-    // ИСПРАВЛЕНИЕ: кэш для окна вольтметра
     val windowPath = rememberVoltmeterWindow(geometry)
 
-    // ИСПРАВЛЕНИЕ: размеры текста (вычисляются один раз)
-    val speedTextSize = with(geometry.density) { 42.sp.toPx() }
-    val unitTextSize = with(geometry.density) { 16.sp.toPx() }
+    // ========== РАСЧЕТ РАЗМЕРОВ ТЕКСТА (ВОССТАНОВЛЕНИЕ ПРОПОРЦИЙ) ==========
+    // Используем коэффициенты из SpeedometerWidget_old.kt
+    // 42f * unit для скорости и 16f * unit для км/ч гарантируют те самые пропорции.
+    val speedTextSize = 42f * geometry.unit
+    val unitTextSize = 16f * geometry.unit
 
     // ========== ОСНОВНАЯ ОТРИСОВКА ==========
     Box(modifier = modifier) {
@@ -259,19 +242,6 @@ internal fun SpeedometerWidget(
 
 /**
  * Отрисовка спидометра.
- *
- * ОПТИМИЗАЦИЯ: добавлены параметры trailCache, speedTextSize, unitTextSize
- *
- * @param geometry Геометрические параметры
- * @param speed Текущая скорость для отображения
- * @param scaleBitmap Битмап со статической шкалой
- * @param needleBitmap Битмап со стрелкой
- * @param ringColor Цвет основных элементов (из геометрии)
- * @param speedPaint Кэшированный Paint для отрисовки числового значения скорости
- * @param unitPaint Кэшированный Paint для отрисовки единиц измерения
- * @param trailCache Кэш с предвычисленными данными хвоста
- * @param speedTextSize Заранее вычисленный размер шрифта для скорости
- * @param unitTextSize Заранее вычисленный размер шрифта для единиц измерения
  */
 private fun DrawScope.drawSpeedometer(
     geometry: Geometry,
@@ -320,7 +290,6 @@ private data class TrailCache(
 
 /**
  * Создает и кэширует данные для хвоста спидометра.
- * Вызывается только при изменении геометрии.
  */
 @Composable
 private fun rememberTrailCache(
@@ -348,7 +317,6 @@ private fun rememberTrailCache(
 
 /**
  * Создает и кэширует путь для окна вольтметра.
- * Вызывается только при изменении геометрии.
  */
 @Composable
 private fun rememberVoltmeterWindow(
@@ -376,11 +344,7 @@ private fun rememberVoltmeterWindow(
 }
 
 /**
- * Отрисовка хвоста спидометра с градиентом и тонкой дугой
- *
- * @param geometry Геометрические параметры
- * @param speed Текущая скорость
- * @param trailCache Кэш с предвычисленными неизменяемыми данными
+ * Отрисовка хвоста спидометра.
  */
 private fun DrawScope.drawSpeedometerTrail(
     geometry: Geometry,
@@ -410,7 +374,6 @@ private fun DrawScope.drawSpeedometerTrail(
         y = needleEnd.y - bigRadius * sinA
     )
 
-    // ИСПРАВЛЕНИЕ: используем trailAlphaStops из geometry
     val radialStops = geometry.trailAlphaStops
 
     val innerStop = bigInnerRadius / bigRadius
@@ -425,7 +388,6 @@ private fun DrawScope.drawSpeedometerTrail(
         radius = bigRadius
     )
 
-    // ИСПРАВЛЕНИЕ: используем кэшированный Path
     clipPath(trailCache.radiusClipPath) {
         val sectorClipPath = Path().apply {
             arcTo(
@@ -457,7 +419,7 @@ private fun DrawScope.drawSpeedometerTrail(
 }
 
 /**
- * Определяет цвет хвоста по скорости
+ * Определяет цвет хвоста по скорости.
  */
 private fun getTrailColor(speed: Float): Color {
     val white = Color.White
@@ -483,14 +445,14 @@ private fun getTrailColor(speed: Float): Color {
 }
 
 /**
- * Рисует тонкую внешнюю дугу хвоста
+ * Рисует тонкую внешнюю дугу хвоста.
  */
 private fun DrawScope.drawTrailBorder(
     geometry: Geometry,
     sweepAngle: Float,
     color: Color
 ) {
-    val borderWidth = 1.dp.toPx()
+    val borderWidth = 1f * geometry.unit
     val borderRadius = geometry.scaleRadius + borderWidth / 2f
     val borderRect = Rect(
         left = geometry.center.x - borderRadius,
@@ -515,15 +477,6 @@ private fun DrawScope.drawTrailBorder(
 
 /**
  * Рисует текст текущей скорости в центре спидометра.
- *
- * ОПТИМИЗАЦИЯ: размер текста передается как параметр (вычислен заранее)
- *
- * @param speed Текущая скорость
- * @param geometry Геометрические параметры
- * @param speedPaint Кэшированный Paint
- * @param unitPaint Кэшированный Paint
- * @param speedTextSize Заранее вычисленный размер шрифта для скорости
- * @param unitTextSize Заранее вычисленный размер шрифта для единиц измерения
  */
 private fun DrawScope.drawSpeedText(
     speed: Float,
@@ -542,6 +495,7 @@ private fun DrawScope.drawSpeedText(
         val baseline = geometry.center.y - (fm.ascent + fm.descent) / 2f
 
         drawText(speedStr, geometry.center.x, baseline, speedPaint)
+        // ВОССТАНОВЛЕНИЕ: отступ 32 единицы от базовой линии, как в оригинале
         drawText("км/ч", geometry.center.x, baseline + 32f * geometry.unit, unitPaint)
     }
 }
@@ -620,21 +574,6 @@ private data class VoltageAngles(
 
 /**
  * Отрисовка вольтметра.
- *
- * АРХИТЕКТУРА (ИСПРАВЛЕНИЕ):
- *   1. Используем трафарет (windowPath) в форме окна (нижний сегмент)
- *   2. Применяем clipPath — кольцо видно только в окне
- *   3. Поверх рисуем иконку и стрелку (без обрезки)
- *   4. НЕТ закрашивания фоном → нет черного ореола
- *
- * @param geometry Геометрические параметры
- * @param voltage Текущее напряжение
- * @param ringBitmap Битмап с цветным кольцом (полный круг)
- * @param ringRotation Угол поворота кольца
- * @param iconPainter Иконка батареи
- * @param alpha Прозрачность иконки (для мигания)
- * @param needleAngle Угол стрелки вольтметра
- * @param windowPath Кэшированный путь для трафарета окна
  */
 private fun DrawScope.drawVoltmeter(
     geometry: Geometry,
@@ -728,8 +667,8 @@ private fun DrawScope.drawVoltageNeedle(
     )
 
     val tip = Offset(
-        geometry.center.x + cos * (geometry.scaleRadius - 2f),
-        geometry.center.y + sin * (geometry.scaleRadius - 2f)
+        geometry.center.x + cos * (geometry.scaleRadius - 2f * geometry.unit),
+        geometry.center.y + sin * (geometry.scaleRadius - 2f * geometry.unit)
     )
 
     drawLine(
@@ -811,12 +750,6 @@ private fun getExtendedVoltageRange(): Pair<Float, Float> {
 
 /**
  * Создает bitmap с цветным кольцом вольтметра.
- *
- * ИЗМЕНЕНИЯ:
- *   - Удалена маска с BlendMode.DstIn (больше не нужна)
- *   - Удален backgroundColor (не используется)
- *
- * @param geometry Геометрические параметры
  */
 private fun buildVoltageRingBitmap(
     geometry: Geometry
@@ -840,7 +773,7 @@ private fun buildVoltageRingBitmap(
         val ringWidth = geometry.tickLarge
         val ringOuterRadius = geometry.scaleRadius - ringWidth / 2f
 
-        // 1. Цветное кольцо (круговой градиент)
+        // 1. Цветное кольцо
         rotate(270f) {
             drawArc(
                 brush = sweepBrush,
@@ -856,7 +789,7 @@ private fun buildVoltageRingBitmap(
             )
         }
 
-        // 2. Радиальный градиент для глубины (ВОССТАНОВЛЕН)
+        // 2. Радиальный градиент
         val innerRadius = ringOuterRadius - ringWidth / 2f
         val outerRadius = ringOuterRadius + ringWidth / 2f
         val thickness = outerRadius - innerRadius
@@ -1035,7 +968,8 @@ private fun buildNeedleBitmap(
             radius = geometry.blackRadius,
             color = ringColor,
             sweepAngle = 45f,
-            startAngle = 0f
+            startAngle = 0f,
+            geometry = geometry
         )
 
         val needleLength = geometry.scaleRadius - 1f * geometry.unit
@@ -1075,16 +1009,18 @@ private fun buildNeedleBitmap(
 private fun DrawScope.drawHeatBloomSegment(
     radius: Float,
     color: Color,
+    geometry: Geometry,
     sweepAngle: Float = 45f,
-    gradientWidth: Float = 7.dp.toPx(),
+    gradientWidth: Float = 7f,
     startAngle: Float = 270f
 ) {
+    val scaledGradientWidth = gradientWidth * geometry.unit
     val center = Offset(size.width / 2f, size.height / 2f)
-    val outerRadius = radius + gradientWidth
+    val outerRadius = radius + scaledGradientWidth
 
-    val innerStop = (radius - gradientWidth) / outerRadius
+    val innerStop = (radius - scaledGradientWidth) / outerRadius
     val peakStop = radius / outerRadius
-    val outerStop = (radius + gradientWidth) / outerRadius
+    val outerStop = (radius + scaledGradientWidth) / outerRadius
 
     val canvas = drawContext.canvas
     val layerRect = Rect(Offset.Zero, size)
@@ -1111,12 +1047,12 @@ private fun DrawScope.drawHeatBloomSegment(
         color = Color.White,
         radius = radius,
         center = center,
-        style = Stroke(width = 1.dp.toPx())
+        style = Stroke(width = 1f * geometry.unit)
     )
 
     drawIntoCanvas {
-        it.save()
-        it.rotate(startAngle - 180f, center.x, center.y)
+        it.nativeCanvas.save()
+        it.nativeCanvas.rotate(startAngle - 180f, center.x, center.y)
 
         val sweepFraction = sweepAngle / 360f
         val half = sweepFraction / 2f
@@ -1136,7 +1072,7 @@ private fun DrawScope.drawHeatBloomSegment(
             center = center,
             blendMode = BlendMode.DstIn
         )
-        it.restore()
+        it.nativeCanvas.restore()
     }
 
     canvas.restore()
@@ -1154,7 +1090,7 @@ private fun DrawScope.drawBatteryIconAndText(
     val iconColor = voltageToColor(voltage)
     val iconSize = geometry.textSizePx
 
-    val voltageText = String.format("%.1fV", voltage)
+    val voltageText = String.format(Locale.US, "%.1fV", voltage)
 
     val textPaint = android.graphics.Paint().apply {
         color = Color.Gray.toArgb()
@@ -1163,10 +1099,10 @@ private fun DrawScope.drawBatteryIconAndText(
     }
     val textWidth = textPaint.measureText(voltageText)
 
-    val spacing = 4.dp.toPx()
+    val spacing = 4f * geometry.unit
     val totalWidth = iconSize + spacing + textWidth
 
-    val radiusBlock = geometry.textRadius - 5f
+    val radiusBlock = geometry.textRadius - 5f * geometry.unit
     val angle = 90f
     val rad = Math.toRadians(angle.toDouble()).toFloat()
     val cos = cos(rad)
