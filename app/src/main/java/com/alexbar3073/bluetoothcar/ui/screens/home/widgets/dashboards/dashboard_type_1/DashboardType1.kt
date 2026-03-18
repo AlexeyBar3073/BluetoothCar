@@ -1,6 +1,5 @@
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,10 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.tooling.preview.Preview
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
@@ -74,44 +71,5 @@ fun DashboardType1(
                 geometry = geometry
             )
         }
-    }
-}
-
-// ========== PREVIEWS ==========
-
-/**
- * Настройка превью для сравнения устройств с разной пропорцией пикселя.
- * Высота в DP зафиксирована (800dp), чтобы устройства отображались в одном размере по вертикали.
- * Ширина рассчитана исходя из физических размеров:
- * 1080P: 116/65 * 800 = 1428dp
- * 720P: 196/113 * 800 = 1388dp
- * DPI подобран так, чтобы получить реальное разрешение по вертикали (1080 и 720 пикселей).
- */
-
-@Preview(
-    name = "1. Device 1080P (1795x1080, 116x65mm)",
-    device = "spec:width=1428dp,height=800dp,dpi=216",
-    backgroundColor = 0xFF121212,
-    showBackground = true
-)
-@Preview(
-    name = "2. Device 720P (1280x720, 196x113mm)",
-    device = "spec:width=1388dp,height=800dp,dpi=144",
-    backgroundColor = 0xFF121212,
-    showBackground = true
-)
-@Composable
-fun DashboardType1Preview() {
-    val fakeCarData = CarData(
-        speed = 96f,
-        fuel = 49f,
-        voltage = 12.6f,
-        remainingRange = 520f
-    )
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212))) {
-        DashboardType1(
-            carData = fakeCarData,
-            appSettings = null
-        )
     }
 }

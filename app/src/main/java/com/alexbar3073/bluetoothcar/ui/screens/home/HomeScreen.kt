@@ -12,9 +12,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
+import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
+import com.alexbar3073.bluetoothcar.data.models.AppSettings
+import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
+import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.StatusCircleButton
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1.DashboardType1
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
@@ -24,44 +31,40 @@ import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
- * ФАЙЛ: ui/screens/home/HomeScreen.kt
- * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Главный экран приложения "Бортовой компьютер". Отображает состояние подключения,
- * данные от автомобиля и управляющие элементы.
- *
- * ОТВЕТСТВЕННОСТЬ:
- * 1. Отображение статуса подключения и выбранного устройства
- * 2. Отображение данных от БК (скорость, RPM, температура и т.д.)
- * 3. Предоставление кнопок для управления подключением
- * 4. Навигация к экрану настроек
- *
- * КЛЮЧЕВОЙ ПРИНЦИП:
- * - Использует готовые данные из ConnectionStatusInfo без дополнительных преобразований
- * - Не содержит бизнес-логики, только отображение
- * - Все действия делегируются SharedViewModel
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Получает данные от: SharedViewModel.kt
- * 2. Использует виджеты: BluetoothStatusWidget.kt, CarDataWidget.kt
- * 3. Использует тему: ui/theme/Theme.kt
- * 4. Вызывает навигацию к: SettingsScreen.kt
+ * Главный экран приложения "Бортовой компьютер".
  */
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
     navigateToSettings: () -> Unit
 ) {
-    BluetoothCarTheme {
-        // Получаем состояние из ViewModel
-        val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
-        val carData by viewModel.carData.collectAsStateWithLifecycle()
-        val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
-        val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
+    // Получаем состояние из ViewModel
+    val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
+    val carData by viewModel.carData.collectAsStateWithLifecycle()
+    val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
+    val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
 
+    HomeScreenContent(
+        selectedDevice = selectedDevice,
+        carData = carData,
+        connectionStatusInfo = connectionStatusInfo,
+        appSettings = appSettings,
+        onRetryConnection = { viewModel.retryConnection() },
+        navigateToSettings = navigateToSettings
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreenContent(
+    selectedDevice: BluetoothDeviceData?,
+    carData: CarData,
+    connectionStatusInfo: ConnectionStatusInfo,
+    appSettings: AppSettings?,
+    onRetryConnection: () -> Unit,
+    navigateToSettings: () -> Unit
+) {
+    BluetoothCarTheme {
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
@@ -70,7 +73,6 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            // Иконка дома - меняем цвет в зависимости от выбора устройства
                             Icon(
                                 imageVector = Icons.Filled.DirectionsCar,
                                 contentDescription = "Бортовой компьютер",
@@ -85,15 +87,12 @@ fun HomeScreen(
                             )
                         }
                     },
-                    // В HomeScreen.kt меняем navigationIcon:
-
                     navigationIcon = {
-                        // НОВАЯ КРУГЛАЯ КНОПКА СТАТУСА
                         StatusCircleButton(
                             connectionStatusInfo = connectionStatusInfo,
                             onClick = {
                                 if (connectionStatusInfo.allowsManualRetry) {
-                                    viewModel.retryConnection()
+                                    onRetryConnection()
                                 }
                             }
                         )
@@ -128,7 +127,7 @@ fun HomeScreen(
                         actionIconContentColor = AppColors.TextSecondary
                     ),
                     modifier = Modifier
-                        .height(COMPACT_TOP_BAR_HEIGHT) // Меняем высоту
+                        .height(COMPACT_TOP_BAR_HEIGHT)
                         .background(
                             brush = Brush.verticalGradient(
                                 colors = AppColors.SurfaceGradient
@@ -144,7 +143,6 @@ fun HomeScreen(
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
             ) {
-                // КАРТОЧКА СО СТАТУСОМ ПОДКЛЮЧЕНИЯ УБРАНА
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -161,59 +159,43 @@ fun HomeScreen(
     }
 }
 
+// ========== PREVIEWS ==========
+
 /**
- * Элемент информации для отображения пар ключ-значение.
- * Используется в информационной карточке для компактного отображения данных.
+ * ПРЕВЬЮ С УЧЕТОМ ФИЗИЧЕСКИХ ПРОПОРЦИЙ УСТРОЙСТВ:
+ * 1080P: Соотношение 116/65 ≈ 1.785. При высоте 360dp ширина = 642dp.
+ * 720P: Соотношение 196/113 ≈ 1.735. При высоте 360dp ширина = 624dp.
  */
+
+@Preview(
+    name = "Home - 1080P (116x65mm)",
+    device = "spec:width=642dp,height=360dp,dpi=480",
+    showSystemUi = false,
+    backgroundColor = 0xFF121212,
+    showBackground = true
+)
+@Preview(
+    name = "Home - 720P (196x113mm)",
+    device = "spec:width=624dp,height=360dp,dpi=320",
+    showSystemUi = false,
+    backgroundColor = 0xFF121212,
+    showBackground = true
+)
 @Composable
-private fun InfoItem(
-    title: String,
-    value: String,
-    unit: String
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall,
-            color = AppColors.TextSecondary
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Row(
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = AppColors.TextPrimary
-            )
-
-            if (unit.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = unit,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AppColors.TextTertiary,
-                    modifier = Modifier.padding(bottom = 1.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Форматирует временную метку в читаемый формат.
- * Используется для отображения времени последнего обновления данных.
- */
-private fun formatTime(timestamp: Long): String {
-    val minutesAgo = (System.currentTimeMillis() - timestamp) / (1000 * 60)
-    return when {
-        minutesAgo < 1 -> "только что"
-        minutesAgo < 60 -> "${minutesAgo.toInt()} мин назад"
-        else -> "${(minutesAgo / 60).toInt()} ч назад"
-    }
+fun HomeScreenPreview() {
+    val fakeCarData = CarData(
+        speed = 96f,
+        fuel = 49f,
+        voltage = 12.6f,
+        remainingRange = 520f
+    )
+    
+    HomeScreenContent(
+        selectedDevice = BluetoothDeviceData("Toyota OBD", "00:11:22:33:44:55"),
+        carData = fakeCarData,
+        connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
+        appSettings = AppSettings(),
+        onRetryConnection = {},
+        navigateToSettings = {}
+    )
 }

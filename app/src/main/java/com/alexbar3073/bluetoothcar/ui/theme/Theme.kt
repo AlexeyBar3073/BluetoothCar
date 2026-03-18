@@ -26,27 +26,6 @@ import androidx.core.view.WindowCompat
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Определение темы приложения BluetoothCar. Содержит цветовые схемы для темной и светлой тем,
  * вспомогательные функции для работы с цветами и градиентами, а также настройки системного UI.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
- * 1. Используется в:
- *    - MainActivity.kt - устанавливает тему для всего приложения
- *    - Всех экранах (HomeScreen.kt, SettingsScreen.kt, DevicesScreen.kt) - применяет тему
- *    - Виджетах (SpeedometerWidget.kt, CarDataWidget.kt) - использует кастомные цвета
- *
- * 2. Определяет:
- *    - AppColors - все кастомные цвета приложения
- *    - BluetoothCarTheme - основная тема приложения
- *    - Цветовые схемы для темной и светлой темы
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - [Дата создания] - Создание файла с базовой темой и цветами
- * - [Сегодня] - Исправлено устаревшее использование window.statusBarColor с поддержкой Android 7+
- * - [Сегодня] - Упрощен код, убраны deprecated методы systemUiVisibility
- * - 2026.02.05 21:45: ДОБАВЛЕНИЕ КОНСТАНТЫ ВЫСОТЫ ТОП-БАРА
- *   1. Добавлена константа COMPACT_TOP_BAR_HEIGHT для единой высоты топ-бара
- * - 2026.02.05 22:15: ИСПРАВЛЕНИЕ НАСТРОЙКИ СИСТЕМНОГО UI
- *   1. Исправлена настройка цвета статус-бара и иконок
- *   2. Добавлена правильная обработка для темной и светлой темы
  */
 
 /**
@@ -76,16 +55,16 @@ private val LightPink40 = Color(0xFFFF6B6B)
 // ===== Кастомные цветовые схемы =====
 private val DarkColorScheme = darkColorScheme(
     primary = DarkBlue80,
-    secondary = Color(0xFF4ADE80),        // Зеленый для успеха
-    tertiary = Color(0xFFFFA500),        // Оранжевый для спидометра
-    background = Color(0xFF0A0A0F),      // Темный фон
-    surface = Color(0xFF1A1A24),         // Поверхность карточек
+    secondary = Color(0xFF4ADE80),
+    tertiary = Color(0xFFFFA500),
+    background = Color(0xFF0A0A0F),
+    surface = Color(0xFF1A1A24),
     surfaceVariant = Color(0xFF2A2A34),
     error = DarkPink80,
     onPrimary = Color.Black,
     onSecondary = Color.Black,
     onTertiary = Color.Black,
-    onBackground = Color(0xFFE0E0FF),    // Основной текст
+    onBackground = Color(0xFFE0E0FF),
     onSurface = Color(0xFFE0E0FF),
     onSurfaceVariant = DarkBlueGrey80,
     onError = Color.Black,
@@ -100,16 +79,16 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = LightBlue80,
-    secondary = Color(0xFF005522),       // Темно-зеленый
-    tertiary = Color(0xFF664400),        // Темно-оранжевый
-    background = Color(0xFFF5F5FF),      // Светлый фон с голубым оттенком
-    surface = Color(0xFFFFFFFF),         // Белая поверхность
-    surfaceVariant = Color(0xFFEEEEFF),  // Светло-голубая вариация
+    secondary = Color(0xFF005522),
+    tertiary = Color(0xFF664400),
+    background = Color(0xFFF5F5FF),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFEEEEFF),
     error = LightPink80,
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
-    onBackground = Color(0xFF1A1A24),    // Темный текст на светлом фоне
+    onBackground = Color(0xFF1A1A24),
     onSurface = Color(0xFF1A1A24),
     onSurfaceVariant = LightBlueGrey80,
     onError = Color.White,
@@ -124,25 +103,17 @@ private val LightColorScheme = lightColorScheme(
 
 // ===== Объект с кастомными цветами =====
 object AppColors {
-    // Основные цвета
     val PrimaryBlue = DarkBlue80
     val PrimaryBlueDark = DarkBlue40
-
-    // Цвета из SpeedometerWidget
     val SpeedometerYellow = Color.Yellow
     val SpeedometerOrange = Color(0xFFFFA500)
-
-    // Цвета состояний
     val Success = Color(0xFF4ADE80)
     val SuccessAlpha = Color(0x224ADE80)
-
     val Warning = Color(0xFFFACC15)
     val WarningAlpha = Color(0x22FACC15)
-
     val Error = DarkPink80
     val ErrorAlpha = Color(0x22F87171)
 
-    // Белый с разной прозрачностью
     val WhiteAlpha10 = Color.White.copy(alpha = 0.1f)
     val WhiteAlpha20 = Color.White.copy(alpha = 0.2f)
     val WhiteAlpha30 = Color.White.copy(alpha = 0.3f)
@@ -151,17 +122,14 @@ object AppColors {
     val WhiteAlpha70 = Color.White.copy(alpha = 0.7f)
     val WhiteAlpha80 = Color.White.copy(alpha = 0.8f)
 
-    // Текст
     val TextPrimary = Color(0xFFE0E0FF)
     val TextSecondary = DarkBlueGrey80
     val TextTertiary = DarkBlueGrey40
 
-    // Поверхности
     val SurfaceLight = Color(0x1AFFFFFF)
     val SurfaceMedium = Color(0x15FFFFFF)
     val SurfaceDark = Color(0x0AFFFFFF)
 
-    // Градиенты
     val BackgroundGradient = listOf(
         Color(0xFF0A0A0F),
         Color(0xFF12121A),
@@ -180,20 +148,17 @@ object AppColors {
         Color.Transparent
     )
 
-    // Акцентные цвета
     val AccentCyan = DarkBlue80
     val AccentGreen = Color(0xFF4ADE80)
     val AccentRed = DarkPink80
     val AccentYellow = Color(0xFFFACC15)
     val AccentOrange = Color(0xFFFFA500)
 
-    // Прозрачные версии
     val TransparentPrimary = Color(0x1500D4FF)
     val TransparentSuccess = Color(0x154ADE80)
     val TransparentWarning = Color(0x15FACC15)
     val TransparentError = Color(0x15F87171)
 
-    // Специфичные для виджетов
     val SpeedometerTickMajor = WhiteAlpha80
     val SpeedometerTickMinor = WhiteAlpha70
     val SpeedometerTickSmall = WhiteAlpha60
@@ -202,7 +167,6 @@ object AppColors {
     val SpeedometerDialStroke = WhiteAlpha60
     val SpeedometerCenterStroke = WhiteAlpha20
 
-    // Bluetooth-специфичные
     val BluetoothDeviceConnected = DarkBlue80
     val BluetoothDeviceAvailable = WhiteAlpha60
     val BluetoothStatusError = DarkPink80
@@ -211,13 +175,11 @@ object AppColors {
 
 // ===== Вспомогательные функции =====
 
-// Функция для градиента фона
 @Composable
 fun verticalGradientBackground(colors: List<Color> = AppColors.BackgroundGradient): androidx.compose.ui.graphics.Brush {
     return androidx.compose.ui.graphics.Brush.verticalGradient(colors = colors)
 }
 
-// Функция для градиента спидометра
 @Composable
 fun speedometerRadialGradient(
     center: androidx.compose.ui.geometry.Offset,
@@ -231,7 +193,6 @@ fun speedometerRadialGradient(
     )
 }
 
-// Функция для получения цвета сообщения
 fun getMessageColor(message: String?): Color {
     return when {
         message == null -> AppColors.TextPrimary
@@ -242,7 +203,6 @@ fun getMessageColor(message: String?): Color {
     }
 }
 
-// Функция для получения фона сообщения
 fun getMessageBackgroundColor(message: String?): Color {
     return when {
         message == null -> AppColors.SurfaceDark
@@ -253,7 +213,6 @@ fun getMessageBackgroundColor(message: String?): Color {
     }
 }
 
-// Функция для получения цвета типа устройства Bluetooth
 fun getBluetoothDeviceColor(isPaired: Boolean, isSelected: Boolean = false): Color {
     return when {
         isSelected -> AppColors.BluetoothDeviceConnected
@@ -266,7 +225,6 @@ fun getBluetoothDeviceColor(isPaired: Boolean, isSelected: Boolean = false): Col
 @Composable
 fun BluetoothCarTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
@@ -275,7 +233,6 @@ fun BluetoothCarTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -285,56 +242,24 @@ fun BluetoothCarTheme(
         SideEffect {
             val window = (view.context as Activity).window
 
-            // ИСПРАВЛЕНИЕ: Правильная настройка системного UI для Android 7+
-
-            // 1. Устанавливаем цвет статус-бара в цвет фона темы
-            val statusBarColor = colorScheme.background.toArgb()
+            // УСТАНОВКА ЦВЕТА СИСТЕМНОГО UI
+            // Используем фиксированный цвет фона для бесшовного интерфейса
+            val statusBarColor = Color(0xFF0A0A0F).toArgb()
+            
             @Suppress("DEPRECATION")
             window.statusBarColor = statusBarColor
 
-            // 2. Для Android 8.1+ устанавливаем цвет навигационного бара
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 @Suppress("DEPRECATION")
                 window.navigationBarColor = statusBarColor
             }
 
-            // 3. Для Android 10+ используем WindowInsetsController для настройки иконок
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
                     val controller = WindowCompat.getInsetsController(window, view)
-
-                    // Настраиваем цвет иконок статус-бара:
-                    // - Для темной темы: светлые иконки (false)
-                    // - Для светлой темы: темные иконки (true)
                     controller.isAppearanceLightStatusBars = !darkTheme
-
-                    // Настраиваем цвет иконок навигационного бара
                     controller.isAppearanceLightNavigationBars = !darkTheme
-
-                } catch (e: Exception) {
-                    // Игнорируем ошибки, если метод не доступен
-                }
-            }
-
-            // 4. Для старых Android (5.0+ Lollipop) используем старый метод
-            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                try {
-                    // Для темной темы - светлые иконки (SYSTEM_UI_FLAG_LIGHT_STATUS_BAR = false)
-                    // Для светлой темы - темные иконки (SYSTEM_UI_FLAG_LIGHT_STATUS_BAR = true)
-                    if (darkTheme) {
-                        @Suppress("DEPRECATION")
-                        window.decorView.systemUiVisibility =
-                            window.decorView.systemUiVisibility and
-                                    android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-                    } else {
-                        @Suppress("DEPRECATION")
-                        window.decorView.systemUiVisibility =
-                            window.decorView.systemUiVisibility or
-                                    android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                    }
-                } catch (e: Exception) {
-                    // Игнорируем ошибки
-                }
+                } catch (e: Exception) {}
             }
         }
     }

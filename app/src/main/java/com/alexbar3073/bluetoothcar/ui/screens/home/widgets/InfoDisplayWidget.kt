@@ -15,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,8 +25,9 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Данные для отображения в информационном дисплее.
- * Можно легко расширять под новые параметры автомобиля.
+ * @Immutable позволяет Compose пропускать рекомпозицию, если данные не изменились.
  */
+@Immutable
 data class CarInfo(
     val temperature: Int = 90,      // °C
     val fuelLevel: Int = 75,      // %
@@ -34,12 +36,6 @@ data class CarInfo(
     val range: Int = 420          // запас хода, км
 )
 
-/**
- * Информационный дисплей — отображает ключевые параметры автомобиля в компактном виде.
- *
- * @param modifier Модификатор для настройки внешнего вида/размера (первый опциональный параметр)
- * @param carInfo Данные автомобиля для отображения
- */
 @Composable
 fun InfoDisplayWidget(
     modifier: Modifier = Modifier,
@@ -58,24 +54,21 @@ fun InfoDisplayWidget(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Заголовок блока
             Text(
                 "Информация",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary
             )
 
-            HorizontalDivider( // Исправлено: Divider → HorizontalDivider
+            HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(0.8f),
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
             )
 
-            // Сетка параметров (2 колонки)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // Левая колонка
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -92,7 +85,6 @@ fun InfoDisplayWidget(
                     )
                 }
 
-                // Правая колонка
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -113,10 +105,10 @@ fun InfoDisplayWidget(
                         valueColor = Color.Gray
                     )
                 }
-            } // Закрытие Row
-        } // Закрытие Column
-    } // Закрытие Card
-} // Закрытие функции InfoDisplayWidget
+            }
+        }
+    }
+}
 
 
 @Composable
