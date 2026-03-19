@@ -56,7 +56,7 @@ internal fun TripWidget(
     val tripTotalValueFontSize = (geometry.textSizePx * 0.8f / density).sp
     val smallValueFontSize = (geometry.textSizePx * 0.7f / density).sp
     val unitFontSize = (geometry.textSizePx * 0.35f / density).sp
-    val labelFontSize = (geometry.textSizePx * 0.4f / density).sp
+    val labelFontSize = (geometry.textSizePx * 0.48f / density).sp
 
     // ПАРАМЕТРЫ ГЕОМЕТРИИ (В DP)
     val marginDp = (geometry.margin / density).dp

@@ -62,11 +62,18 @@ fun DashboardType1(
                     geometry = geometry
                 )
 
-                // Виджет топлива
+                // Виджет топлива (слева)
                 FuelWidget(
                     modifier = Modifier.fillMaxSize(),
                     carData = carData,
                     appSettings = appSettings,
+                    geometry = geometry
+                )
+
+                // Виджет температуры (справа)
+                TemperatureWidget(
+                    modifier = Modifier.fillMaxSize(),
+                    carData = carData,
                     geometry = geometry
                 )
             }

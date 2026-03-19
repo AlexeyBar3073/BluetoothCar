@@ -39,12 +39,19 @@ data class CarData(
     @SerialName("rpm")
     val rpm: Float = 0f,      // об/мин
 
+    @SerialName("coolant_temp")
+    val coolantTemp: Float = 0f,      // °C
+
+    @SerialName("transmission_temp")
+    val transmissionTemp: Float = 0f,      // °C
+
     val timestamp: Long = System.currentTimeMillis()
 ) {
     companion object {
         fun hasMeaningfulData(data: CarData): Boolean {
             return data.speed != 0f || data.voltage != 0f || data.fuel != 0f ||
-                    data.tripA != 0f || data.tripB != 0f || data.odometer != 0f
+                    data.tripA != 0f || data.tripB != 0f || data.odometer != 0f ||
+                    data.coolantTemp != 0f || data.transmissionTemp != 0f
         }
     }
 }

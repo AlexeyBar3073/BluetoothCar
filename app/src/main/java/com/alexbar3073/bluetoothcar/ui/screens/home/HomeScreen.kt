@@ -149,7 +149,7 @@ fun HomeScreenContent(
                         .fillMaxSize()
                         .weight(1f)
                 ) {
-                    DashboardType2(
+                    DashboardType1(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
                         appSettings = appSettings
