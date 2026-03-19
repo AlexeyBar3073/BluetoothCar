@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import kotlin.math.min
+import kotlin.math.sqrt
 
 internal data class Geometry(
     // Базовые параметры
@@ -42,7 +43,10 @@ internal data class Geometry(
     val bigMaxRadius: Float,
     val bigOuterRingRadius: Float,
     val bigScaleRadius: Float,
-    val bigTextRadius: Float
+    val bigTextRadius: Float,
+
+    // Дополнительные параметры для TripWidget
+    val tripArcRadius: Float
 ) {
     companion object {
         fun fromSize(
@@ -55,14 +59,12 @@ internal data class Geometry(
             val canvasHeight = size.minDimension // В ландшафте это высота (864 на вашем устройстве)
 
             // 2. ВЫЧИСЛЯЕМ ВИРТУАЛЬНЫЙ UNIT
-            // Мы знаем, что при высоте 864 вам нравился unit = 3.0 (который давал dp)
-            // 864 / 288 = 3.0. Это наша константа для пропорций.
             val unit = canvasHeight / 288f
 
             val margin = 3f * unit
             val center = Offset(size.width / 2f, size.height / 2f)
 
-            // 3. ПРИМЕНЯЕМ ВАШИ ПОДОБРАННЫЕ КОЭФФИЦИЕНТЫ
+            // 3. ПРИМЕНЯЕМ КОЭФФИЦИЕНТЫ
             val outerStrokeWidth = 2f * unit
             val gapScale = 8f * unit
             val tickSmall = 6f * unit
@@ -70,15 +72,10 @@ internal data class Geometry(
             val tickLarge = 14f * unit
             val textOffsetFromTick = 12f * unit
 
-            // Текст (был 18sp, что при плотности 3.0 равно 54px. 18 * 3 = 54)
             val textSizePx = 18f * unit 
             
             val glowGap = 10f * unit
-
-            // Ваш GlowWidth (65 пикселей).
-            // Чтобы он был пропорциональным, переводим его в юниты: 65 / 3 = 21.66
             val glowWidth = 21.66f * unit
-
             val blackStrokeWidth = 8f * unit
 
             // Радиусы для малой окружности (спидометр)
@@ -107,6 +104,15 @@ internal data class Geometry(
                 0.062f, 0.123f, 0.185f, 0.246f, 0.308f, 0.370f,
                 0.431f, 0.493f, 0.554f, 0.616f, 0.678f, 0.739f
             )
+
+            // РАСЧЕТ РАДИУСА ДЛЯ TRIP WIDGET
+            // Расстояние от центра экрана до верхней угловой точки TripWidget (с учетом margin)
+            // Центр находится в (size.width/2, size.height/2).
+            // Точка находится в (margin, size.height) относительно глобального контейнера.
+            // В координатах относительно центра это (margin - size.width/2, size.height/2).
+            val dx = margin - size.width / 2f
+            val dy = size.height / 2f
+            val tripArcRadius = sqrt(dx * dx + dy * dy)
 
             return Geometry(
                 unit = unit,
@@ -140,7 +146,8 @@ internal data class Geometry(
                 bigMaxRadius = bigMaxRadius,
                 bigOuterRingRadius = bigOuterRingRadius,
                 bigScaleRadius = bigScaleRadius,
-                bigTextRadius = bigTextRadius
+                bigTextRadius = bigTextRadius,
+                tripArcRadius = tripArcRadius
             )
         }
     }

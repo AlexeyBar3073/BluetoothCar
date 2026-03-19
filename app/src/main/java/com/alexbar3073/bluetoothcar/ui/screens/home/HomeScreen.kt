@@ -24,6 +24,7 @@ import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.StatusCircleButton
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1.DashboardType1
+import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_2.DashboardType2
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
@@ -148,7 +149,7 @@ fun HomeScreenContent(
                         .fillMaxSize()
                         .weight(1f)
                 ) {
-                    DashboardType1(
+                    DashboardType2(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
                         appSettings = appSettings
@@ -160,12 +161,6 @@ fun HomeScreenContent(
 }
 
 // ========== PREVIEWS ==========
-
-/**
- * ПРЕВЬЮ С УЧЕТОМ ФИЗИЧЕСКИХ ПРОПОРЦИЙ УСТРОЙСТВ:
- * 1080P: Соотношение 116/65 ≈ 1.785. При высоте 360dp ширина = 642dp.
- * 720P: Соотношение 196/113 ≈ 1.735. При высоте 360dp ширина = 624dp.
- */
 
 @Preview(
     name = "Home - 1080P (116x65mm)",
@@ -185,16 +180,19 @@ fun HomeScreenContent(
 fun HomeScreenPreview() {
     val fakeCarData = CarData(
         speed = 96f,
-        fuel = 49f,
+        fuel = 42f, // Около 70% от 60л
         voltage = 12.6f,
-        remainingRange = 520f
+        remainingRange = 305f,
+        odometer = 326452f,
+        tripA = 8675.2f,
+        fuelConsumption = 12.4f
     )
     
     HomeScreenContent(
         selectedDevice = BluetoothDeviceData("Toyota OBD", "00:11:22:33:44:55"),
         carData = fakeCarData,
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
-        appSettings = AppSettings(),
+        appSettings = AppSettings(fuelTankCapacity = 60f),
         onRetryConnection = {},
         navigateToSettings = {}
     )

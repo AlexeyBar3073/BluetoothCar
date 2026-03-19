@@ -76,16 +76,6 @@ internal fun FuelWidget(
     // Иконка заправки
     val fuelIcon = painterResource(R.drawable.fuel_50)
 
-    // ========== КЭШИРОВАНИЕ PAINT ==========
-    val fuelPaint = remember(geometry.unit) {
-        android.graphics.Paint().apply {
-            color = Color.Gray.toArgb()
-            textAlign = android.graphics.Paint.Align.LEFT
-            textSize = geometry.textSizePx
-            isAntiAlias = true
-        }
-    }
-
     // ========== ГЕОМЕТРИЯ ДУГИ (СТАТИЧЕСКАЯ ДЛЯ РАЗМЕРА) ==========
     val arcGeometry = remember(geometry.width, geometry.height) {
         val outerRadius = (geometry.width - 2 * geometry.margin) / 2f
@@ -154,15 +144,7 @@ internal fun FuelWidget(
                 style = Stroke(width = geometry.outerStrokeWidth)
             )
 
-            // 3. ТЕКСТ С ОСТАТКОМ ТОПЛИВА
-            drawFuelText(
-                currentFuel = currentFuel,
-                geometry = geometry,
-                arcGeometry = arcGeometry,
-                fuelPaint = fuelPaint
-            )
-
-            // 4. СТРЕЛКА
+            // 3. СТРЕЛКА
             drawFuelNeedle(
                 fuelAngle = fuelAngle,
                 geometry = geometry,
@@ -318,28 +300,6 @@ private fun buildFuelScaleBitmap(
     }
 
     return bitmap
-}
-
-private fun DrawScope.drawFuelText(
-    currentFuel: Float,
-    geometry: Geometry,
-    arcGeometry: FuelArcGeometry,
-    fuelPaint: android.graphics.Paint
-) {
-    val fuelText = "${currentFuel.toInt()} л"
-    val rad1 = Math.toRadians(arcGeometry.endAngle.toDouble()).toFloat()
-    val r1 = arcGeometry.tickRadius - geometry.tickLarge - geometry.textOffsetFromTick
-    val x1 = geometry.center.x + r1 * cos(rad1)
-    val y1 = geometry.center.y + r1 * sin(rad1)
-
-    val targetY = y1
-    val targetX = x1 + geometry.textSizePx * 0.8f
-
-    drawContext.canvas.nativeCanvas.apply {
-        val fm = fuelPaint.fontMetrics
-        val baseline = targetY - (fm.ascent + fm.descent) / 2f
-        drawText(fuelText, targetX, baseline, fuelPaint)
-    }
 }
 
 private fun DrawScope.drawFuelNeedle(
