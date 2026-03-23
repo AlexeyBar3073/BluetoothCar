@@ -37,7 +37,8 @@ internal data class DashboardType4Geometry(
     val density: Density,
     val ringColor: Color,
     val logTag: String,
-    val trailAlphaStops: List<Float>
+    val trailAlphaStops: List<Float>,
+    val tripArcRadius: Float
 ) {
     companion object {
         fun fromSize(
@@ -79,6 +80,10 @@ internal data class DashboardType4Geometry(
                 0.431f, 0.493f, 0.554f, 0.616f, 0.678f, 0.739f
             )
 
+            val dx = margin - size.width / 2f
+            val dy = size.height / 2f
+            val tripArcRadius = sqrt(dx * dx + dy * dy)
+
             return DashboardType4Geometry(
                 unit = unit, center = center, width = size.width, height = size.height,
                 margin = margin, gapScale = gapScale, maxRadius = maxRadius,
@@ -91,7 +96,8 @@ internal data class DashboardType4Geometry(
                 ringRadius = ringRadius, blackStrokeWidth = blackStrokeWidth,
                 blackRadius = blackRadius, startAngle = startAngle,
                 fullSweep = fullSweep, maxSpeed = maxSpeed, density = density,
-                ringColor = ringColor, logTag = logTag, trailAlphaStops = trailAlphaStops
+                ringColor = ringColor, logTag = logTag, trailAlphaStops = trailAlphaStops,
+                tripArcRadius = tripArcRadius
             )
         }
     }
