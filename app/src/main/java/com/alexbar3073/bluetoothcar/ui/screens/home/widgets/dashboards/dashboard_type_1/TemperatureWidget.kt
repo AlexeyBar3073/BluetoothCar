@@ -70,9 +70,9 @@ internal fun TemperatureWidget(
         label = "trans"
     )
 
-    // Иконки из ресурсов
-    val coolantIcon = painterResource(R.drawable.engine_coolant)
-    val transIcon = painterResource(R.drawable.oil_temperature)
+    // Используем новую иконку
+    val coolantIcon = painterResource(R.drawable.engine_coolant_new)
+    val transIcon = painterResource(R.drawable.oil_temperature_new)
 
     // ========== ГЕОМЕТРИЯ ДУГИ (СИММЕТРИЧНО FUEL) ==========
     val arcGeometry = remember(geometry.width, geometry.height) {
@@ -90,7 +90,6 @@ internal fun TemperatureWidget(
 
         val tickRadius = outerRadius - geometry.outerStrokeWidth / 2f - geometry.gapScale
         
-        // Разделитель равен высоте большой риски
         val gapAngle = Math.toDegrees((geometry.tickLarge / tickRadius).toDouble()).toFloat()
         val individualSweep = (abs(totalSweep) - gapAngle) / 2f
 
@@ -329,13 +328,11 @@ private fun drawSubScale(
         )
 
         if (percent == 0f || percent == 50f || percent == 100f) {
-            // УВЕЛИЧЕННЫЙ ОТСТУП: добавлено + 8f * unit к textOffsetFromTick для предотвращения "прилипания"
             val textRadius = arcGeo.tickRadius - tickLength - geometry.textOffsetFromTick - 6f * geometry.unit
             val itemX = geometry.center.x + textRadius * cosA
             val itemY = geometry.center.y + textRadius * sinA
 
             if (percent == 50f) {
-                // Вместо 90 рисуем соответствующую иконку (coolant или transmission)
                 val iconSize = geometry.textSizePx * 1.3f
                 drawScope.translate(left = itemX - iconSize / 2f, top = itemY - iconSize / 2f) {
                     with(icon) {

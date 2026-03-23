@@ -25,6 +25,8 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.StatusCircleButton
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1.DashboardType1
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_2.DashboardType2
+import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_3.DashboardType3
+import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4.DashboardType4
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
@@ -149,7 +151,7 @@ fun HomeScreenContent(
                         .fillMaxSize()
                         .weight(1f)
                 ) {
-                    DashboardType1(
+                    DashboardType4(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
                         appSettings = appSettings
@@ -185,7 +187,9 @@ fun HomeScreenPreview() {
         remainingRange = 305f,
         odometer = 326452f,
         tripA = 8675.2f,
-        fuelConsumption = 12.4f
+        fuelConsumption = 12.4f,
+        coolantTemp = 87f,
+        transmissionTemp = 73f
     )
     
     HomeScreenContent(
