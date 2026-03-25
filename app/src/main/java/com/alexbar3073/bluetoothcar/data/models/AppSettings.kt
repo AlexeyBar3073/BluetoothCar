@@ -1,4 +1,4 @@
-// Файл: data/models/AppSettings.kt
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/data/models/AppSettings.kt
 package com.alexbar3073.bluetoothcar.data.models
 
 import kotlinx.serialization.SerialName
@@ -7,31 +7,27 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * ФАЙЛ: AppSettings.kt
- * МЕСТОНАХОЖДЕНИЕ: data/models/
- *
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * Единая модель настроек приложения согласно ТЗ.
- * ТОЛЬКО ДАННЫЕ, логика в соответствующих классах.
+ * Единая модель настроек приложения. Является "источником истины" для конфигурации 
+ * как UI-части, так и параметров работы с бортовым компьютером.
  *
- * КЛЮЧЕВЫЕ ПРИНЦИПЫ:
- * 1. Чистая модель данных (без бизнес-логики)
- * 2. ConnectionFeasibilityChecker проверяет возможность подключения
- * 3. DataStreamHandler использует toDeviceSettingsMap()
+ * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
+ * 1. Используется SettingsRepository для сохранения/загрузки через DataStore.
+ * 2. Считывается AppController для инициализации всей системы.
+ * 3. Передается в BluetoothConnectionManager для настройки протокола обмена.
+ * 4. Наблюдается в SharedViewModel для отображения состояния в UI.
  *
  * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.04 13:30 UTC: ИСПРАВЛЕНИЕ ОШИБКИ
- *   1. Удалены ВСЕ методы проверки (логика в ConnectionFeasibilityChecker)
- *   2. Оставлен только toDeviceSettingsMap() для DataStreamHandler
- *   3. Класс теперь - чистая модель данных
+ * - 2026.02.04 13:30 UTC: Удалены методы логики, класс приведен к состоянию "чистой модели".
+ * - 2025.02.04 14:35 UTC: Файл приведен к стандарту оформления AI_RULES.md (путь в 1 строке, описание после импортов).
  */
 @Serializable
 data class AppSettings(
-    // Bluetooth настройки
+    // --- Bluetooth настройки ---
     @SerialName("selected_device")
     val selectedDevice: BluetoothDeviceData? = null,
 
-    // Топливная система (для расчета расхода)
+    // --- Параметры топливной системы (для расчетов БК) ---
     @SerialName("fuel_tank_capacity")
     val fuelTankCapacity: Float = 60f,
 
@@ -41,15 +37,14 @@ data class AppSettings(
     @SerialName("injector_count")
     val injectorCount: Int = 4,
 
-    // Датчики (для калибровки)
+    // --- Параметры датчиков ---
     @SerialName("speed_sensor_signals")
     val speedSensorSignalsPerMeter: Int = 3,
 
-    // Внешний вид (только для приложение)
+    // --- Настройки внешнего вида и поведения UI ---
     @SerialName("selected_theme")
     val selectedTheme: String = "system",
 
-    // Дополнительные настройки (только для приложения)
     @SerialName("show_speedometer")
     val showSpeedometer: Boolean = true,
 
@@ -63,12 +58,8 @@ data class AppSettings(
     val updateInterval: Int = 1000
 ) {
     /**
-     * Конвертировать в настройки для устройства.
-     * DataStreamHandler отправляет на БК (технические настройки).
-     * Устройство НЕ отправляется на БК.
-     *
-     * ИЗ ТЗ: "отправка настроек приложения на БК"
-     * ЕДИНСТВЕННЫЙ необходимый метод.
+     * Преобразование технических настроек в Map для отправки на устройство.
+     * Используется DataStreamHandler при реализации протокола обмена.
      */
     fun toDeviceSettingsMap(): Map<String, Any> {
         return mapOf(
@@ -79,6 +70,10 @@ data class AppSettings(
         )
     }
 
+    /**
+     * Преобразование технических настроек в JSON строку.
+     * Используется для логирования и отладки протокола.
+     */
     fun toDeviceSettingsJson(): String {
         val jsonObject = buildJsonObject {
             put("fuel_tank_capacity", fuelTankCapacity.toDouble())

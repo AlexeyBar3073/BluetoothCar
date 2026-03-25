@@ -1,19 +1,35 @@
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/HomeScreen.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,9 +39,6 @@ import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.StatusCircleButton
-import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1.DashboardType1
-import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_2.DashboardType2
-import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_3.DashboardType3
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4.DashboardType4
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
@@ -34,14 +47,25 @@ import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
- * Главный экран приложения "Бортовой компьютер".
+ * ТЕГ: Домашний экран / Главный экран
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Главный экран приложения. Отвечает за выбор и отображение текущего дашборда 
+ * на основе настроек пользователя и данных от БК.
+ *
+ * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
+ * 1. Получает данные из SharedViewModel.
+ * 2. Содержит в себе виджеты DashboardTypeX.
+ * 3. Использует StatusCircleButton для индикации состояния подключения.
+ * 
+ * ВЫЗЫВАЕТСЯ ИЗ: NavGraph (через MainActivity/NavHost)
  */
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
     navigateToSettings: () -> Unit
 ) {
-    // Получаем состояние из ViewModel
+    // Получаем состояние из ViewModel с учетом жизненного цикла
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
     val carData by viewModel.carData.collectAsStateWithLifecycle()
     val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
@@ -57,6 +81,11 @@ fun HomeScreen(
     )
 }
 
+/**
+ * Внутренний контент главного экрана.
+ * Разделяет логику получения данных и отрисовку UI.
+ * Вызывается из: HomeScreen
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenContent(
@@ -151,6 +180,7 @@ fun HomeScreenContent(
                         .fillMaxSize()
                         .weight(1f)
                 ) {
+                    // Отображаем выбранный тип дашборда (сейчас жестко задан Type 4)
                     DashboardType4(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
@@ -162,8 +192,15 @@ fun HomeScreenContent(
     }
 }
 
-// ========== PREVIEWS ==========
+// ==================== PREVIEWS ====================
 
+/**
+ * ПРЕВЬЮ С УЧЕТОМ ФИЗИЧЕСКИХ ПРОПОРЦИЙ УСТРОЙСТВ:
+ * 1080P: Соотношение 116/65 ≈ 1.785. При высоте 360dp ширина = 642dp.
+ * 720P: Соотношение 196/113 ≈ 1.735. При высоте 360dp ширина = 624dp.
+ * 
+ * Вызывается средствами Android Studio (Compose Preview)
+ */
 @Preview(
     name = "Home - 1080P (116x65mm)",
     device = "spec:width=642dp,height=360dp,dpi=480",
@@ -191,7 +228,7 @@ fun HomeScreenPreview() {
         coolantTemp = 87f,
         transmissionTemp = 73f
     )
-    
+
     HomeScreenContent(
         selectedDevice = BluetoothDeviceData("Toyota OBD", "00:11:22:33:44:55"),
         carData = fakeCarData,

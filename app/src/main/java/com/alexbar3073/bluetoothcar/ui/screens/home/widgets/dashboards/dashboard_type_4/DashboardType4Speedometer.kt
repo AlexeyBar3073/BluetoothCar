@@ -1,3 +1,4 @@
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/widgets/dashboards/dashboard_type_4/DashboardType4Speedometer.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4
 
 import androidx.compose.animation.core.Animatable
@@ -55,7 +56,45 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /**
- * Виджет спидометра для дашборда Type 4. Полностью повторяет логику Type 1.
+ * ТЕГ: Спидометр Дашборда 4
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Отрисовка спидометра и вольтметра для четвёртого типа дашборда.
+ * Включает в себя основную шкалу скорости, стрелку, текстовое значение скорости
+ * и дуговой вольтметр в нижней части прибора.
+ *
+ * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
+ * 1. Вызывается из DashboardType4.kt.
+ * 2. Использует DashboardType4Geometry.kt для получения параметров отрисовки.
+ * 3. Использует CarData.kt для получения текущих значений скорости и напряжения.
+ *
+ * ИСТОРИЯ ИЗМЕНЕНИЙ:
+ * - 2025.03.25 14:15: Улучшена видимость иконки при низком заряде: применен ярко-алый цвет (Color(0xFFFF0000)) и скорректирована анимация мигания (alpha от 0.4f до 1.0f).
+ * - 2025.03.25 13:40: Возвращено горизонтальное расположение иконки и текста (в одну линию) для вольтметра.
+ * - 2025.03.25 13:10: Исправлено качество отрисовки иконки вольтметра (убраны "ступеньки") за счет изменения порядка трансформаций.
+ * - 2025.03.25 12:45: Уменьшено расстояние между иконкой и текстом вольтметра. Приведено к формату AI_RULES.
+ * - 2025.03.25 12:30: Поменяли местами иконку и текст вольтметра. Применен ресурс ic_battery_full_50.
+ */
+
+private const val BASE_MIN_VOLTAGE = 12.0f
+private const val BASE_MAX_VOLTAGE = 12.7f
+private const val BASE_START_ANGLE = 140f
+private const val BASE_SWEEP_ANGLE = -100f
+private const val EXTENSION_DEGREES = 130f
+
+private val BURGUNDY = Color(0xFF800000)
+private val DARK_GREEN = Color(0xFF1B5E20)
+private val DARK_BLUE = Color(0xFF0D47A1)
+private val BRIGHT_RED = Color(0xFFFF0000) // Ярко-алый для критических состояний
+
+/**
+ * Вспомогательный класс для хранения углов поворота вольтметра.
+ */
+private data class VoltageAngles(val needleAngle: Float, val ringRotation: Float)
+
+/**
+ * Основной компонент спидометра Type 4.
+ * Вызывается из: DashboardType4.kt
  */
 @Composable
 internal fun DashboardType4Speedometer(
@@ -69,109 +108,57 @@ internal fun DashboardType4Speedometer(
     val startupFallDuration = 5000
     val transitionDuration = 1500
 
+    // Состояние анимации запуска (тест стрелок)
     var startupFinished by rememberSaveable { mutableStateOf(false) }
     val startupAnim = remember { Animatable(0f) }
     val transitionAnim = remember { Animatable(0f) }
 
+    // Запуск анимации при первом появлении
     LaunchedEffect(startupFinished) {
         if (!startupFinished) {
-            startupAnim.animateTo(
-                maxSpeed,
-                animationSpec = tween(startupRiseDuration, easing = FastOutSlowInEasing)
-            )
-            startupAnim.animateTo(
-                0f,
-                animationSpec = tween(startupFallDuration, easing = LinearOutSlowInEasing)
-            )
-            transitionAnim.animateTo(
-                1f,
-                animationSpec = tween(transitionDuration, easing = FastOutSlowInEasing)
-            )
+            startupAnim.animateTo(maxSpeed, animationSpec = tween(startupRiseDuration, easing = FastOutSlowInEasing))
+            startupAnim.animateTo(0f, animationSpec = tween(startupFallDuration, easing = LinearOutSlowInEasing))
+            transitionAnim.animateTo(1f, animationSpec = tween(transitionDuration, easing = FastOutSlowInEasing))
             startupFinished = true
         }
     }
 
+    // Выбор значения для отображения: анимация или реальные данные
     val displaySpeed = if (!startupFinished) {
-        if (transitionAnim.value > 0f) {
-            val targetSpeed = max(0f, carData.speed)
-            targetSpeed * transitionAnim.value
-        } else {
-            startupAnim.value
-        }
-    } else {
-        carData.speed
-    }
+        if (transitionAnim.value > 0f) (max(0f, carData.speed) * transitionAnim.value) else startupAnim.value
+    } else carData.speed
 
     val displayVoltage = if (!startupFinished) {
-        if (transitionAnim.value > 0f) {
-            val targetVoltage = max(0f, carData.voltage)
-            targetVoltage * transitionAnim.value
-        } else {
-            startupAnim.value / maxSpeed * maxVoltage
-        }
-    } else {
-        carData.voltage
-    }
+        if (transitionAnim.value > 0f) (max(0f, carData.voltage) * transitionAnim.value) else (startupAnim.value / maxSpeed * maxVoltage)
+    } else carData.voltage
 
-    val animatedSpeed by animateFloatAsState(
-        targetValue = displaySpeed.coerceIn(0f, maxSpeed),
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 90f),
-        label = "needle"
-    )
+    // Плавная анимация стрелок
+    val animatedSpeed by animateFloatAsState(targetValue = displaySpeed.coerceIn(0f, maxSpeed), animationSpec = spring(0.82f, 90f), label = "needle")
+    val animatedVoltage by animateFloatAsState(targetValue = displayVoltage.coerceIn(0f, maxVoltage), animationSpec = spring(0.82f, 90f), label = "voltage")
 
-    val animatedVoltage by animateFloatAsState(
-        targetValue = displayVoltage.coerceIn(0f, maxVoltage),
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 90f),
-        label = "voltage"
-    )
-
+    // Логика иконок аккумулятора
     val isLowVoltage = animatedVoltage <= 11.8f
     val isCharging = animatedVoltage > 13.0f
-
-    val alarmIcon = painterResource(R.drawable.battery_full_48)
-    val normalIcon = painterResource(R.drawable.battery_50)
+    val idleIcon = painterResource(R.drawable.ic_battery_full_50)
     val chargingIcon = painterResource(R.drawable.battery_charging_50)
-    val currentIcon = if (isCharging) chargingIcon else if (isLowVoltage) alarmIcon else normalIcon
+    val currentIcon = if (isCharging) chargingIcon else idleIcon
 
-    val blinkAlpha by animateFloatAsState(
-        targetValue = if (isLowVoltage) 0.3f else 1f,
-        animationSpec = if (isLowVoltage) infiniteRepeatable(animation = tween(500)) else tween(0),
-        label = "blink_anim"
-    )
+    // Анимация мигания при низком напряжении (alpha от 0.4 до 1.0 для заметности)
+    val blinkAlpha by animateFloatAsState(targetValue = if (isLowVoltage) 0.4f else 1f, animationSpec = if (isLowVoltage) infiniteRepeatable(tween(500)) else tween(0), label = "blink")
 
-    val speedPaint = remember {
-        android.graphics.Paint().apply {
-            color = Color.White.toArgb()
-            textAlign = android.graphics.Paint.Align.CENTER
-            isFakeBoldText = true
-            isAntiAlias = true
-        }
-    }
+    // Настройка кистей для текста
+    val speedPaint = remember { android.graphics.Paint().apply { color = Color.White.toArgb(); textAlign = android.graphics.Paint.Align.CENTER; isFakeBoldText = true; isAntiAlias = true } }
+    val unitPaint = remember { android.graphics.Paint().apply { color = Color.Gray.toArgb(); textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true } }
 
-    val unitPaint = remember {
-        android.graphics.Paint().apply {
-            color = Color.Gray.toArgb()
-            textAlign = android.graphics.Paint.Align.CENTER
-            isAntiAlias = true
-        }
-    }
-
+    // Расчет вращения шкалы вольтметра
     var ringRotation by remember { mutableFloatStateOf(0f) }
-    val anglesState = remember(animatedVoltage, ringRotation) {
-        derivedStateOf { calculateAngles(animatedVoltage, ringRotation) }
-    }
+    val anglesState = remember(animatedVoltage, ringRotation) { derivedStateOf { calculateAngles(animatedVoltage, ringRotation) } }
     val angles by anglesState
 
-    LaunchedEffect(angles.ringRotation) {
-        if (angles.ringRotation != ringRotation) {
-            ringRotation = angles.ringRotation
-        }
-    }
+    LaunchedEffect(angles.ringRotation) { if (angles.ringRotation != ringRotation) ringRotation = angles.ringRotation }
 
-    val bitmapKey = remember(geometry.width, geometry.height) {
-        Pair(geometry.width, geometry.height)
-    }
-
+    // Кэширование битмапов для оптимизации
+    val bitmapKey = remember(geometry.width, geometry.height) { Pair(geometry.width, geometry.height) }
     var scaleBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
     var needleBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
     var ringBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
@@ -179,128 +166,172 @@ internal fun DashboardType4Speedometer(
     val trailCache = rememberTrailCache(geometry)
     val windowPath = rememberVoltmeterWindow(geometry)
 
-    val speedTextSize = 42f * geometry.unit
-    val unitTextSize = 16f * geometry.unit
-
     Box(modifier = modifier) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawVoltmeter(
-                geometry = geometry,
-                voltage = animatedVoltage,
-                ringBitmap = ringBitmap ?: buildVoltageRingBitmap(geometry).also { ringBitmap = it },
-                ringRotation = ringRotation,
-                iconPainter = currentIcon,
-                alpha = if (isLowVoltage) blinkAlpha else 1f,
-                needleAngle = angles.needleAngle,
-                windowPath = windowPath
-            )
-
-            drawSpeedometer(
-                geometry = geometry,
-                speed = animatedSpeed,
-                scaleBitmap = scaleBitmap ?: buildScaleBitmap(geometry, geometry.ringColor).also { scaleBitmap = it },
-                needleBitmap = needleBitmap ?: buildNeedleBitmap(geometry, geometry.ringColor).also { needleBitmap = it },
-                ringColor = geometry.ringColor,
-                speedPaint = speedPaint,
-                unitPaint = unitPaint,
-                trailCache = trailCache,
-                speedTextSize = speedTextSize,
-                unitTextSize = unitTextSize
-            )
+            // Рисуем вольтметр (нижняя дуга)
+            drawVoltmeter(geometry, animatedVoltage, ringBitmap ?: buildVoltageRingBitmap(geometry).also { ringBitmap = it }, ringRotation, currentIcon, if (isLowVoltage) blinkAlpha else 1f, angles.needleAngle, windowPath)
+            // Рисуем основной спидометр
+            drawSpeedometer(geometry, animatedSpeed, scaleBitmap ?: buildScaleBitmap(geometry, geometry.ringColor).also { scaleBitmap = it }, needleBitmap ?: buildNeedleBitmap(geometry, geometry.ringColor).also { needleBitmap = it }, geometry.ringColor, speedPaint, unitPaint, trailCache)
         }
     }
 }
 
-private fun DrawScope.drawSpeedometer(
-    geometry: DashboardType4Geometry,
-    speed: Float,
-    scaleBitmap: ImageBitmap,
-    needleBitmap: ImageBitmap,
-    ringColor: Color,
-    speedPaint: android.graphics.Paint,
-    unitPaint: android.graphics.Paint,
-    trailCache: TrailCache,
-    speedTextSize: Float,
-    unitTextSize: Float
-) {
+/**
+ * Отрисовка основного блока спидометра (шкала, свечение, стрелка, текст).
+ * Вызывается из: DashboardType4Speedometer
+ */
+private fun DrawScope.drawSpeedometer(geometry: DashboardType4Geometry, speed: Float, scaleBitmap: ImageBitmap, needleBitmap: ImageBitmap, ringColor: Color, speedPaint: android.graphics.Paint, unitPaint: android.graphics.Paint, trailCache: TrailCache) {
     val needleAngle = geometry.startAngle + geometry.fullSweep * (speed / geometry.maxSpeed)
-
     drawImage(scaleBitmap, Offset.Zero)
     drawDualRadialGlow(geometry, speed, ringColor)
-
-    rotate(needleAngle, pivot = geometry.center) {
-        drawImage(needleBitmap, Offset.Zero)
-    }
-
-    drawSpeedText(speed, geometry, speedPaint, unitPaint, speedTextSize, unitTextSize)
+    rotate(needleAngle, pivot = geometry.center) { drawImage(needleBitmap, Offset.Zero) }
+    drawSpeedText(speed, geometry, speedPaint, unitPaint)
     drawSpeedometerTrail(geometry, speed, trailCache)
 }
 
-private data class TrailCache(
-    val innerRadius: Float,
-    val radiusClipPath: Path
-)
-
-@Composable
-private fun rememberTrailCache(geometry: DashboardType4Geometry): TrailCache {
-    return remember(geometry.width, geometry.height) {
-        val outerRadius = geometry.scaleRadius
-        val radiusClipPath = Path().apply {
-            addOval(Rect(geometry.center.x - outerRadius, geometry.center.y - outerRadius, geometry.center.x + outerRadius, geometry.center.y + outerRadius))
-        }
-        TrailCache(outerRadius - geometry.tickLarge, radiusClipPath)
+/**
+ * Отрисовка текста текущей скорости в центре прибора.
+ * Вызывается из: drawSpeedometer
+ */
+private fun DrawScope.drawSpeedText(speed: Float, geometry: DashboardType4Geometry, speedPaint: android.graphics.Paint, unitPaint: android.graphics.Paint) {
+    speedPaint.textSize = 42f * geometry.unit
+    unitPaint.textSize = 16f * geometry.unit
+    drawContext.canvas.nativeCanvas.apply {
+        val speedStr = speed.toInt().toString()
+        val fm = speedPaint.fontMetrics
+        val baseline = geometry.center.y - (fm.ascent + fm.descent) / 2f
+        drawText(speedStr, geometry.center.x, baseline, speedPaint)
+        drawText("км/ч", geometry.center.x, baseline + 32f * geometry.unit, unitPaint)
     }
 }
 
-@Composable
-private fun rememberVoltmeterWindow(geometry: DashboardType4Geometry): Path {
-    return remember(geometry.width, geometry.height) {
-        val radius = geometry.scaleRadius
-        Path().apply {
-            arcTo(Rect(geometry.center.x - radius, geometry.center.y - radius, geometry.center.x + radius, geometry.center.y + radius), 40f, 100f, true)
-            lineTo(geometry.center.x, geometry.center.y)
-            close()
+/**
+ * Отрисовка компонентов вольтметра (вращающаяся шкала, иконка, текст, мини-стрелка).
+ * Вызывается из: DashboardType4Speedometer
+ */
+private fun DrawScope.drawVoltmeter(geometry: DashboardType4Geometry, voltage: Float, ringBitmap: ImageBitmap, ringRotation: Float, iconPainter: Painter, alpha: Float, needleAngle: Float, windowPath: Path) {
+    // Ограничиваем область рисования шкалы "окном" вольтметра
+    clipPath(windowPath) {
+        rotate(ringRotation, pivot = geometry.center) {
+            drawImage(ringBitmap, Offset(geometry.center.x - ringBitmap.width / 2f, geometry.center.y - ringBitmap.height / 2f))
         }
     }
+    drawBatteryIconAndText(geometry, voltage, iconPainter, alpha)
+    drawVoltageNeedle(geometry, needleAngle, voltageToColor(voltage))
 }
 
+/**
+ * Отрисовка иконки батареи и текстового значения напряжения в одну горизонтальную линию.
+ * Вызывается из: drawVoltmeter
+ */
+private fun DrawScope.drawBatteryIconAndText(geometry: DashboardType4Geometry, voltage: Float, iconPainter: Painter, alpha: Float = 1f) {
+    val iconSize = geometry.textSizePx
+    val voltageText = String.format(Locale.US, "%.1fV", voltage)
+    val textPaint = android.graphics.Paint().apply { color = Color.Gray.toArgb(); textSize = geometry.textSizePx * 0.8f; isAntiAlias = true }
+    
+    // Расчитываем общую ширину блока для центрирования
+    val spacing = 4f * geometry.unit
+    val totalWidth = iconSize + spacing + textPaint.measureText(voltageText)
+    
+    // Позиционируем блок в нижней части прибора
+    val blockCenterX = geometry.center.x
+    val blockCenterY = geometry.center.y + geometry.textRadius - 5f * geometry.unit
+    val blockLeft = blockCenterX - totalWidth / 2f
+    
+    // Рисуем иконку
+    translate(blockLeft, blockCenterY - iconSize / 2f) {
+        with(iconPainter) {
+            draw(Size(iconSize, iconSize), alpha = alpha, colorFilter = ColorFilter.tint(voltageToColor(voltage)))
+        }
+    }
+    
+    // Рисуем текст
+    drawContext.canvas.nativeCanvas.drawText(
+        voltageText,
+        blockLeft + iconSize + spacing,
+        blockCenterY - (textPaint.ascent() + textPaint.descent()) / 2f,
+        textPaint
+    )
+}
+
+/**
+ * Отрисовка тонкой светящейся стрелки вольтметра.
+ * Вызывается из: drawVoltmeter
+ */
+private fun DrawScope.drawVoltageNeedle(geometry: DashboardType4Geometry, needleAngle: Float, color: Color) {
+    val angleRad = Math.toRadians(needleAngle.toDouble()).toFloat()
+    val cos = cos(angleRad); val sin = sin(angleRad)
+    val innerGlowRadius = geometry.ringRadius - geometry.glowWidth
+    val start = Offset(geometry.center.x + cos * innerGlowRadius, geometry.center.y + sin * innerGlowRadius)
+    val tip = Offset(geometry.center.x + cos * (geometry.scaleRadius - 2f * geometry.unit), geometry.center.y + sin * (geometry.scaleRadius - 2f * geometry.unit))
+    drawLine(Brush.linearGradient(listOf(color.copy(alpha = 0f), color.copy(alpha = 0.5f)), start, tip), start, tip, 5f * geometry.unit, StrokeCap.Round)
+    drawLine(Brush.linearGradient(listOf(Color.Transparent, Color.White), start, tip), start, tip, 1.5f * geometry.unit, StrokeCap.Round)
+}
+
+/**
+ * Преобразование напряжения в цвет для индикации состояния.
+ */
+private fun voltageToColor(v: Float): Color = when {
+    v <= 11.8f -> BRIGHT_RED // Используем ярко-алый для критического уровня
+    v <= 12.0f -> lerp(BURGUNDY, Color.Red, ((v - 11.8f) / 0.2f).coerceIn(0f, 1f))
+    v <= 12.2f -> lerp(Color.Red, Color.Yellow, ((v - 12.0f) / 0.2f).coerceIn(0f, 1f))
+    v <= 12.5f -> lerp(Color.Yellow, Color.Green, ((v - 12.2f) / 0.3f).coerceIn(0f, 1f))
+    v <= 12.75f -> lerp(Color.Green, DARK_GREEN, ((v - 12.5f) / 0.25f).coerceIn(0f, 1f))
+    v <= 13.1f -> lerp(DARK_GREEN, DARK_BLUE, ((v - 12.75f) / 0.35f).coerceIn(0f, 1f))
+    else -> Color(0xFF3378D8)
+}
+
+/**
+ * Кэширование параметров шлейфа спидометра.
+ */
+private data class TrailCache(val innerRadius: Float, val radiusClipPath: Path)
+
+/**
+ * Создание и запоминание параметров шлейфа.
+ */
+@Composable
+private fun rememberTrailCache(geometry: DashboardType4Geometry): TrailCache = remember(geometry.width, geometry.height) {
+    val outerRadius = geometry.scaleRadius
+    val path = Path().apply { addOval(Rect(geometry.center.x - outerRadius, geometry.center.y - outerRadius, geometry.center.x + outerRadius, geometry.center.y + outerRadius)) }
+    TrailCache(outerRadius - geometry.tickLarge, path)
+}
+
+/**
+ * Создание пути для ограничения области видимости шкалы вольтметра.
+ */
+@Composable
+private fun rememberVoltmeterWindow(geometry: DashboardType4Geometry): Path = remember(geometry.width, geometry.height) {
+    val radius = geometry.scaleRadius
+    Path().apply { arcTo(Rect(geometry.center.x - radius, geometry.center.y - radius, geometry.center.x + radius, geometry.center.y + radius), 40f, 100f, true); lineTo(geometry.center.x, geometry.center.y); close() }
+}
+
+/**
+ * Отрисовка цветного шлейфа за стрелкой спидометра.
+ * Вызывается из: drawSpeedometer
+ */
 private fun DrawScope.drawSpeedometerTrail(geometry: DashboardType4Geometry, speed: Float, trailCache: TrailCache) {
     val sweepAngle = geometry.fullSweep * (speed / geometry.maxSpeed)
     if (sweepAngle <= 0f) return
-
     val color = getTrailColor(speed)
     val currentAngle = geometry.startAngle + sweepAngle
     val angleRad = currentAngle * PI.toFloat() / 180f
-    val cosA = cos(angleRad)
-    val sinA = sin(angleRad)
-
+    val cosA = cos(angleRad); val sinA = sin(angleRad)
     val needleEnd = Offset(geometry.center.x + geometry.scaleRadius * cosA, geometry.center.y + geometry.scaleRadius * sinA)
     val bigRadius = geometry.scaleRadius * 1.1f
-    val bigInnerRadius = bigRadius - geometry.tickLarge
     val bigCircleCenter = Offset(needleEnd.x - bigRadius * cosA, needleEnd.y - bigRadius * sinA)
-
-    val innerStop = bigInnerRadius / bigRadius
-    val colorStops = geometry.trailAlphaStops.mapIndexed { i, alpha ->
-        (innerStop + i * (1f - innerStop) / (geometry.trailAlphaStops.size - 1)) to color.copy(alpha = alpha)
-    }.toTypedArray()
-
-    val radialBrush = Brush.radialGradient(colorStops = colorStops, center = bigCircleCenter, radius = bigRadius)
-
+    val innerStop = (bigRadius - geometry.tickLarge) / bigRadius
+    val stops = geometry.trailAlphaStops.mapIndexed { i, a -> (innerStop + i * (1f - innerStop) / (geometry.trailAlphaStops.size - 1)) to color.copy(alpha = a) }.toTypedArray()
+    val radialBrush = Brush.radialGradient(colorStops = stops, center = bigCircleCenter, radius = bigRadius)
     clipPath(trailCache.radiusClipPath) {
-        val sectorClipPath = Path().apply {
-            arcTo(Rect(geometry.center.x - bigRadius, geometry.center.y - bigRadius, geometry.center.x + bigRadius, geometry.center.y + bigRadius), geometry.startAngle, sweepAngle, true)
-            lineTo(geometry.center.x, geometry.center.y)
-            close()
-        }
-
-        clipPath(sectorClipPath) {
-            drawCircle(brush = radialBrush, center = bigCircleCenter, radius = bigRadius - geometry.tickLarge / 2f, style = Stroke(width = geometry.tickLarge))
-        }
+        val sector = Path().apply { arcTo(Rect(geometry.center.x - bigRadius, geometry.center.y - bigRadius, geometry.center.x + bigRadius, geometry.center.y + bigRadius), geometry.startAngle, sweepAngle, true); lineTo(geometry.center.x, geometry.center.y); close() }
+        clipPath(sector) { drawCircle(brush = radialBrush, center = bigCircleCenter, radius = bigRadius - geometry.tickLarge / 2f, style = Stroke(width = geometry.tickLarge)) }
     }
-
     drawTrailBorder(geometry, sweepAngle, color)
 }
 
+/**
+ * Получение цвета шлейфа в зависимости от скорости.
+ */
 private fun getTrailColor(speed: Float): Color {
     val white = Color.White; val green = Color.Green; val yellow = Color.Yellow; val orange = Color(0xFFFFA500); val red = Color.Red; val burgundy = Color(0xFF800000)
     return when {
@@ -318,218 +349,73 @@ private fun getTrailColor(speed: Float): Color {
     }
 }
 
+/**
+ * Отрисовка тонкой внешней границы шлейфа.
+ */
 private fun DrawScope.drawTrailBorder(geometry: DashboardType4Geometry, sweepAngle: Float, color: Color) {
-    val borderWidth = 1f * geometry.unit
-    val borderRadius = geometry.scaleRadius + borderWidth / 2f
-    val borderRect = Rect(geometry.center.x - borderRadius, geometry.center.y - borderRadius, geometry.center.x + borderRadius, geometry.center.y + borderRadius)
-
-    drawArc(
-        brush = Brush.sweepGradient(colors = listOf(color.copy(alpha = 0f), color.copy(alpha = 1f)), center = geometry.center),
-        startAngle = geometry.startAngle,
-        sweepAngle = sweepAngle,
-        useCenter = false,
-        topLeft = borderRect.topLeft,
-        size = borderRect.size,
-        style = Stroke(width = borderWidth)
-    )
+    val borderRadius = geometry.scaleRadius + 0.5f * geometry.unit
+    drawArc(brush = Brush.sweepGradient(colors = listOf(color.copy(alpha = 0f), color.copy(alpha = 1f)), center = geometry.center), startAngle = geometry.startAngle, sweepAngle = sweepAngle, useCenter = false, topLeft = Offset(geometry.center.x - borderRadius, geometry.center.y - borderRadius), size = Size(borderRadius * 2, borderRadius * 2), style = Stroke(width = 1f * geometry.unit))
 }
 
-private fun DrawScope.drawSpeedText(
-    speed: Float,
-    geometry: DashboardType4Geometry,
-    speedPaint: android.graphics.Paint,
-    unitPaint: android.graphics.Paint,
-    speedTextSize: Float,
-    unitTextSize: Float
-) {
-    speedPaint.textSize = speedTextSize
-    unitPaint.textSize = unitTextSize
-
-    drawContext.canvas.nativeCanvas.apply {
-        val speedStr = speed.toInt().toString()
-        val fm = speedPaint.fontMetrics
-        val baseline = geometry.center.y - (fm.ascent + fm.descent) / 2f
-
-        drawText(speedStr, geometry.center.x, baseline, speedPaint)
-        drawText("км/ч", geometry.center.x, baseline + 32f * geometry.unit, unitPaint)
-    }
-}
-
-private fun DrawScope.drawDualRadialGlow(
-    geometry: DashboardType4Geometry,
-    speed: Float,
-    baseColor: Color,
-    peakSpread: Float = 0.01f
-) {
+/**
+ * Отрисовка двойного радиального свечения вокруг шкалы.
+ */
+private fun DrawScope.drawDualRadialGlow(geometry: DashboardType4Geometry, speed: Float, baseColor: Color, peakSpread: Float = 0.01f) {
     val innerRadius = geometry.ringRadius - geometry.glowWidth
     val outerRadius = geometry.ringRadius + geometry.glowWidth
     if (innerRadius <= 0f) return
-
     val glowColor = if (speed <= 120f) baseColor else lerp(baseColor, Color.Red, ((speed - 120f) / 100f).coerceIn(0f, 1f))
-    val innerStop = innerRadius / outerRadius
-    val peakStop = geometry.ringRadius / outerRadius
-
-    val leftPeak = (peakStop - peakSpread).coerceIn(0f, 1f)
-    val rightPeak = (peakStop + peakSpread).coerceIn(0f, 1f)
-
-    val brush = Brush.radialGradient(
-        colorStops = arrayOf(
-            innerStop to Color.Transparent,
-            leftPeak to glowColor.copy(alpha = 0.6f),
-            peakStop to glowColor,
-            rightPeak to glowColor.copy(alpha = 0.6f),
-            1f to Color.Transparent
-        ),
-        center = geometry.center,
-        radius = outerRadius
-    )
-
-    drawCircle(
-        brush = brush,
-        center = geometry.center,
-        radius = (outerRadius + innerRadius) / 2f,
-        style = Stroke(width = outerRadius - innerRadius)
-    )
+    val brush = Brush.radialGradient(colorStops = arrayOf(innerRadius / outerRadius to Color.Transparent, (geometry.ringRadius / outerRadius - peakSpread).coerceIn(0f, 1f) to glowColor.copy(alpha = 0.6f), geometry.ringRadius / outerRadius to glowColor, (geometry.ringRadius / outerRadius + peakSpread).coerceIn(0f, 1f) to glowColor.copy(alpha = 0.6f), 1f to Color.Transparent), center = geometry.center, radius = outerRadius)
+    drawCircle(brush = brush, center = geometry.center, radius = (outerRadius + innerRadius) / 2f, style = Stroke(width = outerRadius - innerRadius))
 }
 
-// ==============================
-// ВОЛЬТМЕТР
-// ==============================
-
-private const val BASE_MIN_VOLTAGE = 12.0f
-private const val BASE_MAX_VOLTAGE = 12.7f
-private const val BASE_START_ANGLE = 140f
-private const val BASE_SWEEP_ANGLE = -100f
-private const val EXTENSION_DEGREES = 130f
-
-private val BURGUNDY = Color(0xFF800000)
-private val DARK_GREEN = Color(0xFF1B5E20)
-private val DARK_BLUE = Color(0xFF0D47A1)
-
-private data class VoltageAngles(val needleAngle: Float, val ringRotation: Float)
-
-private fun DrawScope.drawVoltmeter(
-    geometry: DashboardType4Geometry,
-    voltage: Float,
-    ringBitmap: ImageBitmap,
-    ringRotation: Float,
-    iconPainter: Painter,
-    alpha: Float,
-    needleAngle: Float,
-    windowPath: Path
-) {
-    clipPath(windowPath) {
-        rotate(ringRotation, pivot = geometry.center) {
-            drawImage(ringBitmap, Offset(geometry.center.x - ringBitmap.width / 2f, geometry.center.y - ringBitmap.height / 2f))
-        }
-    }
-    drawBatteryIconAndText(geometry, voltage, iconPainter, alpha)
-    drawVoltageNeedle(geometry, needleAngle, voltageToColor(voltage))
-}
-
+/**
+ * Расчёт углов для анимации шкалы вольтметра.
+ */
 private fun calculateAngles(voltage: Float, currentRingRotation: Float): VoltageAngles {
-    val baseMinAngle = BASE_START_ANGLE
-    val baseMaxAngle = BASE_START_ANGLE + BASE_SWEEP_ANGLE
     val degreesPerVolt = abs(BASE_SWEEP_ANGLE) / (BASE_MAX_VOLTAGE - BASE_MIN_VOLTAGE)
     val voltageAngleAbsolute = BASE_START_ANGLE - (voltage - BASE_MIN_VOLTAGE) * degreesPerVolt
-
     return if (currentRingRotation != 0f) {
-        val limiter = if (currentRingRotation > 0f) baseMaxAngle else baseMinAngle
-        val desired = voltageAngleAbsolute + currentRingRotation
-        val overflow = desired - limiter
-        var newRotation = currentRingRotation - overflow
-
-        if (currentRingRotation > 0f && newRotation < 0f) newRotation = 0f
-        if (currentRingRotation < 0f && newRotation > 0f) newRotation = 0f
-
-        newRotation = newRotation.coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
+        val limiter = if (currentRingRotation > 0f) (BASE_START_ANGLE + BASE_SWEEP_ANGLE) else BASE_START_ANGLE
+        var newRotation = (currentRingRotation - (voltageAngleAbsolute + currentRingRotation - limiter)).coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
         if (abs(newRotation) < 0.0001f) newRotation = 0f
         VoltageAngles(limiter, newRotation)
     } else {
-        val clampedAngle = voltageAngleAbsolute.coerceIn(baseMaxAngle, baseMinAngle)
-        val overflow = voltageAngleAbsolute - clampedAngle
-        var newRotation = -overflow
-        newRotation = newRotation.coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
+        val clamped = voltageAngleAbsolute.coerceIn(BASE_START_ANGLE + BASE_SWEEP_ANGLE, BASE_START_ANGLE)
+        var newRotation = (clamped - voltageAngleAbsolute).coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
         if (abs(newRotation) < 0.0001f) newRotation = 0f
-        VoltageAngles(clampedAngle, newRotation)
+        VoltageAngles(clamped, newRotation)
     }
 }
 
-private fun DrawScope.drawVoltageNeedle(geometry: DashboardType4Geometry, needleAngle: Float, ringColor: Color) {
-    val angleRad = Math.toRadians(needleAngle.toDouble()).toFloat()
-    val cos = cos(angleRad); val sin = sin(angleRad)
-    val innerGlowRadius = geometry.ringRadius - geometry.glowWidth
-    val start = Offset(geometry.center.x + cos * innerGlowRadius, geometry.center.y + sin * innerGlowRadius)
-    val tip = Offset(geometry.center.x + cos * (geometry.scaleRadius - 2f * geometry.unit), geometry.center.y + sin * (geometry.scaleRadius - 2f * geometry.unit))
-
-    drawLine(brush = Brush.linearGradient(colors = listOf(ringColor.copy(alpha = 0f), ringColor.copy(alpha = 0.5f)), start = start, end = tip), start = start, end = tip, strokeWidth = 5f * geometry.unit, cap = StrokeCap.Round)
-    drawLine(brush = Brush.linearGradient(colors = listOf(Color.Transparent, Color.White), start = start, end = tip), start = start, end = tip, strokeWidth = 1.5f * geometry.unit, cap = StrokeCap.Round)
-}
-
-private fun voltageToColor(v: Float): Color = when {
-    v <= 11.8f -> Color.Red
-    v <= 12.0f -> lerp(BURGUNDY, Color.Red, ((v - 11.8f) / 0.2f).coerceIn(0f, 1f))
-    v <= 12.2f -> lerp(Color.Red, Color.Yellow, ((v - 12.0f) / 0.2f).coerceIn(0f, 1f))
-    v <= 12.5f -> lerp(Color.Yellow, Color.Green, ((v - 12.2f) / 0.3f).coerceIn(0f, 1f))
-    v <= 12.75f -> lerp(Color.Green, DARK_GREEN, ((v - 12.5f) / 0.25f).coerceIn(0f, 1f))
-    v <= 13.1f -> lerp(DARK_GREEN, DARK_BLUE, ((v - 12.75f) / 0.35f).coerceIn(0f, 1f))
-    else -> Color(0xFF3378D8)
-}
-
-private fun buildSweepBrush(): Brush {
-    val extendedRange = (BASE_MAX_VOLTAGE - BASE_MIN_VOLTAGE) * (EXTENSION_DEGREES / abs(BASE_SWEEP_ANGLE))
-    val extendedMin = BASE_MIN_VOLTAGE - extendedRange
-    val extendedMax = BASE_MAX_VOLTAGE + extendedRange
-
-    fun normalizeInverted(v: Float): Float = 1.0f - ((v - extendedMin) / (extendedMax - extendedMin)).coerceIn(0f, 1f)
-
-    val stops = arrayOf(
-        0.00f to DARK_BLUE,
-        normalizeInverted(13.1f) to DARK_BLUE,
-        normalizeInverted(13.0f) to DARK_GREEN,
-        normalizeInverted(12.75f) to DARK_GREEN,
-        normalizeInverted(12.5f) to Color.Green,
-        normalizeInverted(12.2f) to Color.Yellow,
-        normalizeInverted(12.0f) to Color.Red,
-        normalizeInverted(11.8f) to BURGUNDY,
-        1.00f to BURGUNDY
-    )
-    return Brush.sweepGradient(colorStops = stops)
-}
-
+/**
+ * Создание битмапа шкалы вольтметра.
+ */
 private fun buildVoltageRingBitmap(geometry: DashboardType4Geometry): ImageBitmap {
     val bitmap = ImageBitmap(geometry.width.toInt(), geometry.height.toInt())
-    val composeCanvas = Canvas(bitmap)
     val drawScope = CanvasDrawScope()
-    val sweepBrush = buildSweepBrush()
-
-    drawScope.draw(geometry.density, LayoutDirection.Ltr, composeCanvas, Size(geometry.width, geometry.height)) {
-        val ringWidth = geometry.tickLarge; val ringOuterRadius = geometry.scaleRadius - ringWidth / 2f
-        rotate(270f) {
-            drawArc(brush = sweepBrush, startAngle = 0f, sweepAngle = 360f, useCenter = false, topLeft = Offset(geometry.center.x - ringOuterRadius, geometry.center.y - ringOuterRadius), size = Size(ringOuterRadius * 2, ringOuterRadius * 2), style = Stroke(width = ringWidth))
-        }
-
-        val innerRadius = ringOuterRadius - ringWidth / 2f
-        val outerRadius = ringOuterRadius + ringWidth / 2f
-        val thickness = outerRadius - innerRadius
-        val dissolveDepth = thickness * 0.65f
-        val fadeEnd = innerRadius + dissolveDepth
-
-        val radialBrush = Brush.radialGradient(
-            colorStops = arrayOf(0f to Color.Transparent, (innerRadius / outerRadius) to Color.Transparent, (fadeEnd / outerRadius) to Color.Black, 1f to Color.Black),
-            center = geometry.center,
-            radius = outerRadius
-        )
-
-        drawArc(brush = radialBrush, startAngle = 0f, sweepAngle = 360f, useCenter = false, topLeft = Offset(geometry.center.x - ringOuterRadius, geometry.center.y - ringOuterRadius), size = Size(ringOuterRadius * 2, ringOuterRadius * 2), style = Stroke(width = ringWidth), blendMode = BlendMode.DstIn)
-
-        rotate(270f) {
-            drawArc(color = Color.White.copy(alpha = 0.02f), startAngle = 0f, sweepAngle = 360f, useCenter = false, topLeft = Offset(geometry.center.x - ringOuterRadius, geometry.center.y - ringOuterRadius), size = Size(ringOuterRadius * 2, ringOuterRadius * 2), style = Stroke(width = ringWidth), blendMode = BlendMode.Overlay)
-        }
+    drawScope.draw(geometry.density, LayoutDirection.Ltr, Canvas(bitmap), Size(geometry.width, geometry.height)) {
+        val ringOuterRadius = geometry.scaleRadius - geometry.tickLarge / 2f
+        rotate(270f) { drawArc(brush = buildSweepBrush(), startAngle = 0f, sweepAngle = 360f, useCenter = false, topLeft = Offset(geometry.center.x - ringOuterRadius, geometry.center.y - ringOuterRadius), size = Size(ringOuterRadius * 2, ringOuterRadius * 2), style = Stroke(width = geometry.tickLarge)) }
+        val radialBrush = Brush.radialGradient(colorStops = arrayOf(0f to Color.Transparent, (ringOuterRadius - geometry.tickLarge / 2f) / (ringOuterRadius + geometry.tickLarge / 2f) to Color.Transparent, (ringOuterRadius - geometry.tickLarge / 2f + geometry.tickLarge * 0.65f) / (ringOuterRadius + geometry.tickLarge / 2f) to Color.Black, 1f to Color.Black), center = geometry.center, radius = ringOuterRadius + geometry.tickLarge / 2f)
+        drawArc(brush = radialBrush, startAngle = 0f, sweepAngle = 360f, useCenter = false, topLeft = Offset(geometry.center.x - ringOuterRadius, geometry.center.y - ringOuterRadius), size = Size(ringOuterRadius * 2, ringOuterRadius * 2), style = Stroke(width = geometry.tickLarge), blendMode = BlendMode.DstIn)
     }
     return bitmap
 }
 
+/**
+ * Создание градиентной кисти для шкалы вольтметра.
+ */
+private fun buildSweepBrush(): Brush {
+    val ext = (BASE_MAX_VOLTAGE - BASE_MIN_VOLTAGE) * (EXTENSION_DEGREES / abs(BASE_SWEEP_ANGLE))
+    val min = BASE_MIN_VOLTAGE - ext; val max = BASE_MAX_VOLTAGE + ext
+    fun n(v: Float) = 1f - ((v - min) / (max - min)).coerceIn(0f, 1f)
+    return Brush.sweepGradient(colorStops = arrayOf(0f to DARK_BLUE, n(13.1f) to DARK_BLUE, n(13f) to DARK_GREEN, n(12.75f) to DARK_GREEN, n(12.5f) to Color.Green, n(12.2f) to Color.Yellow, n(12f) to Color.Red, n(11.8f) to BURGUNDY, 1f to BURGUNDY))
+}
+
+/**
+ * Создание битмапа основной шкалы спидометра.
+ */
 private fun buildScaleBitmap(geometry: DashboardType4Geometry, ringColor: Color): ImageBitmap {
     val bitmap = ImageBitmap(geometry.width.toInt(), geometry.height.toInt())
     val drawScope = CanvasDrawScope()
@@ -548,33 +434,33 @@ private fun buildScaleBitmap(geometry: DashboardType4Geometry, ringColor: Color)
     return bitmap
 }
 
+/**
+ * Создание битмапа стрелки спидометра.
+ */
 private fun buildNeedleBitmap(geometry: DashboardType4Geometry, ringColor: Color): ImageBitmap {
     val bitmap = ImageBitmap(geometry.width.toInt(), geometry.height.toInt())
     val drawScope = CanvasDrawScope()
     drawScope.draw(geometry.density, LayoutDirection.Ltr, Canvas(bitmap), Size(geometry.width, geometry.height)) {
         drawCircle(Color.Black, geometry.blackRadius, geometry.center, style = Stroke(geometry.blackStrokeWidth))
-
         drawHeatBloomSegment(radius = geometry.blackRadius, color = ringColor, geometry = geometry, sweepAngle = 45f, startAngle = 0f)
-
-        val innerGlowRadius = geometry.ringRadius - geometry.glowWidth
         val tip = Offset(geometry.center.x + geometry.scaleRadius - 1f * geometry.unit, geometry.center.y)
-        val start = Offset(geometry.center.x + innerGlowRadius, geometry.center.y)
-        
+        val start = Offset(geometry.center.x + (geometry.ringRadius - geometry.glowWidth), geometry.center.y)
         drawLine(Brush.linearGradient(listOf(ringColor.copy(alpha = 0f), ringColor.copy(alpha = 0.5f)), start, tip), start, tip, 5f * geometry.unit, StrokeCap.Round)
         drawLine(Brush.linearGradient(listOf(Color.Transparent, Color.White), start, tip), start, tip, 1.5f * geometry.unit, StrokeCap.Round)
     }
     return bitmap
 }
 
+/**
+ * Отрисовка "эффекта раскаленного сегмента" у основания стрелки.
+ */
 private fun DrawScope.drawHeatBloomSegment(radius: Float, color: Color, geometry: DashboardType4Geometry, sweepAngle: Float = 45f, gradientWidth: Float = 7f, startAngle: Float = 270f) {
     val scaledGradientWidth = gradientWidth * geometry.unit
     val outerRadius = radius + scaledGradientWidth
     val canvas = drawContext.canvas
     canvas.saveLayer(Rect(Offset.Zero, size), Paint())
-
     drawCircle(brush = Brush.radialGradient(colorStops = arrayOf(0f to Color.Transparent, (radius - scaledGradientWidth) / outerRadius to Color.Transparent, radius / outerRadius to color, 1f to Color.Transparent), center = geometry.center, radius = outerRadius), radius = outerRadius, center = geometry.center)
     drawCircle(Color.White, radius, geometry.center, style = Stroke(1f * geometry.unit))
-
     drawIntoCanvas {
         it.nativeCanvas.save(); it.nativeCanvas.rotate(startAngle - 180f, geometry.center.x, geometry.center.y)
         val half = (sweepAngle / 360f) / 2f
@@ -582,14 +468,4 @@ private fun DrawScope.drawHeatBloomSegment(radius: Float, color: Color, geometry
         it.nativeCanvas.restore()
     }
     canvas.restore()
-}
-
-private fun DrawScope.drawBatteryIconAndText(geometry: DashboardType4Geometry, voltage: Float, iconPainter: Painter, alpha: Float = 1f) {
-    val iconSize = geometry.textSizePx; val voltageText = String.format(Locale.US, "%.1fV", voltage)
-    val textPaint = android.graphics.Paint().apply { color = Color.Gray.toArgb(); textSize = geometry.textSizePx * 0.8f; isAntiAlias = true }
-    val totalWidth = iconSize + 4f * geometry.unit + textPaint.measureText(voltageText)
-    val blockCenterX = geometry.center.x; val blockCenterY = geometry.center.y + geometry.textRadius - 5f * geometry.unit
-    val blockLeft = blockCenterX - totalWidth / 2f
-    translate(blockLeft, blockCenterY - iconSize / 2f) { with(iconPainter) { draw(Size(iconSize, iconSize), alpha = alpha, colorFilter = ColorFilter.tint(voltageToColor(voltage))) } }
-    drawContext.canvas.nativeCanvas.drawText(voltageText, blockLeft + iconSize + 4f * geometry.unit, blockCenterY - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
 }
