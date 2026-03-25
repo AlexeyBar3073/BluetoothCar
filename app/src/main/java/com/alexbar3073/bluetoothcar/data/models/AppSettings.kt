@@ -3,6 +3,7 @@ package com.alexbar3073.bluetoothcar.data.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -12,14 +13,9 @@ import kotlinx.serialization.json.put
  * как UI-части, так и параметров работы с бортовым компьютером.
  *
  * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Используется SettingsRepository для сохранения/загрузки через DataStore.
+ * 1. Используется SettingsRepository для сохранения/загрузки через DataStore (в формате JSON).
  * 2. Считывается AppController для инициализации всей системы.
  * 3. Передается в BluetoothConnectionManager для настройки протокола обмена.
- * 4. Наблюдается в SharedViewModel для отображения состояния в UI.
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.04 13:30 UTC: Удалены методы логики, класс приведен к состоянию "чистой модели".
- * - 2025.02.04 14:35 UTC: Файл приведен к стандарту оформления AI_RULES.md (путь в 1 строке, описание после импортов).
  */
 @Serializable
 data class AppSettings(
@@ -30,6 +26,10 @@ data class AppSettings(
     // --- Параметры топливной системы (для расчетов БК) ---
     @SerialName("fuel_tank_capacity")
     val fuelTankCapacity: Float = 60f,
+
+    // Это поле сохраняется локально в приложении, но не отправляется на БК
+    @SerialName("min_fuel_level")
+    val minFuelLevel: Float = 5f,
 
     @SerialName("injector_performance")
     val injectorPerformance: Float = 250f,
@@ -59,7 +59,6 @@ data class AppSettings(
 ) {
     /**
      * Преобразование технических настроек в Map для отправки на устройство.
-     * Используется DataStreamHandler при реализации протокола обмена.
      */
     fun toDeviceSettingsMap(): Map<String, Any> {
         return mapOf(
@@ -71,8 +70,8 @@ data class AppSettings(
     }
 
     /**
-     * Преобразование технических настроек в JSON строку.
-     * Используется для логирования и отладки протокола.
+     * Преобразование технических настроек в JSON строку для протокола БК.
+     * min_fuel_level намеренно не включен, так как БК о нем знать не нужно.
      */
     fun toDeviceSettingsJson(): String {
         val jsonObject = buildJsonObject {

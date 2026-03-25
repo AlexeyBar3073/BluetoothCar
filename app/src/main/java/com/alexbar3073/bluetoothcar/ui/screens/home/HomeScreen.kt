@@ -47,25 +47,17 @@ import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
- * ТЕГ: Домашний экран / Главный экран
- * 
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Главный экран приложения. Отвечает за выбор и отображение текущего дашборда 
- * на основе настроек пользователя и данных от БК.
+ * ТЕГ: Домашний экран
  *
- * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Получает данные из SharedViewModel.
- * 2. Содержит в себе виджеты DashboardTypeX.
- * 3. Использует StatusCircleButton для индикации состояния подключения.
- * 
- * ВЫЗЫВАЕТСЯ ИЗ: NavGraph (через MainActivity/NavHost)
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Главный экран приложения. Отображает текущую панель приборов (Dashboard)
+ * и кнопки управления (подключение, настройки).
  */
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
     navigateToSettings: () -> Unit
 ) {
-    // Получаем состояние из ViewModel с учетом жизненного цикла
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
     val carData by viewModel.carData.collectAsStateWithLifecycle()
     val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
@@ -77,14 +69,13 @@ fun HomeScreen(
         connectionStatusInfo = connectionStatusInfo,
         appSettings = appSettings,
         onRetryConnection = { viewModel.retryConnection() },
+        onTripReset = { command -> viewModel.sendJsonCommand(command) },
         navigateToSettings = navigateToSettings
     )
 }
 
 /**
- * Внутренний контент главного экрана.
- * Разделяет логику получения данных и отрисовку UI.
- * Вызывается из: HomeScreen
+ * Контент домашнего экрана. Вынесен отдельно для поддержки Preview.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,6 +85,7 @@ fun HomeScreenContent(
     connectionStatusInfo: ConnectionStatusInfo,
     appSettings: AppSettings?,
     onRetryConnection: () -> Unit,
+    onTripReset: (String) -> Unit = {},
     navigateToSettings: () -> Unit
 ) {
     BluetoothCarTheme {
@@ -154,9 +146,7 @@ fun HomeScreenContent(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = AppColors.SurfaceDark,
-                        titleContentColor = AppColors.TextPrimary,
-                        navigationIconContentColor = AppColors.PrimaryBlue,
-                        actionIconContentColor = AppColors.TextSecondary
+                        titleContentColor = AppColors.TextPrimary
                     ),
                     modifier = Modifier
                         .height(COMPACT_TOP_BAR_HEIGHT)
@@ -175,16 +165,12 @@ fun HomeScreenContent(
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f)
-                ) {
-                    // Отображаем выбранный тип дашборда (сейчас жестко задан Type 4)
+                Box(modifier = Modifier.fillMaxSize()) {
                     DashboardType4(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
-                        appSettings = appSettings
+                        appSettings = appSettings,
+                        onTripReset = onTripReset
                     )
                 }
             }
@@ -194,46 +180,60 @@ fun HomeScreenContent(
 
 // ==================== PREVIEWS ====================
 
-/**
- * ПРЕВЬЮ С УЧЕТОМ ФИЗИЧЕСКИХ ПРОПОРЦИЙ УСТРОЙСТВ:
- * 1080P: Соотношение 116/65 ≈ 1.785. При высоте 360dp ширина = 642dp.
- * 720P: Соотношение 196/113 ≈ 1.735. При высоте 360dp ширина = 624dp.
- * 
- * Вызывается средствами Android Studio (Compose Preview)
- */
 @Preview(
-    name = "Home - 1080P (116x65mm)",
+    name = "Home - Normal",
     device = "spec:width=642dp,height=360dp,dpi=480",
-    showSystemUi = false,
-    backgroundColor = 0xFF121212,
-    showBackground = true
-)
-@Preview(
-    name = "Home - 720P (196x113mm)",
-    device = "spec:width=624dp,height=360dp,dpi=320",
-    showSystemUi = false,
-    backgroundColor = 0xFF121212,
     showBackground = true
 )
 @Composable
-fun HomeScreenPreview() {
+fun HomeScreenNormalPreview() {
     val fakeCarData = CarData(
-        speed = 96f,
-        fuel = 42f, // Около 70% от 60л
-        voltage = 12.6f,
-        remainingRange = 305f,
-        odometer = 326452f,
-        tripA = 8675.2f,
-        fuelConsumption = 12.4f,
-        coolantTemp = 87f,
-        transmissionTemp = 73f
+        speed = 60f,
+        voltage = 14.2f,
+        fuel = 35f, 
+        coolantTemp = 90f,
+        transmissionTemp = 80f,
+        // Включаем иконки для визуального контроля размещения во всех превью
+        isFuelLow = true,
+        tirePressureLow = true,
+        washerFluidLow = true,
+        ecuErrors = "P0300"
     )
 
     HomeScreenContent(
-        selectedDevice = BluetoothDeviceData("Toyota OBD", "00:11:22:33:44:55"),
+        selectedDevice = BluetoothDeviceData("My Car", "00:11:22:33:44:55"),
         carData = fakeCarData,
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
-        appSettings = AppSettings(fuelTankCapacity = 60f),
+        appSettings = AppSettings(fuelTankCapacity = 60f, minFuelLevel = 5f),
+        onRetryConnection = {},
+        navigateToSettings = {}
+    )
+}
+
+@Preview(
+    name = "Home - Warnings",
+    device = "spec:width=642dp,height=360dp,dpi=480",
+    showBackground = true
+)
+@Composable
+fun HomeScreenWarningsPreview() {
+    val fakeCarData = CarData(
+        speed = 0f,
+        voltage = 11.8f,
+        fuel = 3f, 
+        coolantTemp = 105f,
+        transmissionTemp = 95f,
+        ecuErrors = "P0300",
+        tirePressureLow = true,
+        washerFluidLow = true,
+        isFuelLow = true
+    )
+
+    HomeScreenContent(
+        selectedDevice = BluetoothDeviceData("My Car", "00:11:22:33:44:55"),
+        carData = fakeCarData,
+        connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
+        appSettings = AppSettings(fuelTankCapacity = 60f, minFuelLevel = 5f),
         onRetryConnection = {},
         navigateToSettings = {}
     )

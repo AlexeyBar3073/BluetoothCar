@@ -170,6 +170,9 @@ fun SettingsScreen(
                                     "Объем топливного бака" ->
                                         currentSettings.copy(fuelTankCapacity = newValue)
 
+                                    "Мин. остаток топлива" ->
+                                        currentSettings.copy(minFuelLevel = newValue)
+
                                     "Производительность форсунки" ->
                                         currentSettings.copy(injectorPerformance = newValue)
 

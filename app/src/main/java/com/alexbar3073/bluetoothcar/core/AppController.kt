@@ -84,16 +84,23 @@ class AppController(
     // ========== ПРОИЗВОДНЫЕ ПОТОКИ ДАННЫХ ==========
     /** Поток данных от БК с автоматическим сбросом при отключении */
     val carData: StateFlow<CarData> by lazy {
-        // Комбинируем поток данных с потоком состояния подключения
+        // Комбинируем поток данных с потоком состояния подключения и настройками
         combine(
             (bluetoothConnectionManager?.carDataFlow ?: emptyFlow()),
+            _appSettings,
             connectionStatusInfo
-        ) { carDataValue, connectionStatus ->
+        ) { carDataValue, settings, connectionStatus ->
             // Если не подключены или данные устарели, возвращаем пустой объект
             if (!connectionStatus.isActive) {
-                CarData() // Пустой объект с нулевыми значениями (все поля = 0f)
+                CarData() // Пустой объект с нулевыми значениями
             } else {
-                carDataValue ?: CarData() // На случай null из BCM
+                val baseData = carDataValue ?: CarData()
+                val minFuel = settings?.minFuelLevel ?: 5f
+                
+                // Расчет производных полей, которые не приходят напрямую от БК
+                baseData.copy(
+                    isFuelLow = baseData.fuel < minFuel
+                )
             }
         }.stateIn(
             scope = appScope,
@@ -331,6 +338,16 @@ class AppController(
     fun resetConnectionStatistics() {
         AppLogger.logInfo("Сброс статистики подключения", TAG)
         bluetoothConnectionManager?.resetStatistics()
+    }
+
+    /**
+     * Отправить произвольную JSON команду на устройство.
+     * Делегирует вызов BluetoothConnectionManager.
+     * Вызывается из SharedViewModel.
+     */
+    fun sendJsonCommand(jsonCommand: String) {
+        AppLogger.logInfo("Отправка JSON команды: $jsonCommand", TAG)
+        bluetoothConnectionManager?.sendJsonCommand(jsonCommand)
     }
 
     // ========== УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ ==========

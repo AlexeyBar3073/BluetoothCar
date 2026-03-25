@@ -220,6 +220,15 @@ class SharedViewModel(
     }
 
     /**
+     * Отправить произвольную JSON команду на устройство.
+     * Делегирует вызов AppController.
+     */
+    fun sendJsonCommand(jsonCommand: String) {
+        log("UI: Отправка JSON команды: $jsonCommand")
+        appController.sendJsonCommand(jsonCommand)
+    }
+
+    /**
      * Получить текущие данные от БК.
      * Делегирует вызов AppController.
      * Используется для получения данных вне потока.

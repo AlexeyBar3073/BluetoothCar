@@ -210,11 +210,29 @@ class DataStreamHandler(
      * Вызывается из: BluetoothConnectionManager.kt
      */
     fun sendCommand() {
-        log("Публичный вызов отправки команды")
+        log("Публичный вызов отправки команды GET_DATA")
 
         if (isHandlerActive.get() && isListeningForData.get()) {
             coroutineScope.launch {
                 sendDataRequestCommand()
+            }
+        } else {
+            log("Обработчик не активен или не получает данные")
+        }
+    }
+
+    /**
+     * Отправить произвольную JSON команду на устройство.
+     * @param jsonCommand Строка в формате JSON
+     */
+    fun sendJsonCommand(jsonCommand: String) {
+        log("Публичный вызов отправки JSON команды: $jsonCommand")
+
+        if (isHandlerActive.get() && isListeningForData.get()) {
+            coroutineScope.launch {
+                withContext(Dispatchers.IO) {
+                    bluetoothService.sendData(jsonCommand)
+                }
             }
         } else {
             log("Обработчик не активен или не получает данные")
@@ -352,7 +370,7 @@ class DataStreamHandler(
      * Вызывается: из startSendingProcess().
      *
      * @param settings Настройки для отправки
-     * @return true если настройки отправлены и подтверждены
+     * @return true if настройки отправлены и подтверждены
      */
     private suspend fun sendAppSettings(settings: AppSettings): Boolean {
         return withContext(Dispatchers.IO) {
@@ -396,7 +414,7 @@ class DataStreamHandler(
      * ВЫЗЫВАЕТ LISTENING_DATA при успешном подтверждении команды (согласно ТЗ 9.6).
      * Вызывается: из startSendingProcess().
      *
-     * @return true если команда отправлена и подтверждена
+     * @return true if команда отправлена и подтверждена
      */
     private suspend fun sendDataRequestCommand(): Boolean {
         return withContext(Dispatchers.IO) {
@@ -439,7 +457,7 @@ class DataStreamHandler(
      * @param acknowledgmentFlag Флаг подтверждения получения
      * @param statusMessage Сообщение для логирования
      * @param onSuccess Действие при успешном подтверждении
-     * @return true если подтверждение получено
+     * @return true if подтверждение получено
      */
     private suspend fun sendWithTimeoutAndRetry(
         message: String,
@@ -602,7 +620,7 @@ class DataStreamHandler(
      * Проверить, активен ли обработчик данных.
      * Вызывается: BluetoothConnectionManager.kt.
      *
-     * @return true если обработчик активен
+     * @return true if обработчик активен
      */
     fun isActive(): Boolean {
         return isHandlerActive.get()
@@ -612,7 +630,7 @@ class DataStreamHandler(
      * Проверить, находится ли обработчик в режиме приема данных.
      * Вызывается: BluetoothConnectionManager.kt.
      *
-     * @return true если прием данных активен
+     * @return true if прием данных активен
      */
     fun isListeningForData(): Boolean {
         return isListeningForData.get()

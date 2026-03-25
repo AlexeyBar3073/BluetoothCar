@@ -1,7 +1,9 @@
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/widgets/dashboards/dashboard_type_4/DashboardType4TripWidget.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -32,12 +34,22 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
+/**
+ * ТЕГ: Виджет поездки Тип 4
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Отображение данных о пробеге (Trip A/B, Total), запасе хода и расходе топлива.
+ * Поддерживает переключение между Trip A и Trip B коротким нажатием
+ * и сброс значения длительным нажатием.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun TripWidget(
     modifier: Modifier = Modifier,
     carData: CarData,
     appSettings: AppSettings?,
-    geometry: DashboardType4Geometry
+    geometry: DashboardType4Geometry,
+    onTripReset: (String) -> Unit = {}
 ) {
     var showTripB by remember { mutableStateOf(false) }
 
@@ -137,8 +149,19 @@ internal fun TripWidget(
                 Column(modifier = Modifier.align(Alignment.TopStart), horizontalAlignment = Alignment.Start) {
                     Text(text = if (showTripB) "TRIP B, км" else "TRIP A, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
-                    Text(text = "%.1f".format(if (showTripB) carData.tripB else carData.tripA), style = tripTotalValueStyle,
-                        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showTripB = !showTripB })
+                    Text(
+                        text = "%.1f".format(if (showTripB) carData.tripB else carData.tripA),
+                        style = tripTotalValueStyle,
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { showTripB = !showTripB },
+                            onLongClick = {
+                                val command = if (showTripB) "{\"trip_b\":\"reset\"}" else "{\"trip_a\":\"reset\"}"
+                                onTripReset(command)
+                            }
+                        )
+                    )
                 }
 
                 // --- TOTAL (Справа) ---
@@ -158,7 +181,7 @@ internal fun TripWidget(
                         val segments = 12
                         val gap = 1.5f * geometry.unit
                         val segW = (size.width - (segments - 1) * gap) / segments
-                        val baseColor = if (remainingRange <= 50f) Color.Red else Color.White
+                        val baseColor = Color.White
                         
                         for (i in 0 until segments) {
                             val startX = i * (segW + gap)
@@ -193,7 +216,7 @@ internal fun TripWidget(
                 // --- ТРЕУГОЛЬНИК (Теперь строго совпадает с прогрессом индикатора) ---
                 Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = tickLargeDp).fillMaxWidth(0.5f).height(gapHeightDp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val baseColor = if (remainingRange <= 50f) Color.Red else Color.White
+                        val baseColor = Color.White
                         val triangleX = rangeProgress * size.width
                         val triangleSize = 8.dp.toPx()
                         

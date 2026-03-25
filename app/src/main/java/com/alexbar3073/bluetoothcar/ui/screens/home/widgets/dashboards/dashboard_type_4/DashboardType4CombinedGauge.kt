@@ -1,12 +1,12 @@
 // Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/widgets/dashboards/dashboard_type_4/DashboardType4CombinedGauge.kt
+/**
+ * ТЕГ: Комбинированный прибор 4
+ * Назначение: Визуализация данных топлива, температуры АКПП и двигателя для дашборда тип 4.
+ * Связи: Используется в HomeScreen.kt, получает данные из CarData и настройки из AppSettings.
+ */
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.alexbar3073.bluetoothcar.R
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
+import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -52,18 +53,14 @@ import kotlin.math.sqrt
 
 /**
  * Источники данных для центрального вывода комбинированного прибора.
- * Используется для управления состоянием отображения в DashboardType4CombinedGauge.
  */
 internal enum class GaugeSource {
     FUEL, TRANS_TEMP, ENGINE_TEMP
 }
 
 /**
- * ТЕГ: Комбинированный прибор дашборда 4
- */
-
-/**
- * Основной Composable-компонент комбинированного прибора.
+ * Основной компонент комбинированного прибора.
+ * Вызывается из DashboardType4 (в HomeScreen.kt).
  */
 @Composable
 internal fun DashboardType4CombinedGauge(
@@ -72,16 +69,20 @@ internal fun DashboardType4CombinedGauge(
     appSettings: AppSettings?,
     geometry: DashboardType4Geometry
 ) {
+    // Получение емкости бака из настроек
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
     
+    // Параметры анимации при запуске
     val startupRiseDuration = 1300
     val startupFallDuration = 5000
     val transitionDuration = 1500
 
+    // Состояние завершения анимации запуска
     var startupFinished by rememberSaveable { mutableStateOf(false) }
     val startupAnim = remember { Animatable(0f) } 
     val transitionAnim = remember { Animatable(0f) }
 
+    // Запуск стартовой анимации ("тест стрелок")
     LaunchedEffect(startupFinished) {
         if (!startupFinished) {
             startupAnim.animateTo(1f, animationSpec = tween(startupRiseDuration, easing = FastOutSlowInEasing))
@@ -91,17 +92,37 @@ internal fun DashboardType4CombinedGauge(
         }
     }
 
+    // Анимация мигания для активных предупреждений (чек, топливо и т.д.)
+    val infiniteTransition = rememberInfiniteTransition(label = "warning_blink")
+    val blinkAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blink_alpha"
+    )
+
+    // Выбранный источник данных для центрального текстового вывода
     var selectedSource by rememberSaveable { mutableStateOf(GaugeSource.ENGINE_TEMP) }
 
+    /**
+     * Преобразование температуры в коэффициент (0..1) для шкалы 50-130 градусов.
+     */
     fun getTempRatio(temp: Float): Float {
         val t = temp.coerceIn(50f, 130f)
         return (t - 50f) / 80f
     }
 
+    // Целевые значения для стрелок
     val targetFuel = (carData.fuel / fuelTankCapacity).coerceIn(0f, 1f)
     val targetEngine = getTempRatio(carData.coolantTemp)
     val targetTrans = getTempRatio(carData.transmissionTemp)
 
+    /**
+     * Вычисление текущего отображаемого коэффициента с учетом анимации запуска.
+     */
     fun getDisplayRatio(target: Float): Float {
         return if (!startupFinished) {
             if (transitionAnim.value > 0f) target * transitionAnim.value else startupAnim.value
@@ -112,21 +133,25 @@ internal fun DashboardType4CombinedGauge(
     val currentEngineRatio = getDisplayRatio(targetEngine)
     val currentTransRatio = getDisplayRatio(targetTrans)
 
+    // Плавная анимация движения стрелок
     val animatedFuel by animateFloatAsState(currentFuelRatio, spring(0.8f, 80f), label = "fuel")
     val animatedEngine by animateFloatAsState(currentEngineRatio, spring(0.8f, 80f), label = "engine")
     val animatedTrans by animateFloatAsState(currentTransRatio, spring(0.8f, 80f), label = "trans")
 
+    // Ресурсы иконок
     val fuelIcon = painterResource(R.drawable.fuel_50)
     val engineIcon = painterResource(R.drawable.engine_coolant_new)
     val transIcon = painterResource(R.drawable.oil_temperature_new)
 
-    val batteryIcon = painterResource(R.drawable.ic_battery_full_50)
     val tirePressureIcon = painterResource(R.drawable.ic_tire_pressure_48)
     val checkEngineIcon = painterResource(R.drawable.ic_engine_48)
+    val washingIcon = painterResource(R.drawable.ic_washing)
 
+    // Кэширование статической подложки (шкалы) в битмап
     val bitmapKey = remember(geometry.width, geometry.height) { Pair(geometry.width, geometry.height) }
     var staticBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
 
+    // Настройка кистей для текста
     val valuePaint = remember {
         android.graphics.Paint().apply {
             color = Color.White.toArgb()
@@ -143,6 +168,7 @@ internal fun DashboardType4CombinedGauge(
         }
     }
 
+    // Определение данных для центрального вывода в зависимости от выбранного источника
     val (displayValue, displayUnit, activeAngle) = when (selectedSource) {
         GaugeSource.FUEL -> Triple(if (startupFinished) carData.fuel else (targetFuel * transitionAnim.value * fuelTankCapacity), "л", 180f)
         GaugeSource.TRANS_TEMP -> Triple(if (startupFinished) carData.transmissionTemp else (50f + 80f * currentTransRatio), "°C", 270f)
@@ -151,17 +177,20 @@ internal fun DashboardType4CombinedGauge(
 
     Box(modifier = modifier
         .pointerInput(geometry.center) {
+            // Обработка касаний для переключения режимов отображения
             detectTapGestures { offset ->
                 val dx = offset.x - geometry.center.x
                 val dy = offset.y - geometry.center.y
                 val dist = sqrt(dx * dx + dy * dy)
                 if (dist < geometry.blackRadius) {
+                    // Клик в центр - циклическое переключение
                     selectedSource = when (selectedSource) {
                         GaugeSource.ENGINE_TEMP -> GaugeSource.TRANS_TEMP
                         GaugeSource.TRANS_TEMP -> GaugeSource.FUEL
                         GaugeSource.FUEL -> GaugeSource.ENGINE_TEMP
                     }
                 } else if (dist < geometry.outerRingRadius) {
+                    // Клик на конкретную шкалу
                     var angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
                     if (angle < 0) angle += 360f
                     selectedSource = when {
@@ -175,17 +204,26 @@ internal fun DashboardType4CombinedGauge(
         }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+            // Отрисовка внешнего кольца
             drawCircle(color = Color.White, radius = geometry.outerRingRadius, center = geometry.center, style = Stroke(width = geometry.outerStrokeWidth))
+            
+            // Отрисовка статической части (шкалы) из битмапа
             if (staticBitmap == null) staticBitmap = buildStaticBitmap(geometry)
             staticBitmap?.let { drawImage(it) }
 
+            // Элементы декора и свечения
             drawDualRadialGlow(geometry, geometry.ringColor)
             drawBlackRing(geometry)
             drawGaugeIcons(geometry, fuelIcon, engineIcon, transIcon)
-            drawBottomIcons(geometry, batteryIcon, tirePressureIcon, checkEngineIcon)
+            
+            // Отрисовка нижних индикаторов предупреждений (вызывается из DrawScope)
+            drawBottomIcons(geometry, carData, fuelIcon, checkEngineIcon, tirePressureIcon, washingIcon, blinkAlpha)
+            
+            // Центральный текст и указатель активной шкалы
             drawCenterValue(displayValue, displayUnit, geometry, valuePaint, unitPaint)
             drawActiveSourceArrow(geometry, activeAngle, geometry.ringColor)
 
+            // Отрисовка трех стрелок
             drawNeedleWithBloom(geometry, 140f + 80f * animatedFuel, geometry.ringColor)
             drawNeedleWithBloom(geometry, 230f + 80f * animatedTrans, geometry.ringColor)
             drawNeedleWithBloom(geometry, 40f - 80f * animatedEngine, geometry.ringColor)
@@ -193,6 +231,9 @@ internal fun DashboardType4CombinedGauge(
     }
 }
 
+/**
+ * Отрисовка значения и единицы измерения в центре прибора.
+ */
 private fun DrawScope.drawCenterValue(value: Float, unit: String, geometry: DashboardType4Geometry, valuePaint: android.graphics.Paint, unitPaint: android.graphics.Paint) {
     val valueTextSize = 42f * geometry.unit
     val unitTextSize = 16f * geometry.unit
@@ -207,6 +248,9 @@ private fun DrawScope.drawCenterValue(value: Float, unit: String, geometry: Dash
     }
 }
 
+/**
+ * Отрисовка стрелки-указателя активного режима в центральном черном кольце.
+ */
 private fun DrawScope.drawActiveSourceArrow(geometry: DashboardType4Geometry, angle: Float, color: Color) {
     val arrowRadius = geometry.blackRadius + 4f * geometry.unit
     val arrowSize = 6f * geometry.unit
@@ -221,6 +265,9 @@ private fun DrawScope.drawActiveSourceArrow(geometry: DashboardType4Geometry, an
     }
 }
 
+/**
+ * Отрисовка двухстороннего радиального свечения вдоль кольца прибора.
+ */
 private fun DrawScope.drawDualRadialGlow(geometry: DashboardType4Geometry, color: Color, peakSpread: Float = 0.01f) {
     val innerRadius = geometry.ringRadius - geometry.glowWidth
     val outerRadius = geometry.ringRadius + geometry.glowWidth
@@ -233,11 +280,17 @@ private fun DrawScope.drawDualRadialGlow(geometry: DashboardType4Geometry, color
     drawCircle(brush = brush, center = geometry.center, radius = (outerRadius + innerRadius) / 2f, style = Stroke(width = outerRadius - innerRadius))
 }
 
+/**
+ * Отрисовка внутреннего черного кольца (фон центрального значения).
+ */
 private fun DrawScope.drawBlackRing(geometry: DashboardType4Geometry) {
     drawCircle(color = Color.Black, radius = geometry.blackRadius, center = geometry.center, style = Stroke(width = geometry.blackStrokeWidth))
     drawCircle(color = Color.White.copy(alpha = 0.1f), radius = geometry.blackRadius + geometry.blackStrokeWidth / 2f, center = geometry.center, style = Stroke(width = 1f * geometry.unit))
 }
 
+/**
+ * Отрисовка стрелки с эффектом свечения ("Bloom") у основания.
+ */
 private fun DrawScope.drawNeedleWithBloom(geometry: DashboardType4Geometry, angle: Float, color: Color) {
     val innerGlowRadius = geometry.ringRadius - geometry.glowWidth
     rotate(angle, pivot = geometry.center) {
@@ -249,6 +302,9 @@ private fun DrawScope.drawNeedleWithBloom(geometry: DashboardType4Geometry, angl
     }
 }
 
+/**
+ * Отрисовка эффекта "теплового свечения" у основания стрелки.
+ */
 private fun DrawScope.drawHeatBloomSegment(radius: Float, color: Color, geometry: DashboardType4Geometry, sweepAngle: Float = 45f, gradientWidth: Float = 7f, startAngle: Float = 0f) {
     val scaledGradientWidth = gradientWidth * geometry.unit
     val outerRadius = radius + scaledGradientWidth
@@ -266,6 +322,9 @@ private fun DrawScope.drawHeatBloomSegment(radius: Float, color: Color, geometry
     canvas.restore()
 }
 
+/**
+ * Создание статического битмапа со шкалами для оптимизации отрисовки.
+ */
 private fun buildStaticBitmap(geometry: DashboardType4Geometry): ImageBitmap {
     val bitmap = ImageBitmap(geometry.width.toInt(), geometry.height.toInt())
     val drawScope = CanvasDrawScope()
@@ -277,6 +336,9 @@ private fun buildStaticBitmap(geometry: DashboardType4Geometry): ImageBitmap {
     return bitmap
 }
 
+/**
+ * Отрисовка сегментной шкалы (риски и подписи).
+ */
 private fun DrawScope.drawSegmentScale(geometry: DashboardType4Geometry, startAngle: Float, sweepAngle: Float, labels: List<String> = emptyList(), skipMiddleLabel: Boolean = false) {
     val ringColor = geometry.ringColor
     val steps = 40
@@ -316,32 +378,119 @@ private fun DrawScope.drawSegmentScale(geometry: DashboardType4Geometry, startAn
     }
 }
 
+/**
+ * Отрисовка иконок основных шкал (бензин, температуры).
+ */
 private fun DrawScope.drawGaugeIcons(geometry: DashboardType4Geometry, fuelIcon: Painter, engineIcon: Painter, transIcon: Painter) {
     val baseIconSize = 20f * geometry.unit
-    val dist = geometry.scaleRadius - geometry.tickLarge - 12f * geometry.unit
+    val dist = geometry.scaleRadius - geometry.tickLarge - 16f * geometry.unit
     val ringColor = geometry.ringColor
     drawIconCenteredAt(geometry, 180f, dist, baseIconSize, fuelIcon, ringColor, shouldRotate = false)
     drawIconCenteredAt(geometry, 270f, dist, baseIconSize, transIcon, ringColor, shouldRotate = false)
     drawIconCenteredAt(geometry, 0f, dist, baseIconSize, engineIcon, ringColor, shouldRotate = false)
 }
 
-private fun DrawScope.drawBottomIcons(geometry: DashboardType4Geometry, batteryIcon: Painter, tirePressureIcon: Painter, checkEngineIcon: Painter) {
-    val iconSize = 22f * geometry.unit
-    // ВОЗВРАЩЕНО: радиус длинной риски для комбинированного прибора
-    val dist = geometry.scaleRadius - geometry.tickLarge
+/**
+ * Отрисовка нижних индикаторов предупреждений (Чек, Шины, Омывайка).
+ * Вызывается из основного Canvas.
+ */
+private fun DrawScope.drawBottomIcons(
+    geometry: DashboardType4Geometry,
+    carData: CarData,
+    fuelIcon: Painter,
+    checkEngineIcon: Painter,
+    tirePressureIcon: Painter,
+    washingIcon: Painter,
+    blinkAlpha: Float
+) {
+    val tireIconSize = 22f * geometry.unit
+    val checkIconSize = 24.5f * geometry.unit
+    val fuelIconSize = 20f * geometry.unit
+    val washingIconSize = tireIconSize
+    
+    // Смещение иконок чуть дальше от шкал (внутрь)
+    val dist = geometry.scaleRadius - geometry.tickLarge - 6f * geometry.unit
     val mainColor = geometry.ringColor
-    drawIconCenteredAt(geometry, 65f, dist, iconSize, checkEngineIcon, mainColor, showGlow = true)
-    drawIconCenteredAt(geometry, 90f, dist, iconSize, batteryIcon, mainColor, showGlow = true)
-    drawIconCenteredAt(geometry, 115f, dist, iconSize, tirePressureIcon, mainColor, showGlow = true)
+    
+    // Позиции (интервалы по 20 градусов): 120, 100, 80, 60
+    
+    // 1. Низкий уровень топлива
+    if (carData.isFuelLow) {
+        drawIconCenteredAt(
+            geometry = geometry,
+            angle = 120f,
+            distance = dist,
+            size = fuelIconSize,
+            painter = fuelIcon,
+            color = mainColor.copy(alpha = blinkAlpha),
+            shouldRotate = false,
+            showGlow = true
+        )
+    }
+
+    // 2. Ошибки ЭБУ (Чек)
+    if (carData.ecuErrors.isNotEmpty()) {
+        drawIconCenteredAt(
+            geometry = geometry,
+            angle = 100f,
+            distance = dist,
+            size = checkIconSize,
+            painter = checkEngineIcon,
+            color = mainColor.copy(alpha = blinkAlpha),
+            shouldRotate = false,
+            showGlow = true
+        )
+    }
+
+    // 3. Низкое давление в шинах
+    if (carData.tirePressureLow) {
+        drawIconCenteredAt(
+            geometry = geometry,
+            angle = 80f,
+            distance = dist,
+            size = tireIconSize,
+            painter = tirePressureIcon,
+            color = mainColor.copy(alpha = blinkAlpha),
+            shouldRotate = false,
+            showGlow = true
+        )
+    }
+
+    // 4. Низкий уровень омывающей жидкости
+    if (carData.washerFluidLow) {
+        drawIconCenteredAt(
+            geometry = geometry,
+            angle = 60f,
+            distance = dist,
+            size = washingIconSize,
+            painter = washingIcon,
+            color = mainColor.copy(alpha = blinkAlpha),
+            shouldRotate = false,
+            showGlow = true
+        )
+    }
 }
 
+/**
+ * Универсальный метод отрисовки иконки в заданной полярной координате.
+ */
 private fun DrawScope.drawIconCenteredAt(geometry: DashboardType4Geometry, angle: Float, distance: Float, size: Float, painter: Painter, color: Color, shouldRotate: Boolean = true, showGlow: Boolean = false) {
     val rad = Math.toRadians(angle.toDouble()).toFloat()
     val centerX = geometry.center.x + cos(rad) * distance
     val centerY = geometry.center.y + sin(rad) * distance
     if (showGlow) {
-        val glowRadius = size * 1.5f
-        drawCircle(brush = Brush.radialGradient(0f to color.copy(alpha = 0.5f), 0.3f to color.copy(alpha = 0.2f), 0.7f to color.copy(alpha = 0.05f), 1f to Color.Transparent, center = Offset(centerX, centerY), radius = glowRadius), radius = glowRadius, center = Offset(centerX, centerY))
+        val glowRadius = size * 0.9f
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to color.copy(alpha = 0.4f * color.alpha),
+                0.6f to color.copy(alpha = 0.1f * color.alpha),
+                1f to Color.Transparent,
+                center = Offset(centerX, centerY),
+                radius = glowRadius
+            ),
+            radius = glowRadius,
+            center = Offset(centerX, centerY)
+        )
     }
     rotate(if (shouldRotate) angle - 90f else 0f, pivot = Offset(centerX, centerY)) {
         translate(centerX - size / 2f, centerY - size / 2f) {

@@ -307,6 +307,15 @@ class BluetoothConnectionManager(
         )
     }
 
+    /**
+     * Отправить произвольную JSON команду на устройство.
+     * @param jsonCommand Строка в формате JSON
+     */
+    fun sendJsonCommand(jsonCommand: String) {
+        log("Пересылка JSON команды в DataStreamHandler: $jsonCommand")
+        dataStreamHandler.sendJsonCommand(jsonCommand)
+    }
+
     // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
     /**

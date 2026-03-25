@@ -1,7 +1,9 @@
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/widgets/dashboards/dashboard_type_1/TripWidget.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -33,12 +35,22 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
+/**
+ * ТЕГ: Виджет поездки Тип 1
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Отображение данных о пробеге (Trip A/B, Total), запасе хода и расходе топлива для первого типа дашборда.
+ * Поддерживает переключение между Trip A и Trip B коротким нажатием
+ * и сброс значения длительным нажатием.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun TripWidget(
     modifier: Modifier = Modifier,
     carData: CarData,
     appSettings: AppSettings?,
-    geometry: Geometry
+    geometry: Geometry,
+    onTripReset: (String) -> Unit = {}
 ) {
     var showTripB by remember { mutableStateOf(false) }
 
@@ -138,8 +150,19 @@ internal fun TripWidget(
                 Column(modifier = Modifier.align(Alignment.TopStart), horizontalAlignment = Alignment.Start) {
                     Text(text = if (showTripB) "TRIP B, км" else "TRIP A, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
-                    Text(text = "%.1f".format(if (showTripB) carData.tripB else carData.tripA), style = tripTotalValueStyle,
-                        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showTripB = !showTripB })
+                    Text(
+                        text = "%.1f".format(if (showTripB) carData.tripB else carData.tripA),
+                        style = tripTotalValueStyle,
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { showTripB = !showTripB },
+                            onLongClick = {
+                                val command = if (showTripB) "{\"trip_b\":\"reset\"}" else "{\"trip_a\":\"reset\"}"
+                                onTripReset(command)
+                            }
+                        )
+                    )
                 }
 
                 // --- TOTAL (Справа) ---

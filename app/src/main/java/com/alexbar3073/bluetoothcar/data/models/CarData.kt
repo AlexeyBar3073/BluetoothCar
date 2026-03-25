@@ -4,6 +4,7 @@ package com.alexbar3073.bluetoothcar.data.models
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * Модель данных для информации от бортового компьютера автомобиля.
@@ -45,13 +46,26 @@ data class CarData(
     @SerialName("transmission_temp")
     val transmissionTemp: Float = 0f,      // °C
 
+    @SerialName("ecu_errors")
+    val ecuErrors: String = "",          // Коды ошибок ЭБУ, разделенные ";"
+
+    @SerialName("tire_pressure_low")
+    val tirePressureLow: Boolean = false, // Низкое давление в шинах
+
+    @SerialName("washer_fluid_low")
+    val washerFluidLow: Boolean = false,  // Низкий уровень омывайки
+
+    @Transient
+    val isFuelLow: Boolean = false,      // Рассчитываемый признак "мало топлива"
+
     val timestamp: Long = System.currentTimeMillis()
 ) {
     companion object {
         fun hasMeaningfulData(data: CarData): Boolean {
             return data.speed != 0f || data.voltage != 0f || data.fuel != 0f ||
                     data.tripA != 0f || data.tripB != 0f || data.odometer != 0f ||
-                    data.coolantTemp != 0f || data.transmissionTemp != 0f
+                    data.coolantTemp != 0f || data.transmissionTemp != 0f ||
+                    data.ecuErrors.isNotEmpty() || data.tirePressureLow || data.washerFluidLow
         }
     }
 }

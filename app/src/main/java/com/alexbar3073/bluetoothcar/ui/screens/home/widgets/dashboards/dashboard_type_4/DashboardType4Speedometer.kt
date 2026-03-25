@@ -59,21 +59,14 @@ import kotlin.math.sin
  * ТЕГ: Спидометр Дашборда 4
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * Отрисовка спидометра и вольтметра для четвёртого типа дашборда.
+ * Отрисовка спидометра и вольтметра для четвертого типа дашборда.
  * Включает в себя основную шкалу скорости, стрелку, текстовое значение скорости
- * и дуговой вольтметр в нижней части прибора.
+ * и дуговой вольтметр в нижней части прибора с индикацией заряда АКБ.
  *
  * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
  * 1. Вызывается из DashboardType4.kt.
  * 2. Использует DashboardType4Geometry.kt для получения параметров отрисовки.
  * 3. Использует CarData.kt для получения текущих значений скорости и напряжения.
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2025.03.25 14:15: Улучшена видимость иконки при низком заряде: применен ярко-алый цвет (Color(0xFFFF0000)) и скорректирована анимация мигания (alpha от 0.4f до 1.0f).
- * - 2025.03.25 13:40: Возвращено горизонтальное расположение иконки и текста (в одну линию) для вольтметра.
- * - 2025.03.25 13:10: Исправлено качество отрисовки иконки вольтметра (убраны "ступеньки") за счет изменения порядка трансформаций.
- * - 2025.03.25 12:45: Уменьшено расстояние между иконкой и текстом вольтметра. Приведено к формату AI_RULES.
- * - 2025.03.25 12:30: Поменяли местами иконку и текст вольтметра. Применен ресурс ic_battery_full_50.
  */
 
 private const val BASE_MIN_VOLTAGE = 12.0f
@@ -94,6 +87,7 @@ private data class VoltageAngles(val needleAngle: Float, val ringRotation: Float
 
 /**
  * Основной компонент спидометра Type 4.
+ * Отрисовывает шкалу, стрелку и вольтметр.
  * Вызывается из: DashboardType4.kt
  */
 @Composable
@@ -136,7 +130,7 @@ internal fun DashboardType4Speedometer(
     val animatedSpeed by animateFloatAsState(targetValue = displaySpeed.coerceIn(0f, maxSpeed), animationSpec = spring(0.82f, 90f), label = "needle")
     val animatedVoltage by animateFloatAsState(targetValue = displayVoltage.coerceIn(0f, maxVoltage), animationSpec = spring(0.82f, 90f), label = "voltage")
 
-    // Логика иконок аккумулятора
+    // Логика иконок аккумулятора. Используем battery_charging_50 для режима зарядки.
     val isLowVoltage = animatedVoltage <= 11.8f
     val isCharging = animatedVoltage > 13.0f
     val idleIcon = painterResource(R.drawable.ic_battery_full_50)
@@ -222,10 +216,13 @@ private fun DrawScope.drawVoltmeter(geometry: DashboardType4Geometry, voltage: F
 
 /**
  * Отрисовка иконки батареи и текстового значения напряжения в одну горизонтальную линию.
+ * Размер иконки зафиксирован для обеспечения единообразия.
  * Вызывается из: drawVoltmeter
  */
 private fun DrawScope.drawBatteryIconAndText(geometry: DashboardType4Geometry, voltage: Float, iconPainter: Painter, alpha: Float = 1f) {
+    // Используем фиксированный размер иконки (квадрат) на основе textSizePx из геометрии
     val iconSize = geometry.textSizePx
+    
     val voltageText = String.format(Locale.US, "%.1fV", voltage)
     val textPaint = android.graphics.Paint().apply { color = Color.Gray.toArgb(); textSize = geometry.textSizePx * 0.8f; isAntiAlias = true }
     
@@ -238,14 +235,14 @@ private fun DrawScope.drawBatteryIconAndText(geometry: DashboardType4Geometry, v
     val blockCenterY = geometry.center.y + geometry.textRadius - 5f * geometry.unit
     val blockLeft = blockCenterX - totalWidth / 2f
     
-    // Рисуем иконку
+    // Рисуем иконку (используем фиксированный квадратный размер для единообразия)
     translate(blockLeft, blockCenterY - iconSize / 2f) {
         with(iconPainter) {
             draw(Size(iconSize, iconSize), alpha = alpha, colorFilter = ColorFilter.tint(voltageToColor(voltage)))
         }
     }
     
-    // Рисуем текст
+    // Рисуем текст значения напряжения
     drawContext.canvas.nativeCanvas.drawText(
         voltageText,
         blockLeft + iconSize + spacing,

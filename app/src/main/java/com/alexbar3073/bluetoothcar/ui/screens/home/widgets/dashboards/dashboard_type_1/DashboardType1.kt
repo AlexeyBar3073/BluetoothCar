@@ -1,3 +1,4 @@
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/widgets/dashboards/dashboard_type_1/DashboardType1.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_1
 
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,9 @@ import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
 
 /**
+ * ТЕГ: Дашборд Тип 1
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
  * Дашборд Type 1 - компоновка виджетов по концепции двух окружностей.
  * Двухстрочная компоновка:
  * 1. Приборы (Спидометр и Топливо) - 85% высоты
@@ -21,7 +25,8 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 fun DashboardType1(
     modifier: Modifier = Modifier,
     carData: CarData,
-    appSettings: AppSettings?
+    appSettings: AppSettings?,
+    onTripReset: (String) -> Unit = {}
 ) {
     val density = LocalDensity.current
 
@@ -85,7 +90,8 @@ fun DashboardType1(
                     .weight(0.15f),
                 carData = carData,
                 appSettings = appSettings,
-                geometry = geometry
+                geometry = geometry,
+                onTripReset = onTripReset
             )
         }
     }

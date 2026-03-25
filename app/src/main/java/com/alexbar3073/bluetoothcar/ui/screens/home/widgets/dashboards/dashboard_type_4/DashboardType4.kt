@@ -37,7 +37,8 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 fun DashboardType4(
     modifier: Modifier = Modifier,
     carData: CarData,
-    appSettings: AppSettings?
+    appSettings: AppSettings?,
+    onTripReset: (String) -> Unit = {}
 ) {
     val density = LocalDensity.current
 
@@ -99,7 +100,8 @@ fun DashboardType4(
                     .weight(0.15f),
                 carData = carData,
                 appSettings = appSettings,
-                geometry = tripGeometry
+                geometry = tripGeometry,
+                onTripReset = onTripReset
             )
         }
     }

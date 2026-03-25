@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.EvStation
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PrecisionManufacturing
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Card
@@ -77,6 +78,32 @@ fun SettingsSection(
                             currentValue = appSettings.fuelTankCapacity,
                             minValue = 10f,
                             maxValue = 200f,
+                            unit = "л",
+                            step = 1f
+                        )
+                    )
+                }
+            )
+
+            HorizontalDivider(
+                color = AppColors.SurfaceMedium,
+                thickness = 1.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            SimpleSettingItem(
+                title = "Мин. остаток топлива",
+                value = "${appSettings.minFuelLevel.toInt()} л",
+                icon = Icons.Default.PriorityHigh,
+                iconColor = AppColors.Error,
+                hasClearButton = false,
+                onClick = {
+                    onEditDialogShow(
+                        EditDialogData(
+                            title = "Мин. остаток топлива",
+                            currentValue = appSettings.minFuelLevel,
+                            minValue = 1f,
+                            maxValue = appSettings.fuelTankCapacity,
                             unit = "л",
                             step = 1f
                         )
