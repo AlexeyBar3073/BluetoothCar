@@ -67,7 +67,8 @@ internal fun DashboardType4CombinedGauge(
     modifier: Modifier = Modifier,
     carData: CarData,
     appSettings: AppSettings?,
-    geometry: DashboardType4Geometry
+    geometry: DashboardType4Geometry,
+    onLongPress: () -> Unit = {}
 ) {
     // Получение емкости бака из настроек
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
@@ -147,8 +148,11 @@ internal fun DashboardType4CombinedGauge(
     val checkEngineIcon = painterResource(R.drawable.ic_engine_48)
     val washingIcon = painterResource(R.drawable.ic_washing)
 
-    // Кэширование статической подложки (шкалы) в битмап
-    val bitmapKey = remember(geometry.width, geometry.height) { Pair(geometry.width, geometry.height) }
+    // Кэширование статической подложки (шкалы) в битмап. 
+    // Добавляем geometry.ringColor в ключи для обновления при смене настроек.
+    val bitmapKey = remember(geometry.width, geometry.height, geometry.ringColor) { 
+        Triple(geometry.width, geometry.height, geometry.ringColor) 
+    }
     var staticBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
 
     // Настройка кистей для текста
@@ -178,29 +182,32 @@ internal fun DashboardType4CombinedGauge(
     Box(modifier = modifier
         .pointerInput(geometry.center) {
             // Обработка касаний для переключения режимов отображения
-            detectTapGestures { offset ->
-                val dx = offset.x - geometry.center.x
-                val dy = offset.y - geometry.center.y
-                val dist = sqrt(dx * dx + dy * dy)
-                if (dist < geometry.blackRadius) {
-                    // Клик в центр - циклическое переключение
-                    selectedSource = when (selectedSource) {
-                        GaugeSource.ENGINE_TEMP -> GaugeSource.TRANS_TEMP
-                        GaugeSource.TRANS_TEMP -> GaugeSource.FUEL
-                        GaugeSource.FUEL -> GaugeSource.ENGINE_TEMP
-                    }
-                } else if (dist < geometry.outerRingRadius) {
-                    // Клик на конкретную шкалу
-                    var angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
-                    if (angle < 0) angle += 360f
-                    selectedSource = when {
-                        angle in 130f..230f -> GaugeSource.FUEL
-                        angle in 231f..310f -> GaugeSource.TRANS_TEMP
-                        angle > 310f || angle < 50f -> GaugeSource.ENGINE_TEMP
-                        else -> selectedSource
+            detectTapGestures(
+                onLongPress = { onLongPress() },
+                onTap = { offset ->
+                    val dx = offset.x - geometry.center.x
+                    val dy = offset.y - geometry.center.y
+                    val dist = sqrt(dx * dx + dy * dy)
+                    if (dist < geometry.blackRadius) {
+                        // Клик в центр - циклическое переключение
+                        selectedSource = when (selectedSource) {
+                            GaugeSource.ENGINE_TEMP -> GaugeSource.TRANS_TEMP
+                            GaugeSource.TRANS_TEMP -> GaugeSource.FUEL
+                            GaugeSource.FUEL -> GaugeSource.ENGINE_TEMP
+                        }
+                    } else if (dist < geometry.outerRingRadius) {
+                        // Клик на конкретную шкалу
+                        var angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                        if (angle < 0) angle += 360f
+                        selectedSource = when {
+                            angle in 130f..230f -> GaugeSource.FUEL
+                            angle in 231f..310f -> GaugeSource.TRANS_TEMP
+                            angle > 310f || angle < 50f -> GaugeSource.ENGINE_TEMP
+                            else -> selectedSource
+                        }
                     }
                 }
-            }
+            )
         }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {

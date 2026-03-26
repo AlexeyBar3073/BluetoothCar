@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.LayoutDirection
 import com.alexbar3073.bluetoothcar.R
@@ -94,7 +96,8 @@ private data class VoltageAngles(val needleAngle: Float, val ringRotation: Float
 internal fun DashboardType4Speedometer(
     modifier: Modifier = Modifier,
     carData: CarData,
-    geometry: DashboardType4Geometry
+    geometry: DashboardType4Geometry,
+    onLongPress: () -> Unit = {}
 ) {
     val maxSpeed = 220f
     val maxVoltage = 16f
@@ -151,8 +154,11 @@ internal fun DashboardType4Speedometer(
 
     LaunchedEffect(angles.ringRotation) { if (angles.ringRotation != ringRotation) ringRotation = angles.ringRotation }
 
-    // Кэширование битмапов для оптимизации
-    val bitmapKey = remember(geometry.width, geometry.height) { Pair(geometry.width, geometry.height) }
+    // Кэширование битмапов для оптимизации. 
+    // ВАЖНО: Добавлен geometry.ringColor в ключи, чтобы битмапы пересоздавались при смене цвета.
+    val bitmapKey = remember(geometry.width, geometry.height, geometry.ringColor) { 
+        Triple(geometry.width, geometry.height, geometry.ringColor) 
+    }
     var scaleBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
     var needleBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
     var ringBitmap by remember(bitmapKey) { mutableStateOf<ImageBitmap?>(null) }
@@ -160,7 +166,13 @@ internal fun DashboardType4Speedometer(
     val trailCache = rememberTrailCache(geometry)
     val windowPath = rememberVoltmeterWindow(geometry)
 
-    Box(modifier = modifier) {
+    Box(modifier = modifier
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onLongPress = { onLongPress() }
+            )
+        }
+    ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             // Рисуем вольтметр (нижняя дуга)
             drawVoltmeter(geometry, animatedVoltage, ringBitmap ?: buildVoltageRingBitmap(geometry).also { ringBitmap = it }, ringRotation, currentIcon, if (isLowVoltage) blinkAlpha else 1f, angles.needleAngle, windowPath)
@@ -368,20 +380,38 @@ private fun DrawScope.drawDualRadialGlow(geometry: DashboardType4Geometry, speed
 
 /**
  * Расчёт углов для анимации шкалы вольтметра.
+ * Перенесена проверенная логика из Dashboard 1.
  */
 private fun calculateAngles(voltage: Float, currentRingRotation: Float): VoltageAngles {
+    val baseMinAngle = BASE_START_ANGLE
+    val baseMaxAngle = BASE_START_ANGLE + BASE_SWEEP_ANGLE
     val degreesPerVolt = abs(BASE_SWEEP_ANGLE) / (BASE_MAX_VOLTAGE - BASE_MIN_VOLTAGE)
+
     val voltageAngleAbsolute = BASE_START_ANGLE - (voltage - BASE_MIN_VOLTAGE) * degreesPerVolt
+
     return if (currentRingRotation != 0f) {
-        val limiter = if (currentRingRotation > 0f) (BASE_START_ANGLE + BASE_SWEEP_ANGLE) else BASE_START_ANGLE
-        var newRotation = (currentRingRotation - (voltageAngleAbsolute + currentRingRotation - limiter)).coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
+        val limiter = if (currentRingRotation > 0f) baseMaxAngle else baseMinAngle
+        val desired = voltageAngleAbsolute + currentRingRotation
+        val overflow = desired - limiter
+        var newRotation = currentRingRotation - overflow
+
+        // Критически важные проверки из Dashboard 1 для предотвращения осцилляций
+        if (currentRingRotation > 0f && newRotation < 0f) newRotation = 0f
+        if (currentRingRotation < 0f && newRotation > 0f) newRotation = 0f
+
+        newRotation = newRotation.coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
         if (abs(newRotation) < 0.0001f) newRotation = 0f
+
         VoltageAngles(limiter, newRotation)
     } else {
-        val clamped = voltageAngleAbsolute.coerceIn(BASE_START_ANGLE + BASE_SWEEP_ANGLE, BASE_START_ANGLE)
-        var newRotation = (clamped - voltageAngleAbsolute).coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
+        val clampedAngle = voltageAngleAbsolute.coerceIn(baseMaxAngle, baseMinAngle)
+        val overflow = voltageAngleAbsolute - clampedAngle
+        var newRotation = -overflow
+
+        newRotation = newRotation.coerceIn(-EXTENSION_DEGREES, EXTENSION_DEGREES)
         if (abs(newRotation) < 0.0001f) newRotation = 0f
-        VoltageAngles(clamped, newRotation)
+
+        VoltageAngles(clampedAngle, newRotation)
     }
 }
 
@@ -420,12 +450,12 @@ private fun buildScaleBitmap(geometry: DashboardType4Geometry, ringColor: Color)
         drawCircle(Color.White, geometry.outerRingRadius, geometry.center, style = Stroke(geometry.outerStrokeWidth))
         val textPaint = android.graphics.Paint().apply { color = ringColor.toArgb(); textAlign = android.graphics.Paint.Align.CENTER; textSize = geometry.textSizePx; isAntiAlias = true }
         for (i in 0..geometry.maxSpeed.toInt() step 2) {
-            val angle = geometry.startAngle + geometry.fullSweep * (i / geometry.maxSpeed)
-            val rad = Math.toRadians(angle.toDouble()).toFloat()
+            val iAngle = geometry.startAngle + geometry.fullSweep * (i / geometry.maxSpeed)
+            val rad = Math.toRadians(iAngle.toDouble()).toFloat()
             val cos = cos(rad); val sin = sin(rad)
             val is20 = i % 20 == 0; val tickLen = if (is20) geometry.tickLarge else if (i % 10 == 0) geometry.tickMedium else geometry.tickSmall
             drawLine(ringColor, Offset(geometry.center.x + cos * geometry.scaleRadius, geometry.center.y + sin * geometry.scaleRadius), Offset(geometry.center.x + cos * (geometry.scaleRadius - tickLen), geometry.center.y + sin * (geometry.scaleRadius - tickLen)), if (is20) 2f * geometry.unit else if (i % 10 == 0) 1.5f * geometry.unit else 1f * geometry.unit, StrokeCap.Round)
-            if (is20) drawContext.canvas.nativeCanvas.apply { save(); translate(geometry.center.x + cos * geometry.textRadius, geometry.center.y + sin * geometry.textRadius); rotate(angle + 90f); drawText(i.toString(), 0f, -(textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2f, textPaint); restore() }
+            if (is20) drawContext.canvas.nativeCanvas.apply { save(); translate(geometry.center.x + cos * geometry.textRadius, geometry.center.y + sin * geometry.textRadius); rotate(iAngle + 90f); drawText(i.toString(), 0f, -(textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2f, textPaint); restore() }
         }
     }
     return bitmap

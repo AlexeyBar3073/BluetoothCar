@@ -1,4 +1,4 @@
-// Файл: ui/screens/SettingsScreen.kt
+// Файл: ui/screens/settings/SettingsScreen.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings
 
 import android.util.Log
@@ -10,7 +10,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,12 +17,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
+import com.alexbar3073.bluetoothcar.data.models.AppSettings
+import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ThemeSelectionDialog
+import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ColorPickerDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
@@ -31,61 +35,47 @@ import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
- * ФАЙЛ: ui/screens/SettingsScreen.kt
- * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/
- *
+ * ТЕГ: Экран настроек
+ * 
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Главный экран настроек приложения. Отображает все настройки приложения,
  * управляет диалогами редактирования и взаимодействует с SharedViewModel.
  *
- * ОТВЕТСТВЕННОСТЬ:
- * 1. Отображение всех настроек приложения
- * 2. Управление диалогами редактирования (EditValueDialog, ThemeSelectionDialog)
- * 3. Взаимодействие с SharedViewModel для получения и обновления настроек
- * 4. Навигация назад и к выбору устройств
- * 5. Обработка состояния экрана (диалоги, загрузка)
- *
- * КЛЮЧЕВОЙ ПРИНЦИП:
- * - Получает все данные из SharedViewModel через StateFlow
- * - Все обновления настроек выполняются через SharedViewModel
- * - Управление диалогами осуществляется локальным состоянием
- * - Не содержит бизнес-логики, только UI логику
- *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: SettingsContent.kt для основного содержимого
- * 2. Использует: SharedViewModel.kt для получения и обновления данных
- * 3. Использует: EditValueDialog.kt, ThemeSelectionDialog.kt для диалогов
- * 4. Взаимодействует: NavController для навигации
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.05 16:30: АДАПТАЦИЯ к текущему SharedViewModel
- *   1. Заменен метод updateSetting{...} на прямой вызов updateSettings()
- *   2. Исправлен clearDevice() -> clearSelectedDevice()
- *   3. Упрощена логика обновления настроек
- * - 2026.02.05 16:45: Добавлено оформление согласно требованиям ТЗ
- * - 2026.02.05 21:50: ОБНОВЛЕНИЕ ТОП-БАРА
- *   1. Заменена точка на иконку настроек
- *   2. Использована компактная высота топ-бара
+ * 1. Использует SettingsContent.kt для основного содержимого.
+ * 2. Использует SharedViewModel.kt для получения и обновления данных.
+ * 3. Использует диалоги (EditValueDialog, ThemeSelectionDialog, ColorPickerDialog).
  */
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
     viewModel: SharedViewModel
 ) {
-    // Состояние экрана
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
 
+    SettingsScreenContent(
+        appSettings = appSettings,
+        selectedDevice = selectedDevice,
+        navController = navController,
+        onUpdateSettings = { viewModel.updateSettings(it) },
+        onClearSelectedDevice = { viewModel.clearSelectedDevice() }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreenContent(
+    appSettings: AppSettings,
+    selectedDevice: BluetoothDeviceData?,
+    navController: NavController,
+    onUpdateSettings: (AppSettings) -> Unit,
+    onClearSelectedDevice: () -> Unit
+) {
     var showEditDialog by remember { mutableStateOf(false) }
     var editDialogData by remember { mutableStateOf(EditDialogData()) }
     var showThemeDialog by remember { mutableStateOf(false) }
-
-    // Отладочный вывод для отслеживания изменений
-    LaunchedEffect(appSettings) {
-        Log.d("SettingsScreen", "Обновление appSettings в UI: ${appSettings?.let { it }}")
-    }
 
     BluetoothCarTheme {
         Scaffold(
@@ -96,7 +86,6 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            // Иконка настроек вместо точки
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "Настройки",
@@ -156,97 +145,67 @@ fun SettingsScreen(
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
             ) {
-                // Основное содержимое настроек
-                if (appSettings != null) {
-                    SettingsContent(
-                        appSettings = appSettings!!,
-                        selectedDevice = selectedDevice,
-                        navController = navController,
-                        onEditDialogShow = { data ->
-                            editDialogData = data.copy(onSave = { newValue ->
-                                // СОГЛАСНО ТЗ: Обновляем настройки через прямой вызов
-                                val currentSettings = appSettings!!
-                                val updatedSettings = when (data.title) {
-                                    "Объем топливного бака" ->
-                                        currentSettings.copy(fuelTankCapacity = newValue)
-
-                                    "Мин. остаток топлива" ->
-                                        currentSettings.copy(minFuelLevel = newValue)
-
-                                    "Производительность форсунки" ->
-                                        currentSettings.copy(injectorPerformance = newValue)
-
-                                    "Количество форсунок" ->
-                                        currentSettings.copy(injectorCount = newValue.toInt())
-
-                                    "Сигналы датчика скорости" ->
-                                        currentSettings.copy(speedSensorSignalsPerMeter = newValue.toInt())
-
-                                    "Интервал обновления" ->
-                                        currentSettings.copy(updateInterval = newValue.toInt())
-
-                                    else -> currentSettings
-                                }
-
-                                // Вызываем метод обновления настроек
-                                viewModel.updateSettings(updatedSettings)
-                            })
-                            showEditDialog = true
-                        },
-                        onThemeDialogShow = { showThemeDialog = true },
-                        onDeviceClear = {
-                            // Очищаем выбранное устройство
-                            viewModel.clearSelectedDevice()
-                        },
-                        onTestButtonClick = {
-                            Log.d("SettingsScreen", "Тест переключателя")
-                            val currentSettings = appSettings!!
-                            val updatedSettings = currentSettings.copy(
-                                showSpeedometer = !currentSettings.showSpeedometer
-                            )
-                            viewModel.updateSettings(updatedSettings)
-                        },
-                        onUpdateSetting = { newSettings ->
-                            // Прямой вызов обновления настроек
-                            viewModel.updateSettings(newSettings)
-                        }
-                    )
-                }
+                SettingsContent(
+                    appSettings = appSettings,
+                    selectedDevice = selectedDevice,
+                    navController = navController,
+                    onEditDialogShow = { data ->
+                        editDialogData = data.copy(onSave = { newValue ->
+                            val updatedSettings = when (data.title) {
+                                "Объем топливного бака" -> appSettings.copy(fuelTankCapacity = newValue)
+                                "Мин. остаток топлива" -> appSettings.copy(minFuelLevel = newValue)
+                                "Производительность форсунки" -> appSettings.copy(injectorPerformance = newValue)
+                                "Количество форсунок" -> appSettings.copy(injectorCount = newValue.toInt())
+                                "Сигналы датчика скорости" -> appSettings.copy(speedSensorSignalsPerMeter = newValue.toInt())
+                                "Интервал обновления" -> appSettings.copy(updateInterval = newValue.toInt())
+                                else -> appSettings
+                            }
+                            onUpdateSettings(updatedSettings)
+                        })
+                        showEditDialog = true
+                    },
+                    onThemeDialogShow = { showThemeDialog = true },
+                    onDeviceClear = onClearSelectedDevice,
+                    onTestButtonClick = {
+                        onUpdateSettings(appSettings.copy(showSpeedometer = !appSettings.showSpeedometer))
+                    },
+                    onUpdateSetting = onUpdateSettings
+                )
             }
         }
 
-        // Диалог редактирования значения
         if (showEditDialog) {
-            BluetoothCarTheme {
-                EditValueDialog(
-                    data = editDialogData,
-                    onDismiss = { showEditDialog = false },
-                    onConfirm = { newValue ->
-                        editDialogData.onSave(newValue)
-                        showEditDialog = false
-                    }
-                )
-            }
+            EditValueDialog(
+                data = editDialogData,
+                onDismiss = { showEditDialog = false },
+                onConfirm = { newValue ->
+                    editDialogData.onSave(newValue)
+                    showEditDialog = false
+                }
+            )
         }
 
-        // Диалог выбора темы
         if (showThemeDialog) {
-            BluetoothCarTheme {
-                ThemeSelectionDialog(
-                    currentTheme = appSettings?.selectedTheme ?: "system",
-                    onDismiss = { showThemeDialog = false },
-                    onThemeSelected = { selectedTheme ->
-                        val currentSettings = appSettings
-                        if (currentSettings != null) {
-                            val updatedSettings = currentSettings.copy(
-                                selectedTheme = selectedTheme
-                            )
-                            viewModel.updateSettings(updatedSettings)
-                        }
-                        showThemeDialog = false
-                    }
-                )
-            }
+            ThemeSelectionDialog(
+                currentTheme = appSettings.selectedTheme,
+                onDismiss = { showThemeDialog = false },
+                onThemeSelected = { selectedTheme ->
+                    onUpdateSettings(appSettings.copy(selectedTheme = selectedTheme))
+                    showThemeDialog = false
+                }
+            )
         }
     }
+}
+
+@Preview(showBackground = true, widthDp = 800, heightDp = 480)
+@Composable
+fun SettingsScreenPreview() {
+    SettingsScreenContent(
+        appSettings = AppSettings(),
+        selectedDevice = null,
+        navController = rememberNavController(),
+        onUpdateSettings = {},
+        onClearSelectedDevice = {}
+    )
 }

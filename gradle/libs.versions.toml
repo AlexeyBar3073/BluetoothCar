@@ -16,6 +16,11 @@ materialIconsExtended = "1.7.8"
 navigationCompose = "2.9.7"
 kotlinxSerialization = "1.10.0"
 
+# Тестирование
+mockk = "1.14.9"
+turbine = "1.2.1"
+coroutinesTest = "1.10.2"
+
 # BOM для Compose (все версии Compose управляются через неё)
 composeBom = "2026.02.01"
 uiGraphics = "1.10.4"
@@ -50,6 +55,7 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 
 # Coroutines
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 
 # Kotlin Serialization
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
@@ -58,6 +64,8 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-junit = { module = "androidx.test.ext:junit", version.ref = "junitVersion" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCore" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 
 # Compose Testing (версии из BOM)
 androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }

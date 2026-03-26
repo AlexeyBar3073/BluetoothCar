@@ -55,7 +55,13 @@ data class AppSettings(
     val showVoltage: Boolean = true,
 
     @SerialName("update_interval")
-    val updateInterval: Int = 1000
+    val updateInterval: Int = 1000,
+
+    @SerialName("default_dashboard_color")
+    val defaultDashboardColor: Long = 0xFFFC4903,
+
+    @SerialName("current_dashboard_color")
+    val currentDashboardColor: Long = 0xFFFC4903
 ) {
     /**
      * Преобразование технических настроек в Map для отправки на устройство.

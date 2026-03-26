@@ -32,7 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -246,6 +248,17 @@ fun PermissionItem(
             text = description,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PermissionsScreenPreview() {
+    BluetoothCarTheme {
+        PermissionsScreen(
+            onRequestPermissions = {},
+            onSkip = {}
         )
     }
 }

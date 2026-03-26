@@ -13,22 +13,20 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
+import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ColorPickerDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
 /**
- * ФАЙЛ: ui/screens/settings/components/WidgetsSection.kt
- * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/components/
- *
+ * ТЕГ: Секция настроек виджетов
+ * 
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * Секция настроек отображения виджетов. Содержит переключатели для управления видимостью виджетов.
- *
- * ИЗМЕНЕНИЯ:
- * - 2026.02.05 17:00: Убран параметр scope, убраны корутины
- *   Обновление настроек теперь выполняется синхронно
+ * Секция настроек отображения виджетов и кастомизации приборов.
  */
 
 @Composable
@@ -36,6 +34,8 @@ fun WidgetsSection(
     appSettings: AppSettings,
     onUpdateSetting: (AppSettings) -> Unit
 ) {
+    var showColorPicker by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -57,16 +57,11 @@ fun WidgetsSection(
                 iconColor = AppColors.TextSecondary,
                 isChecked = appSettings.showSpeedometer,
                 onCheckedChange = { isChecked ->
-                    Log.d("WidgetsSection", "Переключатель: Спидометр = $isChecked")
                     onUpdateSetting(appSettings.copy(showSpeedometer = isChecked))
                 }
             )
 
-            HorizontalDivider(
-                color = AppColors.SurfaceMedium,
-                thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            HorizontalDivider(color = AppColors.SurfaceMedium, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
 
             // Показывать уровень топлива
             SwitchSettingItem(
@@ -76,16 +71,11 @@ fun WidgetsSection(
                 iconColor = AppColors.TextSecondary,
                 isChecked = appSettings.showFuelGauge,
                 onCheckedChange = { isChecked ->
-                    Log.d("WidgetsSection", "Переключатель: Уровень топлива = $isChecked")
                     onUpdateSetting(appSettings.copy(showFuelGauge = isChecked))
                 }
             )
 
-            HorizontalDivider(
-                color = AppColors.SurfaceMedium,
-                thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            HorizontalDivider(color = AppColors.SurfaceMedium, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
 
             // Показывать напряжение
             SwitchSettingItem(
@@ -95,10 +85,32 @@ fun WidgetsSection(
                 iconColor = AppColors.TextSecondary,
                 isChecked = appSettings.showVoltage,
                 onCheckedChange = { isChecked ->
-                    Log.d("WidgetsSection", "Переключатель: Напряжение = $isChecked")
                     onUpdateSetting(appSettings.copy(showVoltage = isChecked))
                 }
             )
+
+            HorizontalDivider(color = AppColors.SurfaceMedium, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Цвет дашборда
+            ColorSettingItem(
+                title = "Цвет оформления",
+                subtitle = "Основной цвет оформления приборов",
+                currentColor = Color(appSettings.currentDashboardColor),
+                onColorClick = { showColorPicker = true },
+                onResetClick = {
+                    onUpdateSetting(appSettings.copy(currentDashboardColor = appSettings.defaultDashboardColor))
+                }
+            )
         }
+    }
+
+    if (showColorPicker) {
+        ColorPickerDialog(
+            appSettings = appSettings,
+            onDismiss = { showColorPicker = false },
+            onColorSelected = { color ->
+                onUpdateSetting(appSettings.copy(currentDashboardColor = color.toArgb().toLong()))
+            }
+        )
     }
 }

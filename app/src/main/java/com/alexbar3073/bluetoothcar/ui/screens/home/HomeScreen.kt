@@ -2,6 +2,7 @@
 package com.alexbar3073.bluetoothcar.ui.screens.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,9 +28,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +46,7 @@ import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.StatusCircleButton
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4.DashboardType4
+import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ColorPickerDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
@@ -49,19 +56,32 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 /**
  * ТЕГ: Домашний экран
  *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/
+ *
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * Главный экран приложения. Отображает текущую панель приборов (Dashboard)
- * и кнопки управления (подключение, настройки).
+ * Главный экран приложения. Отвечает за визуализацию панели приборов (Dashboard) 
+ * и предоставление доступа к основным функциям управления (статус связи, настройки).
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * 1. Получает данные из: SharedViewModel.kt (реактивные StateFlow).
+ * 2. Вызывает: DashboardType4.kt.
+ * 3. Навигация: Инициирует переход в SettingsScreen.kt.
+ */
+
+/**
+ * Основная точка входа для Домашнего экрана.
+ * Подписывается на потоки данных и делегирует отрисовку функции контента.
  */
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
     navigateToSettings: () -> Unit
 ) {
-    val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
+    // Получение текущего состояния приложения (гарантированно не null)
+    val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val carData by viewModel.carData.collectAsStateWithLifecycle()
     val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
-    val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
+    val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
 
     HomeScreenContent(
         selectedDevice = selectedDevice,
@@ -70,12 +90,14 @@ fun HomeScreen(
         appSettings = appSettings,
         onRetryConnection = { viewModel.retryConnection() },
         onTripReset = { command -> viewModel.sendJsonCommand(command) },
+        onSettingsUpdate = { viewModel.updateSettings(it) },
         navigateToSettings = navigateToSettings
     )
 }
 
 /**
- * Контент домашнего экрана. Вынесен отдельно для поддержки Preview.
+ * Контентная часть Домашнего экрана.
+ * Реализована без прямой привязки к ViewModel для возможности использования в Preview.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,11 +105,14 @@ fun HomeScreenContent(
     selectedDevice: BluetoothDeviceData?,
     carData: CarData,
     connectionStatusInfo: ConnectionStatusInfo,
-    appSettings: AppSettings?,
+    appSettings: AppSettings,
     onRetryConnection: () -> Unit,
     onTripReset: (String) -> Unit = {},
+    onSettingsUpdate: (AppSettings) -> Unit = {},
     navigateToSettings: () -> Unit
 ) {
+    var showColorPicker by remember { mutableStateOf(false) }
+
     BluetoothCarTheme {
         Scaffold(
             topBar = {
@@ -97,6 +122,7 @@ fun HomeScreenContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
+                            // Иконка авто, активна при наличии выбранного устройства
                             Icon(
                                 imageVector = Icons.Filled.DirectionsCar,
                                 contentDescription = "Бортовой компьютер",
@@ -112,6 +138,7 @@ fun HomeScreenContent(
                         }
                     },
                     navigationIcon = {
+                        // Кнопка статуса с возможностью повтора при ошибках
                         StatusCircleButton(
                             connectionStatusInfo = connectionStatusInfo,
                             onClick = {
@@ -122,6 +149,7 @@ fun HomeScreenContent(
                         )
                     },
                     actions = {
+                        // Кнопка перехода в раздел настроек
                         IconButton(
                             onClick = navigateToSettings,
                             modifier = Modifier.size(36.dp)
@@ -159,20 +187,43 @@ fun HomeScreenContent(
                 )
             }
         ) { paddingValues ->
+            // Основное рабочее пространство экрана
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
+                    .pointerInput(Unit) {
+                        // Обработка длительного нажатия на пустую область экрана (подложку)
+                        detectTapGestures(
+                            onLongPress = {
+                                showColorPicker = true
+                            }
+                        )
+                    }
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
+                    // Отрисовка выбранного типа дашборда (Дашборд 4)
                     DashboardType4(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
                         appSettings = appSettings,
-                        onTripReset = onTripReset
+                        onTripReset = onTripReset,
+                        onLongPress = { showColorPicker = true } // Передаем вызов диалога внутрь дашборда
                     )
                 }
+            }
+
+            // Отображение диалога выбора цвета
+            if (showColorPicker) {
+                ColorPickerDialog(
+                    appSettings = appSettings,
+                    onDismiss = { showColorPicker = false },
+                    onColorSelected = { color ->
+                        val updatedSettings = appSettings.copy(currentDashboardColor = color.toArgb().toLong())
+                        onSettingsUpdate(updatedSettings)
+                    }
+                )
             }
         }
     }
@@ -180,6 +231,9 @@ fun HomeScreenContent(
 
 // ==================== PREVIEWS ====================
 
+/**
+ * Превью домашнего экрана в стандартном рабочем режиме.
+ */
 @Preview(
     name = "Home - Normal",
     device = "spec:width=642dp,height=360dp,dpi=480",
@@ -193,11 +247,9 @@ fun HomeScreenNormalPreview() {
         fuel = 35f, 
         coolantTemp = 90f,
         transmissionTemp = 80f,
-        // Включаем иконки для визуального контроля размещения во всех превью
-        isFuelLow = true,
-        tirePressureLow = true,
-        washerFluidLow = true,
-        ecuErrors = "P0300"
+        isFuelLow = false,
+        tirePressureLow = false,
+        washerFluidLow = false
     )
 
     HomeScreenContent(
@@ -210,6 +262,9 @@ fun HomeScreenNormalPreview() {
     )
 }
 
+/**
+ * Превью домашнего экрана с активными предупреждениями.
+ */
 @Preview(
     name = "Home - Warnings",
     device = "spec:width=642dp,height=360dp,dpi=480",

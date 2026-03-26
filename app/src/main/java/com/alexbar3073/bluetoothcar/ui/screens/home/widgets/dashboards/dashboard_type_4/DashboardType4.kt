@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
@@ -37,10 +38,16 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 fun DashboardType4(
     modifier: Modifier = Modifier,
     carData: CarData,
-    appSettings: AppSettings?,
-    onTripReset: (String) -> Unit = {}
+    appSettings: AppSettings,
+    onTripReset: (String) -> Unit = {},
+    onLongPress: () -> Unit = {}
 ) {
     val density = LocalDensity.current
+    
+    // Получаем текущий цвет оформления из настроек (гарантированно не null)
+    val ringColor = remember(appSettings.currentDashboardColor) {
+        Color(appSettings.currentDashboardColor)
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val widthPx = with(density) { maxWidth.toPx() }
@@ -51,13 +58,13 @@ fun DashboardType4(
         val partWidthPx = widthPx * 0.5f
 
         // Геометрия для приборов (половина ширины)
-        val gaugeGeometry = remember(partWidthPx, topPartHeightPx) {
-            DashboardType4Geometry.fromSize(Size(partWidthPx, topPartHeightPx), density)
+        val gaugeGeometry = remember(partWidthPx, topPartHeightPx, ringColor) {
+            DashboardType4Geometry.fromSize(Size(partWidthPx, topPartHeightPx), density, ringColor = ringColor)
         }
 
         // Геометрия для TripWidget (полная ширина, чтобы дуги доходили до краев экрана)
-        val tripGeometry = remember(widthPx, topPartHeightPx) {
-            DashboardType4Geometry.fromSize(Size(widthPx, topPartHeightPx), density)
+        val tripGeometry = remember(widthPx, topPartHeightPx, ringColor) {
+            DashboardType4Geometry.fromSize(Size(widthPx, topPartHeightPx), density, ringColor = ringColor)
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -74,7 +81,8 @@ fun DashboardType4(
                     DashboardType4Speedometer(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
-                        geometry = gaugeGeometry
+                        geometry = gaugeGeometry,
+                        onLongPress = onLongPress
                     )
                 }
 
@@ -88,7 +96,8 @@ fun DashboardType4(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
                         appSettings = appSettings,
-                        geometry = gaugeGeometry
+                        geometry = gaugeGeometry,
+                        onLongPress = onLongPress
                     )
                 }
             }
@@ -101,7 +110,8 @@ fun DashboardType4(
                 carData = carData,
                 appSettings = appSettings,
                 geometry = tripGeometry,
-                onTripReset = onTripReset
+                onTripReset = onTripReset,
+                onLongPress = onLongPress
             )
         }
     }

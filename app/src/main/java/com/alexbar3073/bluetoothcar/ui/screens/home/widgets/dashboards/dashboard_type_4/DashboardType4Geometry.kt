@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import kotlin.math.sqrt
 
-internal data class DashboardType4Geometry(
+data class DashboardType4Geometry(
     val unit: Float,
     val center: Offset,
     val width: Float,
