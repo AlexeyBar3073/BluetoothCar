@@ -26,7 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +51,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
+import androidx.compose.runtime.Composable
 
 /**
  * ТЕГ: Домашний экран
@@ -138,13 +138,13 @@ fun HomeScreenContent(
                         }
                     },
                     navigationIcon = {
-                        // Кнопка статуса с возможностью повтора при ошибках
+                        // Кнопка статуса. Разрешаем клик всегда для инициирования процесса проверки в BCM.
                         StatusCircleButton(
                             connectionStatusInfo = connectionStatusInfo,
                             onClick = {
-                                if (connectionStatusInfo.allowsManualRetry) {
-                                    onRetryConnection()
-                                }
+                                // Блокировка снята: вызываем переподключение в любом состоянии,
+                                // чтобы BCM мог проанализировать ситуацию и выдать уведомление (Toast) через CFC.
+                                onRetryConnection()
                             }
                         )
                     },

@@ -1,7 +1,7 @@
 // Файл: data/bluetooth/listeners/DataStreamHandler.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
-import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothService
+import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
@@ -40,13 +40,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - СТРОГАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ согласно ТЗ: настройки → подтверждение → команда → подтверждение → данные
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: BluetoothService.kt для отправки/приема данных
+ * 1. Использует: AppBluetoothService.kt для отправки/приема данных
  * 2. Уведомляет: BluetoothConnectionManager.kt через единую функцию обратного вызова
  * 3. Использует: AppSettings, CarData для сериализации данных
  * 4. Взаимодействует: AppLogger.kt для логирования
  */
 class DataStreamHandler(
-    private val bluetoothService: BluetoothService,
+    private val bluetoothService: AppBluetoothService,
     private val coroutineScope: CoroutineScope,
     private val stateChangeCallback: (ConnectionState, String?) -> Unit
 ) {
@@ -258,7 +258,7 @@ class DataStreamHandler(
         // Отменяем ожидание подписки
         subscriptionReady.cancel()
 
-        // Останавливаем прослушивание данных в BluetoothService
+        // Останавливаем прослушивание данных в AppBluetoothService
         bluetoothService.stopDataListening()
 
         // Сбрасываем все флаги
@@ -550,7 +550,7 @@ class DataStreamHandler(
      * Обработать входящие данные от устройства.
      * Определяет тип сообщения: подтверждение настроек/команды или данные.
      * ВАЖНО: Подтверждения обрабатываются ВНУТРЕННЕ, данные эмитируются в Flow.
-     * Вызывается: BluetoothService при получении данных.
+     * Вызывается: AppBluetoothService при получении данных.
      *
      * @param data Сырые данные в формате JSON
      */

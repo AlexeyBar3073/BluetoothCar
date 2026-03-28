@@ -3,7 +3,7 @@ package com.alexbar3073.bluetoothcar.core
 
 import android.content.Context
 import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothConnectionManager
-import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothService
+import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 
 /**
@@ -28,7 +28,7 @@ import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
  * 1. Используется: AppController.kt (главный координатор получает зависимости)
  * 2. Используется: MainActivity.kt (инициализирует ServiceLocator)
- * 3. Регистрирует: SettingsRepository, BluetoothService, BluetoothConnectionManager
+ * 3. Регистрирует: SettingsRepository, AppBluetoothService, BluetoothConnectionManager
  * 4. Позволяет: SharedViewModelFactory получать зависимости
  *
  * ИСТОРИЯ ИЗМЕНЕНИЙ:
@@ -63,9 +63,9 @@ object ServiceLocator {
             val settingsRepository = SettingsRepository(context.applicationContext)
             register(SettingsRepository::class.java.name, settingsRepository)
 
-            // 2. Создаем и регистрируем BluetoothService (singleton)
-            //    BluetoothService является Android Service, поэтому создается особым образом
-            register(BluetoothService::class.java.name, BluetoothService::class.java)
+            // 2. Создаем и регистрируем AppBluetoothService (singleton)
+            //    AppBluetoothService является Android Service, поэтому создается особым образом
+            register(AppBluetoothService::class.java.name, AppBluetoothService::class.java)
 
             // 3. AppController будет создан позже, после загрузки настроек
             // 4. BluetoothConnectionManager будет создан AppController'ом
@@ -173,12 +173,12 @@ object ServiceLocator {
     }
 
     /**
-     * Получить класс BluetoothService для создания интентов.
-     * BluetoothService является Android Service, поэтому мы регистрируем класс,
+     * Получить класс AppBluetoothService для создания интентов.
+     * AppBluetoothService является Android Service, поэтому мы регистрируем класс,
      * а не экземпляр.
      */
-    fun getBluetoothServiceClass(): Class<BluetoothService> {
-        return resolve(BluetoothService::class.java.name)
+    fun getBluetoothServiceClass(): Class<AppBluetoothService> {
+        return resolve(AppBluetoothService::class.java.name)
     }
 
     /**

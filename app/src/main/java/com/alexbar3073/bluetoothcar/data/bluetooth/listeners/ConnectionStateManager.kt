@@ -1,7 +1,7 @@
 // Файл: data/bluetooth/listeners/ConnectionStateManager.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
-import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothService
+import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
@@ -31,17 +31,17 @@ import kotlinx.coroutines.*
  * - DISCONNECTED вызывается для ЛЮБОГО разрыва/неудачи (единый обработчик)
  *
  * КЛЮЧЕВОЙ ПРИНЦИП:
- * - Использует лямбда-функции для взаимодействия с BluetoothService
- * - BluetoothService только инструмент, не содержит бизнес-логики
+ * - Использует лямбда-функции для взаимодействия с AppBluetoothService
+ * - AppBluetoothService только инструмент, не содержит бизнес-логики
  * - Автоматически запускает мониторинг после успешного подключения
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: BluetoothService.kt для подключения и мониторинга
+ * 1. Использует: AppBluetoothService.kt для подключения и мониторинга
  * 2. Уведомляет: BluetoothConnectionManager.kt через единую функцию обратного вызова
  * 3. Взаимодействует: AppLogger.kt для логирования
  */
 class ConnectionStateManager(
-    private val bluetoothService: BluetoothService,
+    private val bluetoothService: AppBluetoothService,
     private val stateChangeCallback: (ConnectionState, String?) -> Unit
 ) {
     /** Тег для логирования компонента */
@@ -79,8 +79,8 @@ class ConnectionStateManager(
 
     /**
      * Callback-функция для обработки успешного подключения.
-     * Передается в BluetoothService.connectToDevice()
-     * Вызывается BluetoothService при успешном подключении к устройству.
+     * Передается в AppBluetoothService.connectToDevice()
+     * Вызывается AppBluetoothService при успешном подключении к устройству.
      *
      * @param deviceData Подключенное устройство
      */
@@ -96,8 +96,8 @@ class ConnectionStateManager(
 
     /**
      * Callback-функция для обработки отключения.
-     * Передается в BluetoothService.connectToDevice()
-     * Вызывается BluetoothService при отключении от устройства.
+     * Передается в AppBluetoothService.connectToDevice()
+     * Вызывается AppBluetoothService при отключении от устройства.
      *
      * @param deviceData Отключенное устройство
      */
@@ -113,8 +113,8 @@ class ConnectionStateManager(
 
     /**
      * Callback-функция для мониторинга состояния соединения.
-     * Передается в BluetoothService.startConnectionMonitoring()
-     * Вызывается BluetoothService при изменении состояния соединения.
+     * Передается в AppBluetoothService.startConnectionMonitoring()
+     * Вызывается AppBluetoothService при изменении состояния соединения.
      *
      * @param isConnected Состояние соединения
      * @param eventDeviceData Устройство, к которому относится событие
@@ -195,7 +195,7 @@ class ConnectionStateManager(
             // Проверяем, не отменили ли подключение
             ensureActive()
 
-            // Используем BluetoothService для подключения с callback-функциями
+            // Используем AppBluetoothService для подключения с callback-функциями
             val (success, errorMessage) = tryConnectToDevice(deviceData)
 
             if (success) {
@@ -219,7 +219,7 @@ class ConnectionStateManager(
 
         // Если дошли сюда - все 5 попыток неудачны
         log("$MAX_CONNECTION_ATTEMPTS попыток подключения неудачны")
-        stateChangeCallback(ConnectionState.DISCONNECTED, null)
+        stateChangeCallback(ConnectionState.ERROR, "Не удалось подключиться к устройству ${deviceData.name} после $MAX_CONNECTION_ATTEMPTS попыток. Последняя ошибка: $lastError")
     }
 
     /**
@@ -289,7 +289,7 @@ class ConnectionStateManager(
 
         log("Начало пассивного мониторинга соединения: ${deviceData.name}")
 
-        // Подписываемся на системные события через BluetoothService с callback-функцией
+        // Подписываемся на системные события через AppBluetoothService с callback-функцией
         bluetoothService.startConnectionMonitoring(deviceData, connectionMonitoringCallback)
 
         log("Подписка на системные события активирована")

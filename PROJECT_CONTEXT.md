@@ -10,7 +10,7 @@
 ## 🏗️ АРХИТЕКТУРА И ЛОГИКА ВЗАИМОДЕЙСТВИЯ
 
 Архитектура построена на принципах **Single Responsibility**, реактивности и жесткой иерархии управления:
-`UI` ↔ `SharedViewModel` ↔ `AppController` ↔ `BluetoothConnectionManager` ↔ `Listeners` ↔ `BluetoothService`.
+`UI` ↔ `SharedViewModel` ↔ `AppController` ↔ `BluetoothConnectionManager` ↔ `Listeners` ↔ `AppBluetoothService`.
 
 ### 1. Архитектурная иерархия компонентов
 
@@ -42,7 +42,7 @@
 │              (главный координатор Bluetooth-подключения)         │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                   BluetoothService                        │   │
+│  │                   AppBluetoothService                     │   │
 │  │         (обертка над системным Bluetooth API)             │   │
 │  │         • низкоуровневые операции                         │   │
 │  │         • проверка разрешений                             │   │
@@ -108,11 +108,11 @@
 - **Что происходит в init-блоке BCM:**
     1. Установка `_connectionStateFlow.value = ConnectionState.UNDEFINED`.
     2. Вызов `createAllHelpers()`:
-        - Создание `BluetoothService` (обертка над системным API).
-        - Создание `ConnectionFeasibilityChecker` с передачей `BluetoothService` и `handleConnectionState`.
-        - Создание `DeviceAvailabilityMonitor` с передачей `BluetoothService` и `handleConnectionState`.
-        - Создание `ConnectionStateManager` с передачей `BluetoothService` и `handleConnectionState`.
-        - Создание `DataStreamHandler` с передачей `BluetoothService`, `managerScope` и `handleConnectionState`.
+        - Создание `AppBluetoothService` (обертка над системным API).
+        - Создание `ConnectionFeasibilityChecker` с передачей `AppBluetoothService` и `handleConnectionState`.
+        - Создание `DeviceAvailabilityMonitor` с передачей `AppBluetoothService` и `handleConnectionState`.
+        - Создание `ConnectionStateManager` с передачей `AppBluetoothService` и `handleConnectionState`.
+        - Создание `DataStreamHandler` с передачей `AppBluetoothService`, `managerScope` и `handleConnectionState`.
     3. Вызов `startCollectingCarData()`:
         - Подписка на `dataStreamHandler.carDataFlow`.
         - Транзитная эмиссия данных в `_carDataFlow` (для `AppController`).
@@ -179,7 +179,7 @@
 
 ### 4.5. Шаг 4: DataStreamHandler (DSH)
 Реализация логического протокола обмена данными (JSON).
-1. **Подписка**: `startReceivingProcess()` запускает прослушивание потока от `BluetoothService`.
+1. **Подписка**: `startReceivingProcess()` запускает прослушивание потока от `AppBluetoothService`.
 2. **Отправка настроек**: Цикличная отправка JSON с параметрами (интервал 1500 мс), пока не будет получено подтверждение (входящий JSON с ключом `"settings"`).
 3. **Отправка команды**: Цикличная отправка `{"command":"GET_DATA"}` (интервал 1500 мс), пока не будет получено подтверждение (входящий JSON с ключом `"GET_DATA"`).
 4. **Прием данных**: Переход в штатный режим, эмиссия данных `{"data": {...}}` в `carDataFlow`.
@@ -246,7 +246,7 @@
 bluetoothcar/
 ├── core/                # AppController (Главный координатор)
 ├── data/
-│   ├── bluetooth/       # BCM и BluetoothService
+│   ├── bluetooth/       # BCM и AppBluetoothService
 │   │   └── listeners/   # 4 помощника (CFC, DAM, CSM, DSH)
 │   ├── logging/         # AppLogger
 │   ├── models/          # AppSettings, CarData, BluetoothDeviceData

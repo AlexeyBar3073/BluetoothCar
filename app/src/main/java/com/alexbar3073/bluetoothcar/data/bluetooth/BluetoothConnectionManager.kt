@@ -2,6 +2,7 @@
 package com.alexbar3073.bluetoothcar.data.bluetooth
 
 import android.content.Context
+import android.widget.Toast
 import com.alexbar3073.bluetoothcar.data.bluetooth.listeners.ConnectionFeasibilityChecker
 import com.alexbar3073.bluetoothcar.data.bluetooth.listeners.DeviceAvailabilityMonitor
 import com.alexbar3073.bluetoothcar.data.bluetooth.listeners.ConnectionStateManager
@@ -34,14 +35,14 @@ import kotlinx.coroutines.flow.*
  * - BluetoothConnectionManager получает ВСЕ данные для работы исключительно из объекта AppSettings
  * - AppController НИКОГДА не передает BluetoothDeviceData отдельно от AppSettings
  * - Все помощники работают с BluetoothDeviceData, НЕ с AndroidBluetoothDevice
- * - BluetoothService скрывает Android API, предоставляет только Domain модели
+ * - AppBluetoothService скрывает Android API, предоставляет только Domain модели
  * - Автономная обработка состояний и принятие решений
  * - Все состояния и данные передаются через Flow, а не колбеки
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
  * 1. Получает данные от: AppController.kt (через метод updateSettings())
  * 2. Управляет: 4 помощниками в папке listeners/
- * 3. Использует: BluetoothService.kt (через помощников)
+ * 3. Использует: AppBluetoothService.kt (через помощников)
  * 4. Передает данные в: AppController.kt (через StateFlow и SharedFlow)
  */
 class BluetoothConnectionManager(
@@ -62,7 +63,7 @@ class BluetoothConnectionManager(
 
     // ========== ВСЕ 4 ПОМОЩНИКА ==========
     /** Сервис для работы с Bluetooth Android API */
-    private val bluetoothService = BluetoothService().apply { setContext(context) }
+    private val bluetoothService = AppBluetoothService().apply { setContext(context) }
 
     /** Проверяет возможность подключения (шаг 1 по ТЗ) */
     private lateinit var feasibilityChecker: ConnectionFeasibilityChecker
@@ -108,7 +109,7 @@ class BluetoothConnectionManager(
     }
 
     /**
-     * Создать всех 4 помощников и передать им BluetoothService.
+     * Создать всех 4 помощников и передать им AppBluetoothService.
      * Вызывается: из init блока при инициализации класса.
      * СОГЛАСНО ТЗ: BluetoothConnectionManager инициализирует всех помощников.
      */
@@ -135,7 +136,7 @@ class BluetoothConnectionManager(
             coroutineScope = managerScope,
             stateChangeCallback = ::handleConnectionState
         )
-        log("Все 4 помощника созданы с передачей BluetoothService")
+        log("Все 4 помощника созданы с передачей AppBluetoothService")
     }
 
     /**
@@ -171,6 +172,11 @@ class BluetoothConnectionManager(
             ConnectionState.ERROR -> {
                 // Шаг подключения завершился ошибкой
                 log("Получено состояние от помощника: ${state.name}${errorMessage?.let { " с ошибкой: $it" } ?: ""}")
+                errorMessage?.let {
+                    managerScope.launch {
+                        Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                    }
+                }
             }
 
             // Целевое устройство выбрано и проверено, блютуз включен
@@ -205,7 +211,12 @@ class BluetoothConnectionManager(
             }
 
             else -> {
-                // Для остальных состояний ничего не делаем
+                // Для остальных состояний показываем сообщение, если оно есть
+                errorMessage?.let {
+                    managerScope.launch {
+                        Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
     }
@@ -214,7 +225,7 @@ class BluetoothConnectionManager(
 
     /**
      * Получить список сопряженных Bluetooth устройств.
-     * Делегирует вызов BluetoothService.
+     * Делегирует вызов AppBluetoothService.
      * Вызывается: AppController.kt для получения списка устройств для UI.
      * @return Список устройств или null при ошибке
      */
@@ -224,7 +235,7 @@ class BluetoothConnectionManager(
 
     /**
      * Проверить, включен ли Bluetooth адаптер.
-     * Делегирует вызов BluetoothService.
+     * Делегирует вызов AppBluetoothService.
      * Вызывается: AppController.kt для проверки состояния Bluetooth в UI.
      * @return true если Bluetooth включен
      */

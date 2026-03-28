@@ -1,7 +1,7 @@
 // Файл: data/bluetooth/listeners/ConnectionFeasibilityChecker.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
-import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothService
+import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
@@ -35,13 +35,13 @@ import java.io.Closeable
  * - При отключении Bluetooth вызывает DISCONNECTED
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: BluetoothService.kt для доступа к Bluetooth API и мониторинга
+ * 1. Использует: AppBluetoothService.kt для доступа к Bluetooth API и мониторинга
  * 2. Уведомляет: BluetoothConnectionManager.kt через единую функцию обратного вызова
  * 3. Взаимодействует: AppLogger.kt для логирования
  */
 
 class ConnectionFeasibilityChecker(
-    private val bluetoothService: BluetoothService,
+    private val bluetoothService: AppBluetoothService,
     private val stateChangeCallback: (ConnectionState, String?) -> Unit
 ) {
     private val TAG = "ConnectionFeasibilityChecker"
@@ -84,7 +84,7 @@ class ConnectionFeasibilityChecker(
         log("Проверка 1: Наличие и валидность целевого устройства")
         if (deviceData == null||deviceData.address.isBlank()) {
             log("Устройство не указано (null)")
-            stateChangeCallback(ConnectionState.NO_DEVICE_SELECTED, "Устройство не указано")
+            stateChangeCallback(ConnectionState.NO_DEVICE_SELECTED, "Устройство не выбрано")
             return // Выход при первой ошибке
         }
         log("Проверка 1 пройдена: Устройство указано: ${deviceData.name} (${deviceData.address})")
@@ -184,10 +184,10 @@ class ConnectionFeasibilityChecker(
 
     /**
      * Проверить, сопряжено ли устройство с хост-устройством.
-     * Использует BluetoothService для проверки сопряжения.
+     * Использует AppBluetoothService для проверки сопряжения.
      *
      * @param deviceData Доменная модель устройства для проверки
-     * @return true если устройство спарено
+     * @return true if device is paired
      */
     private fun isDevicePaired(deviceData: BluetoothDeviceData): Boolean {
         return try {
