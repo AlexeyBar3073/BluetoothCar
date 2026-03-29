@@ -42,7 +42,9 @@ import java.io.Closeable
 
 class ConnectionFeasibilityChecker(
     private val bluetoothService: AppBluetoothService,
-    private val stateChangeCallback: (ConnectionState, String?) -> Unit
+    private val stateChangeCallback: (ConnectionState, String?) -> Unit,
+    /** Диспетчер для выполнения операций ввода-вывода (IO) */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val TAG = "ConnectionFeasibilityChecker"
 
@@ -58,7 +60,7 @@ class ConnectionFeasibilityChecker(
     fun start(deviceData: BluetoothDeviceData?) {
         log("Начало проверки возможности подключения")
 
-        val scope = CoroutineScope(Dispatchers.IO + Job())
+        val scope = CoroutineScope(ioDispatcher + Job())
 
         scope.launch {
             try {

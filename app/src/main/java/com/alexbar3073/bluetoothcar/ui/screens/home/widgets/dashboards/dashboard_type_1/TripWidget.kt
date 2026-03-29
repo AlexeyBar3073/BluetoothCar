@@ -158,7 +158,7 @@ internal fun TripWidget(
                             indication = null,
                             onClick = { showTripB = !showTripB },
                             onLongClick = {
-                                val command = if (showTripB) "{\"trip_b\":\"reset\"}" else "{\"trip_a\":\"reset\"}"
+                                val command = if (showTripB) "{\"command\":\"RESET_TRIP_B\"}" else "{\"command\":\"RESET_TRIP_A\"}"
                                 onTripReset(command)
                             }
                         )

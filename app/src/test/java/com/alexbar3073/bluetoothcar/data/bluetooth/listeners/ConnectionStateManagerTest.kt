@@ -1,4 +1,3 @@
-//ФАЙЛ: app/src/test/java/com/alexbar3073/bluetoothcar/data/bluetooth/listeners/ConnectionStateManagerTest.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
 import com.alexbar3073.bluetoothcar.MainDispatcherRule
@@ -7,27 +6,14 @@ import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-/**
- * ТЕГ: Тесты менеджера соединений
- * ФАЙЛ: C:/Project/BluetoothCar/app/src/test/java/com/alexbar3073/bluetoothcar/data/bluetooth/listeners/ConnectionStateManagerTest.kt
- * МЕСТОНАХОЖДЕНИЕ: app/src/test/java/com/alexbar3073/bluetoothcar/data/bluetooth/listeners/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Модульные тесты для ConnectionStateManager. Проверяют процесс установления 
- * RFCOMM-соединения, обработку 5 попыток подключения и мониторинг разрывов.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Тестирует: ConnectionStateManager.kt
- * 2. Мокает: AppBluetoothService.kt
- * 3. Использует: ConnectionState, BluetoothDeviceData
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectionStateManagerTest {
 
@@ -37,21 +23,20 @@ class ConnectionStateManagerTest {
     private lateinit var bluetoothService: AppBluetoothService
     private lateinit var stateManager: ConnectionStateManager
     private lateinit var stateCallback: (ConnectionState, String?) -> Unit
-    private val testDispatcher = StandardTestDispatcher()
+    
+    // Используем UnconfinedTestDispatcher для тестов, чтобы корутины запускались сразу
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
     fun setup() {
         bluetoothService = mockk(relaxed = true)
         stateCallback = mockk(relaxed = true)
-        stateManager = ConnectionStateManager(bluetoothService, stateCallback)
+        // Передаем testDispatcher в конструктор для синхронизации с runTest
+        stateManager = ConnectionStateManager(bluetoothService, stateCallback, testDispatcher)
     }
 
-    /**
-     * Тест: Успешное подключение с первой попытки.
-     * Проверяет: статус CONNECTING, вызов сервиса, статус CONNECTED и запуск мониторинга.
-     */
     @Test
-    fun `should return CONNECTED on successful connection and start monitoring`() = runTest {
+    fun `should return CONNECTED on successful connection and start monitoring`() = runTest(testDispatcher) {
         val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
         
         coEvery { 
@@ -68,19 +53,15 @@ class ConnectionStateManagerTest {
         }
 
         stateManager.start(device)
-        advanceTimeBy(100)
+        runCurrent()
 
         verify { stateCallback(ConnectionState.CONNECTING, null) }
         verify { stateCallback(ConnectionState.CONNECTED, null) }
-        // Проверка запуска мониторинга после успеха (п. 4.6.3 протокола)
         verify { bluetoothService.startConnectionMonitoring(eq(device), any()) }
     }
 
-    /**
-     * Тест: Обработка 5 неудачных попыток подключения.
-     */
     @Test
-    fun `should return DISCONNECTED after 5 failed attempts`() = runTest {
+    fun `should return ERROR after 5 failed attempts`() = runTest(testDispatcher) {
         val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
         
         coEvery { 
@@ -94,10 +75,12 @@ class ConnectionStateManagerTest {
 
         stateManager.start(device)
         
-        // 5 попыток по 2сек задержки + таймауты
-        advanceTimeBy(15000)
+        // В CSM 5 попыток. Между попытками задержка 2000мс.
+        // Нам нужно промотать время, чтобы выполнились все ретраи.
+        advanceTimeBy(15000) 
+        runCurrent()
 
-        coVerify(atLeast = 5) { 
+        coVerify(exactly = 5) { 
             bluetoothService.connectToDevice(
                 deviceData = any(),
                 onConnected = any(),
@@ -105,14 +88,13 @@ class ConnectionStateManagerTest {
                 timeoutMs = any()
             ) 
         }
-        verify { stateCallback(ConnectionState.DISCONNECTED, null) }
+        
+        // Проверяем финальный статус ошибки после 5 попыток
+        verify { stateCallback(ConnectionState.ERROR, match { it.contains("после 5 попыток") }) }
     }
 
-    /**
-     * Тест: Мониторинг разрыва уже установленного соединения.
-     */
     @Test
-    fun `should return DISCONNECTED when active connection is lost`() = runTest {
+    fun `should return DISCONNECTED when active connection is lost`() = runTest(testDispatcher) {
         val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
         val monitorCallbackSlot = slot<(Boolean, BluetoothDeviceData?) -> Unit>()
 
@@ -134,22 +116,20 @@ class ConnectionStateManagerTest {
         } just runs
 
         stateManager.start(device)
-        advanceTimeBy(100)
+        runCurrent()
 
-        // Эмулируем разрыв связи через мониторинг
         if (monitorCallbackSlot.isCaptured) {
             monitorCallbackSlot.captured(false, device)
+            runCurrent()
             verify { stateCallback(ConnectionState.DISCONNECTED, null) }
         }
     }
 
-    /**
-     * Тест: Ошибка при попытке запустить повторное подключение, если оно уже идет.
-     */
     @Test
-    fun `should return ERROR if start is called while already attempting connection`() = runTest {
+    fun `should return ERROR if start is called while already attempting connection`() = runTest(testDispatcher) {
         val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
         
+        // Заставляем первую попытку "подвиснуть"
         coEvery { 
             bluetoothService.connectToDevice(
                 deviceData = any(),
@@ -163,6 +143,7 @@ class ConnectionStateManagerTest {
         }
 
         stateManager.start(device)
+        // Вторая попытка в тот же момент
         stateManager.start(device)
 
         verify { stateCallback(ConnectionState.ERROR, match { it.contains("уже выполняется") }) }

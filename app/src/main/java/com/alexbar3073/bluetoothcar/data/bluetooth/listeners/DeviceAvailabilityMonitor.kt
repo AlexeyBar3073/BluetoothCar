@@ -42,7 +42,9 @@ import kotlinx.coroutines.*
 
 class DeviceAvailabilityMonitor(
     private val bluetoothService: AppBluetoothService,
-    private val stateChangeCallback: (ConnectionState, String?) -> Unit
+    private val stateChangeCallback: (ConnectionState, String?) -> Unit,
+    /** Диспетчер для выполнения операций ввода-вывода (IO) */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val TAG = "DeviceAvailabilityMonitor"
 
@@ -166,7 +168,7 @@ class DeviceAvailabilityMonitor(
         // СОГЛАСНО ТЗ: уведомление о начале поиска
         stateChangeCallback(ConnectionState.SEARCHING_DEVICE, null)
 
-        searchScope = CoroutineScope(Dispatchers.IO + Job())
+        searchScope = CoroutineScope(ioDispatcher + Job())
 
         // Запускаем первую попытку поиска
         startDiscovery()

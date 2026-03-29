@@ -3,6 +3,10 @@ package com.alexbar3073.bluetoothcar.data.bluetooth
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice as AndroidBluetoothDevice
 import android.bluetooth.BluetoothSocket
@@ -11,7 +15,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
+import android.os.Binder
 import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
@@ -26,18 +34,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 
 /**
- * ТЕГ: Низкоуровневый Bluetooth сервис
+ * ТЕГ: Низкоуровневый Bluetooth сервис (Android Foreground Service)
  * ФАЙЛ: C:/Project/BluetoothCar/app/src/main/java/com/alexbar3073/bluetoothcar/data/bluetooth/AppBluetoothService.kt
  * МЕСТОНАХОЖДЕНИЕ: data/bluetooth/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * Низкоуровневая обертка над системным Android Bluetooth API. Предоставляет 
- * унифицированный интерфейс для работы с адаптером, поиска устройств, 
- * управления сокетами и потоками данных. 
- * КЛЮЧЕВАЯ ФУНКЦИЯ: Осуществляет конвертирование объектов системного уровня Android (BluetoothDevice) 
- * в доменные объекты приложения (BluetoothDeviceData), изолируя бизнес-логику 
- * от специфики Android API. Это позволяет всей системе работать с универсальными 
- * моделями данных, не зависящими от версии ОС.
+ * Низкоуровневая обертка над системным Android Bluetooth API, реализованная как Android Service.
+ * Предоставляет унифицированный интерфейс для работы с адаптером, поиска устройств, 
+ * управления сокетами и потоками данных.
+ * 
+ * КЛЮЧЕВАЯ ФУНКЦИЯ: Обеспечивает работу Bluetooth-соединения в фоновом режиме через 
+ * механизмы Foreground Service. Осуществляет конвертирование объектов системного уровня 
+ * Android (BluetoothDevice) в доменные объекты приложения (BluetoothDeviceData).
  *
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Инициализация и проверка состояния Bluetooth адаптера.
@@ -46,25 +54,93 @@ import kotlinx.coroutines.flow.channelFlow
  * 4. Мониторинг системных событий (состояние адаптера, подключение/отключение ACL).
  * 5. Чтение и запись данных в Bluetooth сокет.
  * 6. Преобразование системных моделей в доменные модели приложения.
+ * 7. Управление уведомлением для работы в переднем плане (Foreground).
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
  * - Скрытие сложности Android API за простым интерфейсом.
  * - Реактивность через Kotlin Flow для потоков данных.
  * - Использование атомарных флагов для предотвращения состояний гонки.
  * - Единственный источник истины для состояния подключения (проверка сокета).
+ * - Жизненный цикл управляется системой Android (Service).
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
  * 1. Используется: BluetoothConnectionManager.kt и его помощниками (CFC, DAM, CSM, DSH).
  * 2. Использует: AppLogger.kt для диагностического вывода.
  * 3. Использует: BluetoothDeviceData как модель данных устройства.
  */
-class AppBluetoothService {
+class AppBluetoothService : Service() {
+
+    /** 
+     * Binder для предоставления интерфейса сервиса клиентам. 
+     */
+    private val binder = BluetoothBinder()
+
+    /** 
+     * Scope для выполнения корутин в контексте жизненного цикла сервиса. 
+     */
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * Класс для связи сервиса с клиентами (например, MainActivity или BCM).
+     */
+    inner class BluetoothBinder : Binder() {
+        /**
+         * Получить экземпляр сервиса.
+         */
+        fun getService(): AppBluetoothService = this@AppBluetoothService
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
     companion object {
         /** Тег для логирования действий сервиса */
         private const val TAG = "AppBluetoothService"
         
         /** Стандартный UUID для последовательного порта (SPP) */
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+        /** ID канала уведомлений */
+        private const val CHANNEL_ID = "bluetooth_service_channel"
+        
+        /** ID уведомления сервиса */
+        private const val NOTIFICATION_ID = 1
+
+        /**
+         * Глобальный экземпляр сервиса (Singleton-подобный доступ).
+         * Заполняется в onCreate и очищается в onDestroy.
+         */
+        @Volatile
+        private var instance: AppBluetoothService? = null
+
+        /**
+         * Получить текущий экземпляр сервиса.
+         * ПРЕДУПРЕЖДЕНИЕ: Может вернуть null, если сервис еще не создан системой.
+         */
+        fun getInstance(): AppBluetoothService? = instance
+
+        /**
+         * Запустить сервис.
+         * 
+         * @param context Контекст для запуска интента.
+         */
+        fun start(context: Context) {
+            val intent = Intent(context, AppBluetoothService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        /**
+         * Остановить сервис.
+         * 
+         * @param context Контекст для остановки интента.
+         */
+        fun stop(context: Context) {
+            val intent = Intent(context, AppBluetoothService::class.java)
+            context.stopService(intent)
+        }
     }
 
     // ========== СОСТОЯНИЯ И КОНТЕКСТ ==========
@@ -80,8 +156,8 @@ class AppBluetoothService {
     /** Системный Bluetooth адаптер */
     private var bluetoothAdapter: BluetoothAdapter? = null
 
-    /** Контекст приложения для работы с Receiver и разрешениями */
-    private var context: Context? = null
+    /** Контекст приложения (сохраняем для совместимости, хотя сервис сам является контекстом) */
+    private var internalContext: Context? = null
 
     // ========== ПОДКЛЮЧЕНИЕ ==========
 
@@ -139,23 +215,113 @@ class AppBluetoothService {
     /** Атомарный флаг активности прослушивания данных */
     private val isListeningForData = AtomicBoolean(false)
 
-    /**
-     * Установить контекст для работы с сервисом.
-     * Вызывается из: BluetoothConnectionManager.kt при инициализации.
-     * 
-     * @param context Контекст приложения.
-     */
-    fun setContext(context: Context) {
-        // Сохраняем контекст для работы с системными сервисами и разрешениями
-        this.context = context
-        // Инициализируем адаптер и запускаем мониторинг состояния Bluetooth
+    // ========== ЖИЗНЕННЫЙ ЦИКЛ СЕРВИСА ==========
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        internalContext = this
+        AppLogger.logInfo("Создание AppBluetoothService", TAG)
+        createNotificationChannel()
+        
+        // При создании сразу переходим в "тихий" Foreground режим, чтобы сервис не убили
+        startInForeground("Ожидание подключения...")
+        
         initializeBluetoothAdapter()
         startBluetoothStateMonitoring()
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        AppLogger.logInfo("Запуск AppBluetoothService (onStartCommand)", TAG)
+        // START_STICKY позволяет системе перезапустить сервис, если он будет убит
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        AppLogger.logInfo("Уничтожение AppBluetoothService", TAG)
+        cleanupSocket()
+        unregisterBluetoothStateReceiver()
+        unregisterConnectionBroadcastReceiver()
+        unregisterDiscoveryReceiver()
+        serviceScope.cancel()
+        instance = null
+        super.onDestroy()
+    }
+
+    /**
+     * Установить контекст для работы с сервисом.
+     * СОХРАНЕНО ДЛЯ СОВМЕСТИМОСТИ. В режиме Service использует собственный контекст.
+     * 
+     * @param context Контекст приложения.
+     */
+    fun setContext(context: Context) {
+        AppLogger.logInfo("Метод setContext вызван в режиме Service (установка внутреннего контекста)", TAG)
+        this.internalContext = context
+    }
+
+    // ========== УПРАВЛЕНИЕ FOREGROUND РЕЖИМОМ ==========
+
+    /**
+     * Создать канал уведомлений для Foreground Service.
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                CHANNEL_ID,
+                "Bluetooth Car Connection",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Обеспечивает стабильную связь с Bluetooth-устройством в фоне"
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(serviceChannel)
+        }
+    }
+
+    /**
+     * Создать уведомление для Foreground Service.
+     * 
+     * @param content Текст уведомления.
+     */
+    private fun createNotification(content: String): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Связь с Bluetooth-каром")
+            .setContentText(content)
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setOngoing(true)
+            .build()
+    }
+
+    /**
+     * Запустить/обновить сервис в режиме Foreground.
+     * 
+     * @param message Сообщение для уведомления.
+     */
+    private fun startInForeground(message: String) {
+        val notification = createNotification(message)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            AppLogger.logInfo("Сервис переведен в Foreground режим: $message", TAG)
+        } catch (e: Exception) {
+            AppLogger.logError("Ошибка запуска Foreground режима: ${e.message}", TAG)
+        }
+    }
+
+    /**
+     * Остановить режим Foreground (не рекомендуется для активного соединения).
+     */
+    fun stopForegroundMode() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        AppLogger.logInfo("Foreground режим остановлен", TAG)
+    }
+
     /**
      * Инициализировать Bluetooth адаптер.
-     * Вызывается из: setContext().
+     * Вызывается из: onCreate().
      */
     private fun initializeBluetoothAdapter() {
         try {
@@ -313,7 +479,6 @@ class AppBluetoothService {
      * Зарегистрировать BroadcastReceiver для получения результатов поиска.
      */
     private fun registerDiscoveryReceiver() {
-        val context = this.context ?: return
         if (discoveryReceiver != null) return
 
         discoveryReceiver = object : BroadcastReceiver() {
@@ -346,14 +511,14 @@ class AppBluetoothService {
             addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
         }
-        context.registerReceiver(discoveryReceiver, filter)
+        registerReceiver(discoveryReceiver, filter)
     }
 
     /**
      * Отменить регистрацию Receiver-а поиска.
      */
     private fun unregisterDiscoveryReceiver() {
-        discoveryReceiver?.let { context?.unregisterReceiver(it) }
+        discoveryReceiver?.let { unregisterReceiver(it) }
         discoveryReceiver = null
     }
 
@@ -412,12 +577,16 @@ class AppBluetoothService {
                 bluetoothSocket = socket
                 currentConnectionAddress = deviceData.address
                 
+                // При успешном подключении обновляем Foreground уведомление
+                startInForeground("Подключено к ${deviceData.name}")
+                
                 onConnected(deviceData)
                 Pair(true, null)
             }
         } catch (e: Exception) {
             // При любой ошибке закрываем сокет и уведомляем вызывающую сторону
             cleanupSocket()
+            startInForeground("Ошибка подключения к ${deviceData.name}")
             onDisconnected(deviceData)
             Pair(false, e.message ?: "Сбой при установке Bluetooth соединения")
         }
@@ -429,6 +598,7 @@ class AppBluetoothService {
      */
     fun disconnect() {
         cleanupSocket()
+        startInForeground("Соединение разорвано")
     }
 
     /**
@@ -454,7 +624,6 @@ class AppBluetoothService {
      */
     private fun startBluetoothStateMonitoring() {
         if (bluetoothStateReceiver != null) return
-        val context = this.context ?: return
 
         bluetoothStateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -467,7 +636,7 @@ class AppBluetoothService {
                 }
             }
         }
-        context.registerReceiver(bluetoothStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
+        registerReceiver(bluetoothStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
 
     /**
@@ -481,6 +650,11 @@ class AppBluetoothService {
         val id = UUID.randomUUID().toString()
         bluetoothStateCallbacks[id] = callback
         return Closeable { bluetoothStateCallbacks.remove(id) }
+    }
+
+    private fun unregisterBluetoothStateReceiver() {
+        bluetoothStateReceiver?.let { unregisterReceiver(it) }
+        bluetoothStateReceiver = null
     }
 
     // ========== МОНИТОРИНГ СОСТОЯНИЯ СОЕДИНЕНИЯ ==========
@@ -505,7 +679,6 @@ class AppBluetoothService {
      * @param targetAddress MAC-адрес устройства для фильтрации событий.
      */
     private fun registerConnectionBroadcastReceiver(targetAddress: String) {
-        val context = this.context ?: return
         connectionBroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 @Suppress("DEPRECATION")
@@ -517,12 +690,14 @@ class AppBluetoothService {
                     // Системное событие успешной установки ACL соединения
                     AndroidBluetoothDevice.ACTION_ACL_CONNECTED -> {
                         val deviceData = androidDeviceToDomain(device)
+                        startInForeground("Подключено к ${deviceData.name}")
                         connectionStateCallback?.invoke(true, deviceData)
                     }
                     // Системное событие разрыва ACL соединения
                     AndroidBluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                         cleanupSocket()
                         val deviceData = androidDeviceToDomain(device)
+                        startInForeground("Отключено от ${deviceData.name}")
                         connectionStateCallback?.invoke(false, deviceData)
                     }
                 }
@@ -532,7 +707,16 @@ class AppBluetoothService {
             addAction(AndroidBluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(AndroidBluetoothDevice.ACTION_ACL_DISCONNECTED)
         }
-        context.registerReceiver(connectionBroadcastReceiver, filter)
+        registerReceiver(connectionBroadcastReceiver, filter)
+    }
+
+    /**
+     * Отменить регистрацию Receiver-а физического статуса подключения.
+     */
+    private fun unregisterConnectionBroadcastReceiver() {
+        connectionBroadcastReceiver?.let { unregisterReceiver(it) }
+        connectionBroadcastReceiver = null
+        connectionStateCallback = null
     }
 
     /**
@@ -541,9 +725,7 @@ class AppBluetoothService {
      */
     fun stopConnectionMonitoring() {
         if (!isMonitoringConnection.getAndSet(false)) return
-        connectionBroadcastReceiver?.let { context?.unregisterReceiver(it) }
-        connectionBroadcastReceiver = null
-        connectionStateCallback = null
+        unregisterConnectionBroadcastReceiver()
     }
 
     // ========== ПЕРЕДАЧА ДАННЫХ ==========
@@ -567,6 +749,7 @@ class AppBluetoothService {
         } catch (e: Exception) {
             // Любой сбой при записи данных трактуется как потеря связи
             cleanupSocket()
+            startInForeground("Ошибка передачи данных")
             false
         }
     }
@@ -629,7 +812,6 @@ class AppBluetoothService {
      */
     @SuppressLint("MissingPermission")
     private fun getAndroidDeviceByAddress(address: String): AndroidBluetoothDevice? {
-        if (!hasBluetoothConnectPermission()) return null
         return try {
             // Ищем устройство в списке сопряженных в системном адаптере
             bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == address }
@@ -646,15 +828,11 @@ class AppBluetoothService {
      * @return Доменная модель с заполненными данными (имя, адрес, класс).
      */
     private fun androidDeviceToDomain(device: AndroidBluetoothDevice): BluetoothDeviceData {
-        return if (hasBluetoothConnectPermission()) {
-            try {
-                // Используем фабричный метод модели для корректного маппинга полей и классов
-                BluetoothDeviceData.fromAndroidDevice(device)
-            } catch (e: SecurityException) {
-                BluetoothDeviceData(name = "Нет разрешений", address = device.address)
-            }
-        } else {
-            BluetoothDeviceData(name = "Неизвестно", address = device.address)
+        return try {
+            // Используем фабричный метод модели для корректного маппинга полей и классов
+            BluetoothDeviceData.fromAndroidDevice(device)
+        } catch (e: SecurityException) {
+            BluetoothDeviceData(name = "Нет разрешений", address = device.address)
         }
     }
 
@@ -664,9 +842,8 @@ class AppBluetoothService {
      * @return true если разрешение предоставлено пользователем.
      */
     private fun hasBluetoothConnectPermission(): Boolean {
-        val ctx = context ?: return false
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
         } else true
     }
 
@@ -677,14 +854,13 @@ class AppBluetoothService {
      * @return true если все необходимые разрешения предоставлены.
      */
     private fun hasDiscoveryPermissions(): Boolean {
-        val ctx = context ?: return false
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val hasScan = ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
-            val hasConnect = ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            val hasScan = ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+            val hasConnect = ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
             hasScan && hasConnect
         } else {
             // Для Android 7-11 требуется разрешение на доступ к местоположению
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         }
     }
 }

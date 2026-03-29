@@ -4,7 +4,6 @@ package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboar
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -20,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -108,14 +106,7 @@ internal fun TripWidget(
     val tripTotalValueStyle = tightValueStyle.copy(fontSize = tripTotalValueFontSize)
     val smallValueStyle = tightValueStyle.copy(fontSize = smallValueFontSize)
 
-    Box(modifier = modifier
-        .fillMaxSize()
-        .pointerInput(Unit) {
-            detectTapGestures(
-                onLongPress = { onLongPress() }
-            )
-        }
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         // 1. ДЕКОРАТИВНЫЕ ГРАНИЦЫ
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = geometry.outerStrokeWidth
@@ -167,7 +158,7 @@ internal fun TripWidget(
                             indication = null,
                             onClick = { showTripB = !showTripB },
                             onLongClick = {
-                                val command = if (showTripB) "{\"trip_b\":\"reset\"}" else "{\"trip_a\":\"reset\"}"
+                                val command = if (showTripB) "{\"command\":\"RESET_TRIP_B\"}" else "{\"command\":\"RESET_TRIP_A\"}"
                                 onTripReset(command)
                             }
                         )

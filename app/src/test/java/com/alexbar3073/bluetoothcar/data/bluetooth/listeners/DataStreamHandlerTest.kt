@@ -1,20 +1,26 @@
+// Файл: app/src/test/java/com/alexbar3073/bluetoothcar/data/bluetooth/listeners/DataStreamHandlerTest.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
-import app.cash.turbine.test
 import com.alexbar3073.bluetoothcar.MainDispatcherRule
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
-import com.alexbar3073.bluetoothcar.data.models.AppSettings
-import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.*
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import app.cash.turbine.test
 
+/**
+ * ТЕГ: Тесты DataStreamHandler
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Тестирование транспортного шлюза. Проверяется только механизм доставки сообщений,
+ * присвоение ID и фильтрация входящего потока.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DataStreamHandlerTest {
 
@@ -25,95 +31,107 @@ class DataStreamHandlerTest {
     private lateinit var handler: DataStreamHandler
     private lateinit var stateCallback: (ConnectionState, String?) -> Unit
     
-    private val incomingDataFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    private val incomingRawDataFlow = MutableSharedFlow<String>(extraBufferCapacity = 10)
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
     fun setup() {
         bluetoothService = mockk(relaxed = true)
         stateCallback = mockk(relaxed = true)
-        every { bluetoothService.startDataListening() } returns incomingDataFlow
-        // Мы передаем TestScope в конструктор, чтобы использовать его для управления временем
-    }
-
-    @Test
-    fun `should complete full protocol sequence from settings to listening data`() = runTest {
-        handler = DataStreamHandler(bluetoothService, this, stateCallback)
-        val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
-        val settings = AppSettings()
         
-        handler.start(device, settings)
-        testScheduler.runCurrent()
-        
-        verify { stateCallback(ConnectionState.SENDING_SETTINGS, null) }
-        coVerify { bluetoothService.sendData(match { it.contains("settings") }) }
-
-        incomingDataFlow.emit("{\"settings\":\"OK\"}")
-        testScheduler.advanceTimeBy(1600) 
-        testScheduler.runCurrent()
-
-        verify { stateCallback(ConnectionState.REQUESTING_DATA, null) }
-        coVerify { bluetoothService.sendData(match { it.contains("GET_DATA") }) }
-
-        incomingDataFlow.emit("{\"GET_DATA\":\"OK\"}")
-        testScheduler.advanceTimeBy(1600)
-        testScheduler.runCurrent()
-
-        verify { stateCallback(ConnectionState.LISTENING_DATA, null) }
-    }
-
-    @Test
-    fun `should emit CarData when receiving valid data JSON in listening mode`() = runTest {
-        handler = DataStreamHandler(bluetoothService, this, stateCallback)
-        val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
+        // Настройка потока данных от Bluetooth сервиса
+        every { bluetoothService.startDataListening() } returns incomingRawDataFlow
         coEvery { bluetoothService.sendData(any()) } returns true
-        
-        handler.start(device, AppSettings())
-        testScheduler.runCurrent()
-        
-        incomingDataFlow.emit("{\"settings\":\"OK\"}")
-        testScheduler.advanceTimeBy(1600)
-        testScheduler.runCurrent()
-        incomingDataFlow.emit("{\"GET_DATA\":\"OK\"}")
-        testScheduler.advanceTimeBy(1600)
-        testScheduler.runCurrent()
+    }
 
-        handler.carDataFlow.test {
-            val jsonResponse = "{\"data\":{\"speed\":85.5,\"voltage\":13.8,\"fuel\":42.0}}"
-            incomingDataFlow.emit(jsonResponse)
-            
-            val result = awaitItem()
-            assert(result.speed == 85.5f)
-            assert(result.voltage == 13.8f)
-            assert(result.fuel == 42.0f)
+    /**
+     * Тест: Присвоение msg_id и отправка.
+     */
+    @Test
+    fun `should wrap command in envelope with msg_id and send via service`() = runTest(testDispatcher) {
+        handler = DataStreamHandler(bluetoothService, backgroundScope, stateCallback, testDispatcher)
+        handler.start()
+        
+        val testCommand = "{\"command\":\"TEST\"}"
+        handler.sendJsonCommand(testCommand)
+        runCurrent()
+        
+        // Проверяем, что в сервис ушел JSON с msg_id="1"
+        coVerify { bluetoothService.sendData(match { it.contains("\"msg_id\":\"1\"") && it.contains("\"command\":\"TEST\"") }) }
+    }
+
+    /**
+     * Тест: Гарантированная доставка (переотправка).
+     * Если ack_id не получен, сообщение должно отправляться повторно через интервал.
+     */
+    @Test
+    fun `should retry sending command until ack_id is received`() = runTest(testDispatcher) {
+        handler = DataStreamHandler(bluetoothService, backgroundScope, stateCallback, testDispatcher)
+        handler.start()
+        
+        handler.sendJsonCommand("{\"cmd\":\"RETRY_TEST\"}")
+        runCurrent()
+
+        // Первая попытка отправки
+        coVerify(exactly = 1) { bluetoothService.sendData(any()) }
+
+        // Эмулируем прохождение времени (интервал в DSH = 1500мс)
+        testScheduler.advanceTimeBy(1600)
+        runCurrent()
+
+        // Должна быть вторая попытка отправки той же команды
+        coVerify(exactly = 2) { bluetoothService.sendData(any()) }
+
+        // Эмулируем получение подтверждения
+        incomingRawDataFlow.emit("{\"ack_id\":\"1\"}")
+        runCurrent()
+
+        // Еще раз перематываем время - больше отправок быть не должно
+        testScheduler.advanceTimeBy(3000)
+        runCurrent()
+
+        coVerify(exactly = 2) { bluetoothService.sendData(any()) }
+    }
+
+    /**
+     * Тест: Трансляция входящих данных.
+     * Проверяет, что обычные пакеты пробрасываются в incomingMessagesFlow, а ack_id фильтруются.
+     */
+    @Test
+    fun `should emit non-ack messages to incomingMessagesFlow`() = runTest(testDispatcher) {
+        handler = DataStreamHandler(bluetoothService, backgroundScope, stateCallback, testDispatcher)
+        handler.start()
+
+        handler.incomingMessagesFlow.test {
+            val dataPacket = "{\"data\":{\"val\":100}}"
+            val ackPacket = "{\"ack_id\":\"5\"}"
+
+            incomingRawDataFlow.emit(dataPacket)
+            assertEquals(dataPacket, awaitItem())
+
+            incomingRawDataFlow.emit(ackPacket)
+            // ack_id не должен попасть в поток, поэтому awaitItem() тут не сработает
+            expectNoEvents()
         }
     }
 
+    /**
+     * Тест: Остановка обработчика.
+     */
     @Test
-    fun `should return ERROR if settings acknowledgment timeout occurs`() = runTest {
-        handler = DataStreamHandler(bluetoothService, this, stateCallback)
-        val device = BluetoothDeviceData("Car", "00:11:22:33:44:55")
+    fun `should stop listening and sending after stop call`() = runTest(testDispatcher) {
+        handler = DataStreamHandler(bluetoothService, backgroundScope, stateCallback, testDispatcher)
+        handler.start()
         
-        handler.start(device, AppSettings())
-        testScheduler.runCurrent()
+        handler.stop()
+        runCurrent()
 
-        testScheduler.advanceTimeBy(11000)
-        testScheduler.runCurrent()
-
-        verify { stateCallback(ConnectionState.ERROR, match { it.contains("Таймаут") }) }
-    }
-
-    @Test
-    fun `should wait for subscription before sending settings`() = runTest {
-        handler = DataStreamHandler(bluetoothService, this, stateCallback)
-        every { bluetoothService.startDataListening() } answers {
-            incomingDataFlow
-        }
-
-        handler.start(BluetoothDeviceData("Car", "00:11:22:33:44:55"), AppSettings())
+        verify { bluetoothService.stopDataListening() }
         
+        handler.sendJsonCommand("{\"cmd\":\"SHUTDOWN\"}")
+        runCurrent()
+        
+        // После остановки команды не должны уходить в сервис
         coVerify(exactly = 0) { bluetoothService.sendData(any()) }
-        
-        testScheduler.runCurrent()
-        coVerify(atLeast = 1) { bluetoothService.sendData(match { it.contains("settings") }) }
     }
 }

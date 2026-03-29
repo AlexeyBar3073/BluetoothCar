@@ -42,7 +42,9 @@ import kotlinx.coroutines.*
  */
 class ConnectionStateManager(
     private val bluetoothService: AppBluetoothService,
-    private val stateChangeCallback: (ConnectionState, String?) -> Unit
+    private val stateChangeCallback: (ConnectionState, String?) -> Unit,
+    /** Диспетчер для выполнения операций ввода-вывода (IO) */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     /** Тег для логирования компонента */
     private val TAG = "ConnectionStateManager"
@@ -159,7 +161,7 @@ class ConnectionStateManager(
         // СОГЛАСНО ТЗ: уведомление о начале подключения (CONNECTING)
         stateChangeCallback(ConnectionState.CONNECTING, null)
 
-        connectionScope = CoroutineScope(Dispatchers.IO + Job())
+        connectionScope = CoroutineScope(ioDispatcher + Job())
 
         // Запускаем попытки подключения в отдельной корутине
         connectionAttemptJob = connectionScope?.launch {

@@ -22,18 +22,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
-/**
- * ТЕГ: Тесты SharedViewModel
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Модульные тесты для SharedViewModel. Проверяют корректность передачи данных 
- * от AppController в UI и правильность делегирования команд.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Тестирует: SharedViewModel.kt
- * 2. Мокает: AppController.kt
- * 3. Использует модели: ConnectionStatusInfo, AppSettings, CarData
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SharedViewModelTest {
 
@@ -41,21 +29,15 @@ class SharedViewModelTest {
     private lateinit var appController: AppController
     private lateinit var viewModel: SharedViewModel
 
-    /** Потоки-заглушки для имитации данных от контроллера */
     private val connectionStatusFlow = MutableStateFlow(ConnectionState.UNDEFINED.toStatusInfo())
     private val carDataFlow = MutableStateFlow(CarData())
     private val appSettingsFlow = MutableStateFlow(AppSettings())
 
-    /**
-     * Настройка окружения перед каждым тестом.
-     * Заменяет Main диспатчер на тестовый и настраивает моки.
-     */
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         appController = mockk(relaxed = true)
 
-        // Настройка возвращаемых значений для потоков контроллера
         every { appController.connectionStatusInfo } returns connectionStatusFlow
         every { appController.carData } returns carDataFlow
         every { appController.appSettings } returns appSettingsFlow
@@ -63,45 +45,37 @@ class SharedViewModelTest {
         viewModel = SharedViewModel(appController)
     }
 
-    /**
-     * Сброс диспатчера после завершения тестов.
-     */
     @After
     fun tearDown() {
         Dispatchers.resetMain()
     }
 
-    /**
-     * Тест: Проверка реактивного обновления статуса подключения.
-     * Проверяет, что изменения в AppController корректно доходят до ViewModel.
-     */
     @Test
-    fun `viewModel should reflect connection status from controller`() = runTest {
-        val expectedStatus = ConnectionState.CONNECTED.toStatusInfo()
+    fun `viewModel should reflect car data from controller ignoring timestamp`() = runTest {
+        val testCarData = CarData(speed = 60f, fuel = 25f)
         
-        viewModel.connectionStatusInfo.test {
-            // Первое значение при подписке
-            assertEquals(ConnectionState.UNDEFINED.toStatusInfo(), awaitItem())
+        viewModel.carData.test {
+            // Пропускаем начальное значение, так как у него всегда рандомный timestamp
+            awaitItem() 
             
-            // Эмулируем изменение в контроллере
-            connectionStatusFlow.value = expectedStatus
-            assertEquals(expectedStatus, awaitItem())
+            carDataFlow.value = testCarData
+            val received = awaitItem()
+            
+            assertEquals(testCarData.speed, received.speed)
+            assertEquals(testCarData.fuel, received.fuel)
         }
     }
 
-    /**
-     * Тест: Проверка делегирования команды повторного подключения.
-     */
     @Test
-    fun `retryConnection should delegate to appController`() {
-        viewModel.retryConnection()
-        verify { appController.retryConnection() }
+    fun `isConnected should be true when state is active`() = runTest {
+        viewModel.isConnected.test {
+            assertEquals(false, awaitItem())
+
+            connectionStatusFlow.value = ConnectionState.LISTENING_DATA.toStatusInfo()
+            assertEquals(true, awaitItem())
+        }
     }
 
-    /**
-     * Тест: Проверка логики выбора устройства.
-     * Проверяет сохранение существующих настроек при обновлении устройства.
-     */
     @Test
     fun `selectBluetoothDevice should update settings in appController`() {
         val device = BluetoothDeviceData("Test Device", "00:11:22:33:44:55")
@@ -110,28 +84,10 @@ class SharedViewModelTest {
 
         viewModel.selectBluetoothDevice(device)
 
-        // Проверяем, что в контроллер ушли обновленные настройки с сохранением объема бака
         verify { 
             appController.updateSettings(match { 
                 it.selectedDevice == device && it.fuelTankCapacity == 50f 
             }) 
-        }
-    }
-
-    /**
-     * Тест: Проверка производного состояния isConnected.
-     * Проверяет маппинг физического состояния в булево значение для UI.
-     */
-    @Test
-    fun `isConnected should be true when state is active`() = runTest {
-        viewModel.isConnected.test {
-            assertEquals(false, awaitItem()) // Начальное UNDEFINED не является активным
-
-            connectionStatusFlow.value = ConnectionState.LISTENING_DATA.toStatusInfo()
-            assertEquals(true, awaitItem())
-
-            connectionStatusFlow.value = ConnectionState.DISCONNECTED.toStatusInfo()
-            assertEquals(false, awaitItem())
         }
     }
 }

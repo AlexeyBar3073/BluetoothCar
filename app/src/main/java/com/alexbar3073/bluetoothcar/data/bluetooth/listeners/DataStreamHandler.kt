@@ -4,645 +4,267 @@ package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
-import com.alexbar3073.bluetoothcar.data.models.AppSettings
-import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
-import com.alexbar3073.bluetoothcar.data.models.CarData
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
+ * ТЕГ: DataStreamHandler
  * ФАЙЛ: data/bluetooth/listeners/DataStreamHandler.kt
  * МЕСТОНАХОЖДЕНИЕ: data/bluetooth/listeners/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * ОБРАБОТЧИК ПОТОКА ДАННЫХ С BLUETOOTH УСТРОЙСТВОМ. Реализует протокол обмена данными
- * после установления соединения согласно ТЗ: отправка настроек → запрос данных → прием данных.
+ * ТРАНСПОРТНЫЙ ШЛЮЗ ПОТОКА ДАННЫХ. Реализует низкоуровневый механизм обмена данными
+ * по принципу: очередь команд -> упаковка в JSON с msg_id -> ожидание подтверждения ack_id.
  *
- * ОТВЕТСТВЕННОСТЬ (СОГЛАСНО ТЗ):
- * 1. Циклическая отправка настроек приложения на устройство (интервал SEND_INTERVAL_MS)
- * 2. Циклическая отправка команды GET_DATA (интервал SEND_INTERVAL_MS)
- * 3. Прием и десериализация потока данных от устройства
- * 4. Обработка подтверждений получения настроек и команд (внутренняя)
- * 5. Уведомление о состоянии протокола через единую функцию обратного вызова
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Гарантированная доставка исходящих JSON-пакетов (циклическая переотправка до получения ack_id).
+ * 2. Присвоение уникальных msg_id всем исходящим сообщениям.
+ * 3. Трансляция входящего потока данных «как есть» (raw strings) для вышестоящих компонентов.
+ * 4. Управление низкоуровневыми потоками чтения/записи Bluetooth-сервиса.
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
- * - Работает ТОЛЬКО с доменными моделями (BluetoothDeviceData, AppSettings, CarData)
- * - Все операции выполняются асинхронно в корутинах
- * - Результаты возвращаются через единую функцию обратного вызова
- * - Данные от устройства передаются через Flow
- * - Подтверждения настроек и команд обрабатываются ВНУТРЕННЕ (не передаются в BCM)
- * - Соответствует другим помощникам: один статус = один колбек
- * - СТРОГАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ согласно ТЗ: настройки → подтверждение → команда → подтверждение → данные
+ * - Чистый транспорт: не содержит бизнес-логики, не знает о структуре CarData или настройках.
+ * - Работает исключительно со строковыми JSON-пакетами.
+ * - Ответственность за контент сообщений лежит на вызывающем компоненте (оркестраторе).
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: AppBluetoothService.kt для отправки/приема данных
- * 2. Уведомляет: BluetoothConnectionManager.kt через единую функцию обратного вызова
- * 3. Использует: AppSettings, CarData для сериализации данных
- * 4. Взаимодействует: AppLogger.kt для логирования
+ * 1. Использует: AppBluetoothService.kt для низкоуровневой отправки/приема данных.
+ * 2. Уведомляет: BluetoothConnectionManager.kt через входящий поток сообщений.
  */
 class DataStreamHandler(
     private val bluetoothService: AppBluetoothService,
     private val coroutineScope: CoroutineScope,
-    private val stateChangeCallback: (ConnectionState, String?) -> Unit
+    private val stateChangeCallback: (ConnectionState, String?) -> Unit,
+    /** Диспетчер для выполнения операций ввода-вывода (IO) */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     /** Тег для логирования компонента */
     private val TAG = "DataStreamHandler"
 
-    // ========== ПОТОК ДАННЫХ ДЛЯ BLUETOOTHCONNECTIONMANAGER ==========
+    // ========== МОДЕЛИ ДАННЫХ ==========
 
-    /** Поток данных от устройства для BluetoothConnectionManager */
-    private val _carDataFlow = MutableSharedFlow<CarData>()
-    val carDataFlow: SharedFlow<CarData> = _carDataFlow.asSharedFlow()
-
-    // ========== JSON СЕРИАЛИЗАЦИЯ ==========
-
-    /** JSON сериализатор с настройками для работы с данными устройства */
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
+    /**
+     * Внутренняя модель команды в очереди на отправку.
+     * @property id Уникальный номер сообщения для отслеживания подтверждения.
+     * @property payload Полезная нагрузка команды в формате JSON.
+     */
+    private data class QueuedCommand(
+        val id: String,
+        val payload: String
+    ) {
+        /**
+         * Формирует итоговый JSON пакет с внедрением msg_id.
+         * @param json Настроенный экземпляр Json.
+         */
+        fun getEnvelope(json: Json): String {
+            val element = json.parseToJsonElement(payload).jsonObject.toMutableMap()
+            element["msg_id"] = JsonPrimitive(id)
+            return json.encodeToString(JsonObject(element))
+        }
     }
 
-    // ========== ВНУТРЕННИЕ ФЛАГИ ПОДТВЕРЖДЕНИЙ ==========
+    // ========== ПОТОКИ И ОЧЕРЕДИ ==========
 
-    /** Флаг подтверждения получения настроек устройством (ВНУТРЕННИЙ) */
-    private val settingsAcknowledged = AtomicBoolean(false)
+    /** Поток входящих сообщений (сырой JSON) для трансляции наверх */
+    private val _incomingMessagesFlow = MutableSharedFlow<String>()
+    val incomingMessagesFlow: SharedFlow<String> = _incomingMessagesFlow.asSharedFlow()
 
-    /** Флаг подтверждения получения команды устройством (ВНУТРЕННИЙ) */
-    private val commandAcknowledged = AtomicBoolean(false)
+    /** Очередь исходящих команд (Unlimited для предотвращения блокировки отправителей) */
+    private val commandQueue = Channel<QueuedCommand>(Channel.UNLIMITED)
 
-    // ========== ТЕКУЩИЕ ДАННЫЯ ==========
+    /** Поток входящих AckID для пробуждения воркера */
+    private val acknowledgmentsFlow = MutableSharedFlow<String>()
 
-    /** Текущие настройки приложения */
-    private var currentSettings: AppSettings? = null
+    // ========== СОСТОЯНИЕ И СИНХРОНИЗАЦИЯ ==========
 
-    /** Текущее устройство для обмена данными */
-    private var currentDeviceData: BluetoothDeviceData? = null
+    /** JSON сериализатор */
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    
+    /** Генератор уникальных ID сообщений */
+    private val msgIdGenerator = AtomicLong(1)
 
-    // ========== ФЛАГИ СОСТОЯНИЯ ==========
+    /** Последний полученный ID подтверждения для проверки в цикле */
+    private val lastAckId = AtomicReference<String?>(null)
 
     /** Флаг активности обработчика */
     private val isHandlerActive = AtomicBoolean(false)
+    /** Флаг готовности приемника к приему подтверждений */
+    private val isReceiverReady = AtomicBoolean(false)
 
-    /** Флаг отправки настроек */
-    private val isSendingSettings = AtomicBoolean(false)
-
-    /** Флаг отправки команды */
-    private val isRequestingData = AtomicBoolean(false)
-
-    /** Флаг приема данных */
-    private val isListeningForData = AtomicBoolean(false)
-
-    // ========== СИНХРОНИЗАЦИЯ ПОДПИСКИ И ОТПРАВКИ ==========
-
-    /** Синхронизатор: отправка ждет установки подписки на поток данных */
-    private var subscriptionReady = CompletableDeferred<Unit>()
-
-    // ========== КОРУТИНЫ ==========
-
-    /** Job для всего процесса обмена данными */
-    private var dataStreamJob: Job? = null
-
-    /** Job для приема данных */
-    private var dataListeningJob: Job? = null
+    /** Job для цикла обработки очереди */
+    private var workerJob: Job? = null
+    /** Job для приема входящих данных */
+    private var receiverJob: Job? = null
 
     // ========== ПАРАМЕТРЫ ПРОТОКОЛА ==========
 
-    /** Интервал отправки сообщений согласно ТЗ (1500 мс) */
+    /** Интервал между попытками переотправки при отсутствии Ack (мс) */
     private val SEND_INTERVAL_MS = 1500L
 
-    /** Таймаут отправки настроек и команд (10 секунд) - единый таймаут */
-    private val SEND_TIMEOUT_MS = 10000L
-
     /**
-     * Запустить процесс обмена данными с устройством.
-     * Выполняет ПОСЛЕДОВАТЕЛЬНОСТЬ согласно ТЗ: отправка настроек → отправка команды → прием данных.
-     * Вызывается: BluetoothConnectionManager.kt после успешного подключения.
-     *
-     * @param deviceData Устройство для обмена данными
-     * @param settings Настройки приложения для отправки на устройство
+     * Запустить процессы приема и передачи.
+     * Инициализирует воркеры и открывает транспортный канал.
+     * Не отправляет никаких стартовых команд (сценарий управляется извне).
      */
-    fun start(
-        deviceData: BluetoothDeviceData,
-        settings: AppSettings
-    ) {
-        log("=== НАЧАЛО МЕТОДА DataStreamHandler.start() ===")
+    fun start() {
+        log("=== ЗАПУСК ТРАНСПОРТНОГО ШЛЮЗА DataStreamHandler ===")
 
         if (isHandlerActive.get()) {
             log("DataStreamHandler уже активен")
             return
         }
 
-        log("Запуск DataStreamHandler для устройства: ${deviceData.name} (${deviceData.address})")
-
-        this.currentDeviceData = deviceData
-        this.currentSettings = settings
-
-        // Сбрасываем внутренние флаги подтверждений
-        settingsAcknowledged.set(false)
-        commandAcknowledged.set(false)
-
-        // Сбрасываем синхронизатор
-        subscriptionReady.cancel()
-        subscriptionReady = CompletableDeferred()
-
         isHandlerActive.set(true)
+        lastAckId.set(null)
 
-        log("ШАГ 1: Запуск подписки на поток данных (ТЗ 9.1)")
+        // 1. Запускаем приемник (должен слушать Ack до начала отправки)
+        startReceiver()
 
-        // Запускаем подписку на поток данных
-        coroutineScope.launch {
-            startReceivingProcess()
-        }
+        // 2. Запускаем воркер очереди
+        startWorker()
 
-        log("ШАГ 2: Запуск процесса отправки (будет ждать подписки)")
-
-        // Запускаем процесс отправки (будет ждать subscriptionReady)
-        dataStreamJob = coroutineScope.launch {
-            try {
-                startSendingProcess(deviceData, settings)
-
-                // Проверяем успешное завершение протокола
-                if (isHandlerActive.get() &&
-                    settingsAcknowledged.get() &&
-                    commandAcknowledged.get()) {
-                    stateChangeCallback(ConnectionState.LISTENING_DATA, null)
-                } else {
-                    stop()
-                }
-
-            } catch (e: CancellationException) {
-                log("Протокол обмена отменен: ${e.message}")
-            } catch (e: Exception) {
-                log("Ошибка в протоколе обмена: ${e.message}")
-                stateChangeCallback(ConnectionState.ERROR, "Ошибка протокола: ${e.message}")
-                stop()
-            }
-        }
-
-        log("Оба процесса запущены, отправка ждет подписки")
+        log("Транспортные воркеры запущены. Ожидание внешних команд.")
     }
 
     /**
-     * Обновить настройки приложения.
-     * Если обработчик активен и получает данные, новые настройки отправляются немедленно.
-     * Вызывается: BluetoothConnectionManager.kt при изменении настроек во время работы.
-     *
-     * @param settings Новые настройки приложения
+     * Поместить команду в очередь на отправку.
+     * Генерирует уникальный ID для команды.
+     * 
+     * @param jsonPayload JSON строка команды.
      */
-    fun updateAppSettings(settings: AppSettings) {
-        log("Обновление настроек")
-        this.currentSettings = settings
-
-        if (isHandlerActive.get() && isListeningForData.get()) {
-            coroutineScope.launch {
-                sendAppSettings(settings)
-            }
-        }
+    private suspend fun queueCommand(jsonPayload: String) {
+        val id = msgIdGenerator.getAndIncrement().toString()
+        log("Добавление в очередь: ID=$id, Payload=${jsonPayload.take(50)}...")
+        commandQueue.send(QueuedCommand(id, jsonPayload))
     }
 
     /**
-     * Отправить команду GET_DATA на устройство.
-     * Вызывается из: BluetoothConnectionManager.kt
-     */
-    fun sendCommand() {
-        log("Публичный вызов отправки команды GET_DATA")
-
-        if (isHandlerActive.get() && isListeningForData.get()) {
-            coroutineScope.launch {
-                sendDataRequestCommand()
-            }
-        } else {
-            log("Обработчик не активен или не получает данные")
-        }
-    }
-
-    /**
-     * Отправить произвольную JSON команду на устройство.
-     * @param jsonCommand Строка в формате JSON
+     * Публичный метод для отправки JSON команды в очередь.
+     * 
+     * @param jsonCommand Строка JSON.
      */
     fun sendJsonCommand(jsonCommand: String) {
-        log("Публичный вызов отправки JSON команды: $jsonCommand")
-
-        if (isHandlerActive.get() && isListeningForData.get()) {
-            coroutineScope.launch {
-                withContext(Dispatchers.IO) {
-                    bluetoothService.sendData(jsonCommand)
-                }
-            }
-        } else {
-            log("Обработчик не активен или не получает данные")
+        if (!isHandlerActive.get()) return
+        coroutineScope.launch {
+            queueCommand(jsonCommand)
         }
     }
 
     /**
-     * Остановить процесс обмена данными.
-     * Вызывается BluetoothConnectionManager при разрыве соединения или остановке.
-     * Вызывается: BluetoothConnectionManager.kt.
+     * Запуск основного воркера обработки очереди команд.
+     * Реализует цикл гарантированной доставки с ожиданием подтверждения.
+     */
+    private fun startWorker() {
+        workerJob = coroutineScope.launch(ioDispatcher) {
+            log("Worker: Ожидание готовности приемника...")
+            while (!isReceiverReady.get()) delay(50)
+
+            // Обрабатываем команды из канала по одной
+            for (command in commandQueue) {
+                if (!isHandlerActive.get()) break
+                
+                val envelope = command.getEnvelope(json)
+                log("Worker: Берем команду ID=${command.id}")
+
+                // Цикл гарантированной доставки: отправляем пока lastAckId не станет равен нашему id
+                while (lastAckId.get() != command.id && isHandlerActive.get()) {
+                    log("Worker: Отправка пакета ID=${command.id}")
+                    bluetoothService.sendData(envelope)
+
+                    // "Умное ожидание": ждем подтверждения в потоке, но не дольше интервала
+                    withTimeoutOrNull(SEND_INTERVAL_MS) {
+                        acknowledgmentsFlow.first { it == command.id }
+                    }
+                }
+                log("Worker: Команда ID=${command.id} успешно подтверждена БК")
+            }
+        }
+    }
+
+    /**
+     * Запуск приемника входящих данных.
+     * Транслирует входящий поток из BluetoothService в локальный incomingMessagesFlow.
+     */
+    private fun startReceiver() {
+        receiverJob = coroutineScope.launch(ioDispatcher) {
+            log("Receiver: Подписка на поток данных")
+            isReceiverReady.set(true)
+
+            bluetoothService.startDataListening()
+                .catch { e -> 
+                    log("Receiver: Критическая ошибка потока: ${e.message}")
+                    stateChangeCallback(ConnectionState.ERROR, "Ошибка приема: ${e.message}")
+                }
+                .collect { data ->
+                    handleIncomingData(data)
+                }
+        }
+    }
+
+    /**
+     * Обработать входящий JSON пакет.
+     * Распознает подтверждения (ack_id) для внутренней логики транспорта,
+     * все остальные сообщения пробрасывает наверх.
+     * 
+     * @param data Входящая строка JSON.
+     */
+    private fun handleIncomingData(data: String) {
+        if (data.isBlank()) return
+        
+        try {
+            val jsonObject = json.parseToJsonElement(data).jsonObject
+
+            // 1. Техническая часть транспорта: Проверка на подтверждение (Ack)
+            jsonObject["ack_id"]?.jsonPrimitive?.content?.let { ackId ->
+                log("Receiver: Получен AckID=$ackId")
+                lastAckId.set(ackId)
+                coroutineScope.launch { acknowledgmentsFlow.emit(ackId) }
+                return // Пакеты подтверждения не уходят наверх в бизнес-логику
+            }
+
+            // 2. Всё остальное — пробрасываем сквозняком в сторону оркестратора
+            coroutineScope.launch {
+                _incomingMessagesFlow.emit(data)
+            }
+
+        } catch (e: Exception) {
+            log("Receiver: Ошибка разбора пакета: ${e.message}")
+        }
+    }
+
+    /**
+     * Остановить все активные процессы обмена.
      */
     fun stop() {
-        if (!isHandlerActive.get()) {
-            return
-        }
-
+        if (!isHandlerActive.get()) return
         log("Остановка DataStreamHandler")
 
-        // Отменяем все корутины
-        dataStreamJob?.cancel()
-        dataListeningJob?.cancel()
-
-        // Отменяем ожидание подписки
-        subscriptionReady.cancel()
-
-        // Останавливаем прослушивание данных в AppBluetoothService
-        bluetoothService.stopDataListening()
-
-        // Сбрасываем все флаги
         isHandlerActive.set(false)
-        isSendingSettings.set(false)
-        isRequestingData.set(false)
-        isListeningForData.set(false)
-
-        settingsAcknowledged.set(false)
-        commandAcknowledged.set(false)
-
-        log("DataStreamHandler остановлен")
+        isReceiverReady.set(false)
+        
+        workerJob?.cancel()
+        receiverJob?.cancel()
+        
+        bluetoothService.stopDataListening()
     }
 
     /**
-     * Полная очистка ресурсов обработчика.
-     * Вызывается при уничтожении BluetoothConnectionManager.
-     * Вызывается: BluetoothConnectionManager.kt.
+     * Очистить ресурсы и сбросить состояние.
      */
     fun cleanup() {
-        log("Очистка ресурсов DataStreamHandler")
         stop()
-
-        currentDeviceData = null
-        currentSettings = null
-
-        dataStreamJob = null
-        dataListeningJob = null
-
-        subscriptionReady.cancel()
-
         log("Ресурсы DataStreamHandler очищены")
     }
 
-    // ========== ПРОЦЕСС ОТПРАВКИ ДАННЫХ ==========
-
     /**
-     * Запустить процесс отправки данных (настроек и команды) ПОСЛЕДОВАТЕЛЬНО.
-     * ИСПРАВЛЕНИЕ: Ждет установки подписки на поток данных перед началом отправки.
-     * Вызывается: из метода start().
-     *
-     * @param deviceData Устройство для отправки
-     * @param settings Настройки для отправки
-     */
-    private suspend fun startSendingProcess(
-        deviceData: BluetoothDeviceData,
-        settings: AppSettings
-    ) {
-        try {
-            log("Начало startSendingProcess, ждем подписки на поток данных")
-
-            // ЖДЕМ УСТАНОВКИ ПОДПИСКИ НА ПОТОК ДАННЫХ
-            subscriptionReady.await()
-            log("Подписка установлена, начинаем отправку")
-
-            log("Запуск ПОСЛЕДОВАТЕЛЬНОГО процесса отправки данных согласно ТЗ")
-
-            // Шаг 1: Отправка настроек (должна завершиться успешно или таймаутом)
-            log("ШАГ 1.1: Отправка настроек на устройство")
-            stateChangeCallback(ConnectionState.SENDING_SETTINGS, null)
-            val settingsSent = sendAppSettings(settings)
-            if (!settingsSent) {
-                log("Не удалось отправить настройки, прерываем протокол")
-                stateChangeCallback(ConnectionState.ERROR, "Таймаут отправки настроек")
-                return
-            }
-
-            // Шаг 2: Проверяем подтверждение настроек
-            if (!settingsAcknowledged.get()) {
-                log("Настройки отправлены, но подтверждение не получено")
-                stateChangeCallback(ConnectionState.ERROR, "Нет подтверждения настроек от устройства")
-                return
-            }
-
-            log("Настройки отправлены и подтверждены, переходим к команде")
-
-            // Шаг 3: Отправка команды запроса данных (ТОЛЬКО после подтверждения настроек)
-            log("ШАГ 1.2: Отправка команды GET_DATA")
-            stateChangeCallback(ConnectionState.REQUESTING_DATA, null)
-            val commandSent = sendDataRequestCommand()
-            if (!commandSent) {
-                log("Не удалось отправить команду, прерываем протокол")
-                stateChangeCallback(ConnectionState.ERROR, "Таймаут отправки команды")
-                return
-            }
-
-            // Шаг 4: Проверяем подтверждение команды
-            if (!commandAcknowledged.get()) {
-                log("Команда отправлена, но подтверждение не получено")
-                stateChangeCallback(ConnectionState.ERROR, "Нет подтверждения команды от устройства")
-                return
-            }
-
-            log("Команда отправлена и подтверждена, протокол отправки завершен")
-
-        } catch (e: CancellationException) {
-            log("Процесс отправки отменен")
-            throw e
-        } catch (e: Exception) {
-            log("Ошибка в процессе отправки: ${e.message}")
-            stateChangeCallback(ConnectionState.ERROR, "Ошибка отправки: ${e.message}")
-            throw e
-        }
-    }
-
-    /**
-     * Отправить настройки приложения на устройство.
-     * Выполняет циклическую отправку до получения подтверждения или таймаута.
-     * Вызывается: из startSendingProcess().
-     *
-     * @param settings Настройки для отправки
-     * @return true if настройки отправлены и подтверждены
-     */
-    private suspend fun sendAppSettings(settings: AppSettings): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                log("=== НАЧАЛО sendAppSettings() ===")
-                isSendingSettings.set(true)
-
-                // Используем toDeviceSettingsJson() вместо всего объекта AppSettings
-                val settingsJson = settings.toDeviceSettingsJson()
-                val message = """{"settings":$settingsJson}"""
-
-                log("Отправка настроек: ${message.take(100)}...")
-
-                // Сбрасываем флаг подтверждения
-                settingsAcknowledged.set(false)
-
-                // Используем общую функцию с таймаутом (как и для команд)
-                val success = sendWithTimeoutAndRetry(
-                    message = message,
-                    acknowledgmentFlag = settingsAcknowledged,
-                    statusMessage = "Отправка настроек",
-                    onSuccess = {
-                        log("Настройки успешно отправлены и подтверждены")
-                    }
-                )
-
-                isSendingSettings.set(false)
-                return@withContext success
-
-            } catch (e: Exception) {
-                log("Ошибка отправки настроек: ${e.message}")
-                isSendingSettings.set(false)
-                false
-            }
-        }
-    }
-
-    /**
-     * Отправить команду запроса данных на устройство.
-     * Выполняет циклическую отправку до получения подтверждения или таймаута.
-     * ВЫЗЫВАЕТ LISTENING_DATA при успешном подтверждении команды (согласно ТЗ 9.6).
-     * Вызывается: из startSendingProcess().
-     *
-     * @return true if команда отправлена и подтверждена
-     */
-    private suspend fun sendDataRequestCommand(): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                isRequestingData.set(true)
-
-                val commandMessage = """{"command":"GET_DATA"}"""
-                log("Отправка команды: $commandMessage")
-
-                // Сбрасываем флаг подтверждения
-                commandAcknowledged.set(false)
-
-                val success = sendWithTimeoutAndRetry(
-                    message = commandMessage,
-                    acknowledgmentFlag = commandAcknowledged,
-                    statusMessage = "Отправка команды",
-                    onSuccess = {
-                        // СОГЛАСНО ТЗ 9.6: При подтверждении команды вызываем LISTENING_DATA
-                        log("Команда подтверждена, переходим в режим LISTENING_DATA")
-                    }
-                )
-
-                isRequestingData.set(false)
-                return@withContext success
-
-            } catch (e: Exception) {
-                log("Ошибка отправки команды: ${e.message}")
-                isRequestingData.set(false)
-                false
-            }
-        }
-    }
-
-    /**
-     * Циклическая отправка сообщения с таймаутом и проверкой подтверждения.
-     * Внутренний метод для реализации протокола обмена.
-     * Вызывается: из sendAppSettings() и sendDataRequestCommand().
-     *
-     * @param message Сообщение для отправки
-     * @param acknowledgmentFlag Флаг подтверждения получения
-     * @param statusMessage Сообщение для логирования
-     * @param onSuccess Действие при успешном подтверждении
-     * @return true if подтверждение получено
-     */
-    private suspend fun sendWithTimeoutAndRetry(
-        message: String,
-        acknowledgmentFlag: AtomicBoolean,
-        statusMessage: String,
-        onSuccess: () -> Unit = {}
-    ): Boolean {
-        return try {
-            log("=== НАЧАЛО sendWithTimeoutAndRetry ===")
-            log("statusMessage: $statusMessage, таймаут: $SEND_TIMEOUT_MS мс, интервал: $SEND_INTERVAL_MS мс")
-
-            withTimeout(SEND_TIMEOUT_MS) {
-                var attempt = 0
-                while (isHandlerActive.get() && !acknowledgmentFlag.get()) {
-                    attempt++
-
-                    val sent = bluetoothService.sendData(message)
-
-                    if (sent) {
-                        if (attempt % 10 == 0) { // Логируем каждую 10-ю попытку
-                            log("$statusMessage: попытка $attempt...")
-                        }
-
-                        delay(SEND_INTERVAL_MS)
-
-                        if (acknowledgmentFlag.get()) {
-                            log("$statusMessage: подтверждение получено на попытке $attempt")
-                            onSuccess()
-                            return@withTimeout true
-                        }
-                    } else {
-                        log("Ошибка отправки $statusMessage, повтор через ${SEND_INTERVAL_MS * 2} мс")
-                        delay(SEND_INTERVAL_MS * 2)
-                    }
-                }
-                log("$statusMessage: таймаут без подтверждения")
-                false
-            }
-        } catch (e: TimeoutCancellationException) {
-            log("Таймаут $statusMessage: ${e.message}")
-            false
-        } catch (e: CancellationException) {
-            log("$statusMessage отменен: ${e.message}")
-            false
-        } catch (e: Exception) {
-            log("Ошибка $statusMessage: ${e.message}")
-            false
-        }
-    }
-
-    // ========== ПРОЦЕСС ПРИЕМА ДАННЫХ ==========
-
-    /**
-     * Запустить процесс приема данных от устройства.
-     * ИСПРАВЛЕНИЕ: Сигнализирует о готовности подписки через subscriptionReady.
-     * Вызывается: из метода start().
-     */
-    private suspend fun startReceivingProcess() {
-        log("Запуск приёма данных (ожидание установки подписки)")
-
-        try {
-            isListeningForData.set(true)
-
-            dataListeningJob = coroutineScope.launch {
-                bluetoothService.startDataListening()
-                    .catch { e ->
-                        log("Ошибка потока данных: ${e.message}")
-                        stateChangeCallback(ConnectionState.ERROR, "Ошибка приёма: ${e.message}")
-                        subscriptionReady.completeExceptionally(e)
-                    }
-                    .collect { data ->
-                        handleIncomingData(data)
-                    }
-            }
-
-            // СИГНАЛИЗИРУЕМ: подписка установлена!
-            subscriptionReady.complete(Unit)
-            log("Подписка на данные установлена, можно отправлять команды")
-
-        } catch (e: CancellationException) {
-            log("Приём данных отменён")
-            subscriptionReady.completeExceptionally(e)
-        } catch (e: Exception) {
-            log("Ошибка подпики: ${e.message}")
-            subscriptionReady.completeExceptionally(e)
-        }
-    }
-
-    /**
-     * Обработать входящие данные от устройства.
-     * Определяет тип сообщения: подтверждение настроек/команды или данные.
-     * ВАЖНО: Подтверждения обрабатываются ВНУТРЕННЕ, данные эмитируются в Flow.
-     * Вызывается: AppBluetoothService при получении данных.
-     *
-     * @param data Сырые данные в формате JSON
-     */
-    private fun handleIncomingData(data: String) {
-        try {
-            if(data.trim().isEmpty()) return
-
-            log("Получены данные: ${data.take(100)}...")
-
-            val jsonElement = try {
-                json.parseToJsonElement(data)
-            } catch (e: Exception) {
-                log("Ошибка парсинга JSON: ${e.message}")
-                return
-            }
-
-            val jsonObject = jsonElement.jsonObject
-
-            // Проверка подтверждения настроек (ВНУТРЕННЯЯ обработка)
-            if (jsonObject.containsKey("settings")) {
-                log("Подтверждение получения настроек (ВНУТРЕННЕЕ)")
-                settingsAcknowledged.set(true)  // Устанавливаем ВНУТРЕННИЙ флаг
-                return  // НЕ уведомляем BCM
-            }
-
-            // Проверка подтверждения команды (ВНУТРЕННЯЯ обработка)
-            if (jsonObject.containsKey("GET_DATA")) {
-                log("Подтверждение получения команды (ВНУТРЕННЕЕ)")
-                commandAcknowledged.set(true)  // Устанавливаем ВНУТРЕННИЙ флаг
-                return  // НЕ уведомляем BCM
-            }
-
-            // Проверка данных от устройства (эмитируем в Flow)
-            if (jsonObject.containsKey("data")) {
-                log("Данные от бортового компьютера")
-                val dataElement: JsonElement? = jsonObject["data"]
-                val dataString = dataElement.toString().trim()
-                try {
-
-                    log("Декодируем данные: $dataString")
-
-                    val carData = json.decodeFromString<CarData>(dataString)
-
-                    // Эмитируем данные в поток
-                    coroutineScope.launch {
-                        _carDataFlow.emit(carData)
-                    }
-                } catch (e: Exception) {
-                    log("Ошибка парсинга CarData: ${e.message} ->${dataString}")
-                    stateChangeCallback(ConnectionState.ERROR, "Ошибка парсинга данных: ${e.message}")
-                }
-                return
-            }
-
-            // Неизвестный формат данных
-            log("Неизвестный формат данных: ${data.take(50)}...")
-
-        } catch (e: Exception) {
-            log("Ошибка обработки входящих данных: ${e.message}")
-            stateChangeCallback(ConnectionState.ERROR, "Ошибка обработки данных: ${e.message}")
-        }
-    }
-
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
-
-    /**
-     * Проверить, активен ли обработчик данных.
-     * Вызывается: BluetoothConnectionManager.kt.
-     *
-     * @return true if обработчик активен
-     */
-    fun isActive(): Boolean {
-        return isHandlerActive.get()
-    }
-
-    /**
-     * Проверить, находится ли обработчик в режиме приема данных.
-     * Вызывается: BluetoothConnectionManager.kt.
-     *
-     * @return true if прием данных активен
-     */
-    fun isListeningForData(): Boolean {
-        return isListeningForData.get()
-    }
-
-    // ========== МЕТОД ЛОГИРОВАНИЯ ==========
-
-    /**
-     * Записать информационное сообщение в лог.
-     * Вызывается: из всех методов класса для логирования действий.
-     *
-     * @param message Текст сообщения
+     * Логирование с тегом компонента.
+     * @param message Текст сообщения.
      */
     private fun log(message: String) {
         AppLogger.logInfo("[$TAG] $message", TAG)

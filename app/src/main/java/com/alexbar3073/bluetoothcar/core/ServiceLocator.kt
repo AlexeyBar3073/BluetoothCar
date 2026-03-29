@@ -1,7 +1,11 @@
 // Файл: core/ServiceLocator.kt
 package com.alexbar3073.bluetoothcar.core
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothConnectionManager
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
@@ -34,16 +38,16 @@ import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
  * ИСТОРИЯ ИЗМЕНЕНИЙ:
  * - 2026.02.02 18:30 UTC: Создание файла согласно ТЗ и обсуждению
  * - 2026.02.06 14:45: ДОБАВЛЕНА ИДЕМПОТЕНТНОСТЬ ИНИЦИАЛИЗАЦИИ
- *   1. Добавлено поле isInitialized для предотвращения повторной инициализации
- *   2. Метод initialize() теперь проверяет состояние перед выполнением
- *   3. Метод clear() сбрасывает флаг isInitialized
- *   4. Соответствует жизненному циклу из дополнения к ТЗ
+ * - 2026.02.07: Добавлена поддержка асинхронного биндинга AppBluetoothService
  */
 object ServiceLocator {
 
     private val services = mutableMapOf<String, Any>()
     private val locks = mutableMapOf<String, Any>()
     private var isInitialized = false  // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Флаг инициализации
+
+    /** Соединение с Bluetooth сервисом */
+    private var serviceConnection: ServiceConnection? = null
 
     /**
      * Инициализировать ServiceLocator с контекстом приложения.
@@ -63,8 +67,7 @@ object ServiceLocator {
             val settingsRepository = SettingsRepository(context.applicationContext)
             register(SettingsRepository::class.java.name, settingsRepository)
 
-            // 2. Создаем и регистрируем AppBluetoothService (singleton)
-            //    AppBluetoothService является Android Service, поэтому создается особым образом
+            // 2. Регистрация класса сервиса (для интентов)
             register(AppBluetoothService::class.java.name, AppBluetoothService::class.java)
 
             // 3. AppController будет создан позже, после загрузки настроек
@@ -75,6 +78,47 @@ object ServiceLocator {
 
             logInfo("ServiceLocator инициализирован с контекстом приложения")
         }
+    }
+
+    /**
+     * Асинхронно подключиться к Bluetooth сервису.
+     * 
+     * @param context Контекст приложения
+     * @param onReady Коллбэк, вызываемый при успешном биндинге
+     */
+    fun bindBluetoothService(context: Context, onReady: (AppBluetoothService) -> Unit) {
+        // Ключ для ЭКЗЕМПЛЯРА сервиса (отличается от ключа КЛАССА)
+        val instanceKey = "AppBluetoothService_Instance"
+        
+        if (contains(instanceKey)) {
+            val service = resolve<AppBluetoothService>(instanceKey)
+            onReady(service)
+            return
+        }
+
+        serviceConnection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                val binder = service as AppBluetoothService.BluetoothBinder
+                val bluetoothService = binder.getService()
+                
+                // Регистрируем экземпляр сервиса в локаторе
+                register(instanceKey, bluetoothService)
+                
+                logInfo("AppBluetoothService успешно забиндин и зарегистрирован")
+                onReady(bluetoothService)
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {
+                remove(instanceKey)
+                logInfo("AppBluetoothService отсоединился")
+            }
+        }
+
+        // Сначала запускаем сервис (чтобы он стал Foreground), затем биндим
+        AppBluetoothService.start(context)
+        
+        val intent = Intent(context, AppBluetoothService::class.java)
+        context.bindService(intent, serviceConnection!!, Context.BIND_AUTO_CREATE)
     }
 
     /**
@@ -174,8 +218,6 @@ object ServiceLocator {
 
     /**
      * Получить класс AppBluetoothService для создания интентов.
-     * AppBluetoothService является Android Service, поэтому мы регистрируем класс,
-     * а не экземпляр.
      */
     fun getBluetoothServiceClass(): Class<AppBluetoothService> {
         return resolve(AppBluetoothService::class.java.name)

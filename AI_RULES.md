@@ -30,7 +30,7 @@
    Всегда должна содержать путь к файлу в ветке проекта
       Пример:
          НЕПРАВИЛЬНО: C:/Project/BluetoothCar/app/src/main/java/com/alexbar3073/bluetoothcar/data/bluetooth/listeners/ConnectionFeasibilityChecker.kt
-         ПРАВИЛЬНО: //ФАЙЛ: data/bluetooth/listeners/ConnectionFeasibilityChecker.kt.kt
+         ПРАВИЛЬНО: // Файл: data/bluetooth/listeners/ConnectionFeasibilityChecker.kt.kt
 
 
 
@@ -42,7 +42,7 @@
       * ФАЙЛ
       Пример:
          НЕПРАВИЛЬНО: C:/Project/BluetoothCar/app/src/main/java/com/alexbar3073/bluetoothcar/data/bluetooth/listeners/ConnectionFeasibilityChecker.kt
-         ПРАВИЛЬНО: //ФАЙЛ: data/bluetooth/listeners/ConnectionFeasibilityChecker.kt.kt
+         ПРАВИЛЬНО: // Файл: data/bluetooth/listeners/ConnectionFeasibilityChecker.kt.kt
     * МЕСТОНАХОЖДЕНИЕ
     * НАЗНАЧЕНИЕ ФАЙЛА
     * ОТВЕТСТВЕННОСТЬ

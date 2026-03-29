@@ -9,7 +9,6 @@ import com.alexbar3073.bluetoothcar.data.bluetooth.listeners.ConnectionStateMana
 import com.alexbar3073.bluetoothcar.data.bluetooth.listeners.DataStreamHandler
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
-import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -19,34 +18,28 @@ import kotlinx.coroutines.flow.*
  * МЕСТОНАХОЖДЕНИЕ: data/bluetooth/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
- * ГЛАВНЫЙ КООРДИНАТОР BLUETOOTH ПОДКЛЮЧЕНИЯ согласно ТЗ.
- * Автономный контроллер, который самостоятельно анализирует полученные настройки
- * и принимает решения о необходимых действиях.
+ * ГЛАВНЫЙ КООРДИНАТОР BLUETOOTH ПОДКЛЮЧЕНИЯ.
+ * Оркестратор, управляющий жизненным циклом канала связи и состоянием помощников.
  *
- * ОТВЕТСТВЕННОСТЬ (СОГЛАСНО ТЗ):
- * 1. Получает ВСЕ данные для работы исключительно из объекта AppSettings
- * 2. Анализирует изменение настроек (устройство изменилось или нет)
- * 3. При изменении устройства → запускает процедуру подключения с первого шага
- * 4. При изменении других настроек и isConnected = true → отправляет их в DataStreamHandler
- * 5. Координирует работу 4 помощников (ConnectionFeasibilityChecker, DeviceAvailabilityMonitor,
- *    ConnectionStateManager, DataStreamHandler)
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Координация работы 4 помощников (Checker, Monitor, StateManager, DataStreamHandler).
+ * 2. Управление состояниями подключения (от поиска до установленного соединения).
+ * 3. Транзит «сырых» данных из транспортного шлюза (DSH) в сторону AppController.
+ * 4. Предоставление интерфейса для отправки команд в очередь транспорта.
  *
- * КЛЮЧЕВОЙ ПРИНЦИП (СОГЛАСНО ТЗ):
- * - BluetoothConnectionManager получает ВСЕ данные для работы исключительно из объекта AppSettings
- * - AppController НИКОГДА не передает BluetoothDeviceData отдельно от AppSettings
- * - Все помощники работают с BluetoothDeviceData, НЕ с AndroidBluetoothDevice
- * - AppBluetoothService скрывает Android API, предоставляет только Domain модели
- * - Автономная обработка состояний и принятие решений
- * - Все состояния и данные передаются через Flow, а не колбеки
+ * КЛЮЧЕВОЙ ПРИНЦИП:
+ * - Оркестрация: BCM знает КАК установить связь, но не знает ЧТО по ней передается.
+ * - Сквозная передача: Входящие сообщения от DSH передаются в AppController без парсинга.
+ * - Отсутствие бизнес-логики: BCM не анализирует содержимое пакетов (например, CarData).
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Получает данные от: AppController.kt (через метод updateSettings())
- * 2. Управляет: 4 помощниками в папке listeners/
- * 3. Использует: AppBluetoothService.kt (через помощников)
- * 4. Передает данные в: AppController.kt (через StateFlow и SharedFlow)
+ * 1. Получает команды от: AppController.kt.
+ * 2. Управляет: помощниками в папке listeners/.
+ * 3. Транслирует данные в: AppController.kt (через incomingMessagesFlow).
  */
 class BluetoothConnectionManager(
-    private val context: Context
+    private val context: Context,
+    private val bluetoothService: AppBluetoothService
 ) {
     /** Тег для логирования компонента */
     private val TAG = "BluetoothConnectionManager"
@@ -57,21 +50,19 @@ class BluetoothConnectionManager(
     private val _connectionStateFlow = MutableStateFlow<ConnectionState?>(null)
     val connectionStateFlow: StateFlow<ConnectionState?> = _connectionStateFlow.asStateFlow()
 
-    /** Поток данных от устройства для AppController */
-    private val _carDataFlow = MutableSharedFlow<CarData>()
-    val carDataFlow: SharedFlow<CarData> = _carDataFlow.asSharedFlow()
+    /** Поток входящих сообщений (сырой JSON) от устройства для AppController */
+    private val _incomingMessagesFlow = MutableSharedFlow<String>()
+    val incomingMessagesFlow: SharedFlow<String> = _incomingMessagesFlow.asSharedFlow()
 
     // ========== ВСЕ 4 ПОМОЩНИКА ==========
-    /** Сервис для работы с Bluetooth Android API */
-    private val bluetoothService = AppBluetoothService().apply { setContext(context) }
 
-    /** Проверяет возможность подключения (шаг 1 по ТЗ) */
+    /** Проверяет возможность подключения (шаг 1) */
     private lateinit var feasibilityChecker: ConnectionFeasibilityChecker
-    /** Ищет устройство в эфире (шаг 2 по ТЗ) */
+    /** Ищет устройство в эфире (шаг 2) */
     private lateinit var deviceAvailabilityMonitor: DeviceAvailabilityMonitor
-    /** Устанавливает физическое соединение (шаг 3 по ТЗ) */
+    /** Устанавливает физическое соединение (шаг 3) */
     private lateinit var connectionStateManager: ConnectionStateManager
-    /** Обрабатывает обмен данными (шаг 4 по ТЗ) */
+    /** Обрабатывает транспортный уровень обмена данными (шаг 4) */
     private lateinit var dataStreamHandler: DataStreamHandler
 
     // ========== КОРУТИНЫ И ОБЛАСТЬ ВИДИМОСТИ ==========
@@ -79,20 +70,18 @@ class BluetoothConnectionManager(
     private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     // ========== СОХРАНЕННЫЕ ДАННЫЕ ==========
-    // СОГЛАСНО ТЗ: BluetoothConnectionManager хранит текущие данные из настроек
     /** Текущее выбранное Bluetooth устройство из настроек */
     private var currentBluetoothDeviceData: BluetoothDeviceData? = null
-    /** Текущие настройки приложения из AppController */
+    /** Текущие настройки приложения (нужны для формирования JSON при обновлении) */
     private var currentAppSettings: AppSettings? = null
 
     // ========== СТАТУС И ЛОГИРОВАНИЕ ==========
 
-    /** Текущее состояние соединения (для упрощения контроля согласно ТЗ) */
+    /** Текущее состояние соединения (активен ли транспорт) */
     private var isConnected: Boolean = false
 
     /**
      * Записать информационное сообщение в лог.
-     * Вызывается: из всех методов класса для логирования действий.
      * @param message Текст сообщения для логирования
      */
     private fun log(message: String) {
@@ -104,14 +93,12 @@ class BluetoothConnectionManager(
         log("Инициализация BluetoothConnectionManager")
         _connectionStateFlow.value = ConnectionState.UNDEFINED
         createAllHelpers()
-        startCollectingCarData()
+        startCollectingIncomingMessages()
         log("BluetoothConnectionManager инициализирован, 4 помощника созданы")
     }
 
     /**
-     * Создать всех 4 помощников и передать им AppBluetoothService.
-     * Вызывается: из init блока при инициализации класса.
-     * СОГЛАСНО ТЗ: BluetoothConnectionManager инициализирует всех помощников.
+     * Создать всех 4 помощников.
      */
     private fun createAllHelpers() {
         log("Создание всех 4 помощников")
@@ -136,42 +123,34 @@ class BluetoothConnectionManager(
             coroutineScope = managerScope,
             stateChangeCallback = ::handleConnectionState
         )
-        log("Все 4 помощника созданы с передачей AppBluetoothService")
+        log("Все 4 помощника созданы")
     }
 
     /**
-     * Запустить сбор данных от DataStreamHandler.
-     * Подписывается на поток данных от DataStreamHandler и транзитом эмитит в свой поток.
-     * Вызывается: из init блока после создания помощников.
+     * Запустить сбор сырых сообщений от DataStreamHandler.
+     * Транслирует входящий поток строк в свой поток для AppController.
      */
-    private fun startCollectingCarData() {
+    private fun startCollectingIncomingMessages() {
         managerScope.launch {
-            dataStreamHandler.carDataFlow.collect { carData ->
-                // Транзитом эмитируем данные в свой поток
-                _carDataFlow.emit(carData)
+            dataStreamHandler.incomingMessagesFlow.collect { message ->
+                _incomingMessagesFlow.emit(message)
             }
         }
     }
 
     /**
      * Обработать изменение состояния подключения от помощников.
-     * Эмитирует состояние в поток connectionStateFlow.
-     * Вызывается: помощниками (DeviceAvailabilityMonitor, ConnectionFeasibilityChecker, ConnectionStateManager, DataStreamHandler).
      * @param state Новое состояние подключения
      * @param errorMessage Сообщение об ошибке или null если ошибки нет
      */
     private fun handleConnectionState(state: ConnectionState, errorMessage: String? = null) {
 
-        // Эмитируем состояние в поток
         _connectionStateFlow.value = state
         log("Получено оповещение о новом состоянии подключения ${state.name}")
 
-        // Обрабатываем состояние
         when (state) {
-            // Получена ошибка
             ConnectionState.ERROR -> {
-                // Шаг подключения завершился ошибкой
-                log("Получено состояние от помощника: ${state.name}${errorMessage?.let { " с ошибкой: $it" } ?: ""}")
+                log("Ошибка от помощника: ${state.name}${errorMessage?.let { ": $it" } ?: ""}")
                 errorMessage?.let {
                     managerScope.launch {
                         Toast.makeText(context, it, Toast.LENGTH_LONG).show()
@@ -179,31 +158,21 @@ class BluetoothConnectionManager(
                 }
             }
 
-            // Целевое устройство выбрано и проверено, блютуз включен
             ConnectionState.DEVICE_SELECTED -> {
-                // Переходим к проверке физической доступности устройства
                 deviceAvailabilityMonitor.start(currentBluetoothDeviceData ?: return)
             }
 
-            // Целевое устройство найдена в окружении хост-устройства
             ConnectionState.DEVICE_AVAILABLE -> {
-                // Переходим к подключению к устройству
                 connectionStateManager.start(currentBluetoothDeviceData ?: return)
             }
 
-            // Подключение к целевому устройству выполнено
             ConnectionState.CONNECTED -> {
-                // Устанавливаем флаг наличия подключения
                 isConnected = true
-                // Переходим к обмену данными
                 startDataStreamHandler()
             }
 
-            // Произошел разрыв подключения к целевому устройству
             ConnectionState.DISCONNECTED -> {
-                // Сбрасываем признак подключения
                 isConnected = false
-                // Возвращаемся к первому шагу
                 managerScope.launch {
                     _connectionStateFlow.value = ConnectionState.UNDEFINED
                     startConnectionProcess()
@@ -211,7 +180,6 @@ class BluetoothConnectionManager(
             }
 
             else -> {
-                // Для остальных состояний показываем сообщение, если оно есть
                 errorMessage?.let {
                     managerScope.launch {
                         Toast.makeText(context, it, Toast.LENGTH_LONG).show()
@@ -223,117 +191,65 @@ class BluetoothConnectionManager(
 
     // ========== ПУБЛИЧНЫЙ API ДЛЯ APPCONTROLLER ==========
 
-    /**
-     * Получить список сопряженных Bluetooth устройств.
-     * Делегирует вызов AppBluetoothService.
-     * Вызывается: AppController.kt для получения списка устройств для UI.
-     * @return Список устройств или null при ошибке
-     */
+    /** Получает список сопряженных Bluetooth устройств */
     fun getPairedDevices(): List<BluetoothDeviceData>? {
         return bluetoothService.getPairedDevices()
     }
 
-    /**
-     * Проверить, включен ли Bluetooth адаптер.
-     * Делегирует вызов AppBluetoothService.
-     * Вызывается: AppController.kt для проверки состояния Bluetooth в UI.
-     * @return true если Bluetooth включен
-     */
+    /** Проверяет статус Bluetooth адаптера */
     fun isBluetoothEnabled(): Boolean {
         return bluetoothService.bluetoothAdapterIsEnabled()
     }
 
     /**
-     * Обработать новые настройки от AppController.
-     * СОГЛАСНО ТЗ: BluetoothConnectionManager получает ВСЕ данные для работы исключительно из объекта AppSettings.
-     * Вызывается: AppController.kt при изменении настроек пользователем.
-     * @param newSettings Новые настройки приложения
+     * Обновить настройки. 
+     * Если устройство изменилось — перезапуск. 
+     * Если только настройки при живом соединении — отправка в очередь.
      */
     fun updateSettings(newSettings: AppSettings) {
-        log("Получены новые настройки от AppController")
-
-        // СОГЛАСНО ТЗ: Сохраняет в своих свойствах полученные настройки
+        log("Получены новые настройки")
         this.currentAppSettings = newSettings
-
-        // СОГЛАСНО ТЗ: Извлекает из настроек БК
         val newDeviceData = newSettings.selectedDevice
-
-        // СОГЛАСНО ТЗ: Сравнивает полученное БК с текущим БК
-        val isDeviceChanged = (currentBluetoothDeviceData?.address != newDeviceData?.address||newDeviceData==null)
-
-        // СОГЛАСНО ТЗ: После сравнения сохраняет полученное устройство как текущее
+        val isDeviceChanged = (currentBluetoothDeviceData?.address != newDeviceData?.address || newDeviceData == null)
         currentBluetoothDeviceData = newDeviceData
 
-        // СОГЛАСНО ТЗ: По результатам сравнения текущего БК с полученным BluetoothConnectionManager выполняет действия
         when {
-            // 1. Устройство изменилось: запускаем процедуру подключения с первого шага
             isDeviceChanged -> {
-                log("Устройство изменилось, запускаем процедуру подключения с первого шага")
+                log("Устройство изменилось, перезапуск процесса подключения")
                 startConnectionProcess()
             }
-
-            // 2. Устройство НЕ изменилось и статус системы isConnected = true: вызывает метод отправки настроек у класса DataStreamHandler
             !isDeviceChanged && isConnected -> {
-                log("Устройство не изменилось и isConnected = true, отправка настроек в DataStreamHandler")
-                dataStreamHandler.updateAppSettings(newSettings)
-            }
-
-            // 3. При других вариантах - ничего не делает
-            else -> {
-                log("Устройство не изменилось, нет подключения, сохраняет настройки")
-                // Настройки уже сохранены в currentAppSettings
+                log("Обновление настроек при активном соединении")
+                sendJsonCommand("""{"settings":${newSettings.toDeviceSettingsJson()}}""")
             }
         }
     }
 
-    /**
-     * Стандартный метод для запуска процесса подключения.
-     * СОГЛАСНО ТЗ (Поток 6): AppController вызывает этот метод при ручном переподключении.
-     * Также используется внутри класса при изменении устройства в updateSettings().
-     * Вызывается: AppController.kt при нажатии кнопки "Повторить" в UI.
-     */
+    /** Запуск процесса подключения с первого шага */
     fun startConnectionProcess() {
         log("Запуск стандартного процесса подключения")
-
         stopAllProcesses()
         feasibilityChecker.start(currentBluetoothDeviceData)
     }
 
     /**
-     * Начать обмен данными с устройством (Шаг 4 по ТЗ).
-     * Вызывает DataStreamHandler.
-     * Вызывается: из handleConnectionState() при получении CONNECTED.
+     * Запустить транспортный шлюз.
      */
     private fun startDataStreamHandler() {
-        val deviceData = currentBluetoothDeviceData
-        val settings = currentAppSettings
-
-        if (deviceData == null || settings == null) {
-            return
-        }
-
-        dataStreamHandler.start(
-            deviceData = deviceData,
-            settings = settings
-        )
+        dataStreamHandler.start()
     }
 
     /**
-     * Отправить произвольную JSON команду на устройство.
+     * Отправить JSON команду на устройство через транспортную очередь.
      * @param jsonCommand Строка в формате JSON
      */
     fun sendJsonCommand(jsonCommand: String) {
-        log("Пересылка JSON команды в DataStreamHandler: $jsonCommand")
         dataStreamHandler.sendJsonCommand(jsonCommand)
     }
 
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+    // ========== УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ ==========
 
-    /**
-     * Очистить ресурсы BluetoothConnectionManager.
-     * Используется при завершении работы приложения.
-     * Вызывается: AppController.kt при уничтожении приложения.
-     */
+    /** Очистить ресурсы */
     fun cleanup() {
         log("Очистка ресурсов BluetoothConnectionManager")
         stopAllProcesses()
@@ -341,45 +257,24 @@ class BluetoothConnectionManager(
         currentBluetoothDeviceData = null
         currentAppSettings = null
         isConnected = false
-        log("BluetoothConnectionManager очищен")
     }
 
-    /**
-     * Получить текстовую статистику подключения.
-     * Используется для отладки и логирования.
-     * Вызывается: для отладки или отображения диагностической информации.
-     * @return Строка со статистики подключения
-     */
+    /** Статистика для отладки */
     fun getConnectionStatistics(): String {
         val currentState = _connectionStateFlow.value
         return "Статус: ${currentState?.name ?: "null"}, Устройство: ${currentBluetoothDeviceData?.name ?: "нет"}, isConnected: $isConnected"
     }
 
-    /**
-     * Сбросить статистику подключения.
-     * TODO: Реализовать сбор статистики в помощниках.
-     * Вызывается: для сброса диагностической информации.
-     */
     fun resetStatistics() {
         log("Сброс статистики подключения")
-        // TODO: Реализовать сбор статистики в помощниках
     }
 
-    // ========== ВНУТРЕННИЕ МЕТОДЫ ==========
-
-    /**
-     * Остановить все процессы BluetoothConnectionManager.
-     * Используется при cleanup() и при перезапуске.
-     * Вызывается: из cleanup(), startConnectionProcess() и других методов при необходимости остановки.
-     * ВНУТРЕННИЙ МЕТОД: не является частью публичного API.
-     */
     private fun stopAllProcesses() {
-        log("Остановка всех процессов BluetoothConnectionManager")
+        log("Остановка всех процессов")
         _connectionStateFlow.value = ConnectionState.UNDEFINED
         feasibilityChecker.stop()
         deviceAvailabilityMonitor.stop()
         connectionStateManager.stop()
         dataStreamHandler.stop()
-        log("Все процессы остановлены")
     }
 }

@@ -59,8 +59,9 @@
             </intent-filter>
         </activity>
 
+        <!-- Регистрируем AppBluetoothService как системный сервис -->
         <service
-            android:name=".data.bluetooth.BluetoothService"
+            android:name=".data.bluetooth.AppBluetoothService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="connectedDevice"/>

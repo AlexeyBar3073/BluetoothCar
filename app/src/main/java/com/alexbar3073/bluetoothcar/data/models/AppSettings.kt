@@ -4,8 +4,7 @@ package com.alexbar3073.bluetoothcar.data.models
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.*
 
 /**
  * НАЗНАЧЕНИЕ ФАЙЛА:
@@ -87,5 +86,36 @@ data class AppSettings(
             put("speed_sensor_signals", speedSensorSignalsPerMeter)
         }
         return jsonObject.toString()
+    }
+
+    /**
+     * Сливает входящие настройки от БК с текущими.
+     * Сравнивает только те поля, которые относятся к БК.
+     * @param remoteJson JSON объект с настройками от БК.
+     * @return Новый экземпляр AppSettings если данные изменились, иначе текущий.
+     */
+    fun mergeWithRemote(remoteJson: JsonObject): AppSettings {
+        // Извлекаем значения из JSON с проверкой типов, если ключа нет - оставляем текущее
+        val newCapacity = remoteJson["fuel_tank_capacity"]?.jsonPrimitive?.floatOrNull ?: fuelTankCapacity
+        val newInjCount = remoteJson["injector_count"]?.jsonPrimitive?.intOrNull ?: injectorCount
+        val newInjPerf = remoteJson["injector_performance"]?.jsonPrimitive?.floatOrNull ?: injectorPerformance
+        val newSpeedSignals = remoteJson["speed_sensor_signals"]?.jsonPrimitive?.intOrNull ?: speedSensorSignalsPerMeter
+
+        // Проверяем, есть ли реальные изменения в технических полях
+        val hasChanges = newCapacity != fuelTankCapacity ||
+                newInjCount != injectorCount ||
+                newInjPerf != injectorPerformance ||
+                newSpeedSignals != speedSensorSignalsPerMeter
+
+        return if (hasChanges) {
+            this.copy(
+                fuelTankCapacity = newCapacity,
+                injectorCount = newInjCount,
+                injectorPerformance = newInjPerf,
+                speedSensorSignalsPerMeter = newSpeedSignals
+            )
+        } else {
+            this
+        }
     }
 }
