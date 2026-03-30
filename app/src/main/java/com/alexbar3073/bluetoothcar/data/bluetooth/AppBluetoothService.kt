@@ -64,7 +64,7 @@ import kotlinx.coroutines.flow.channelFlow
  * - Жизненный цикл управляется системой Android (Service).
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Используется: BluetoothConnectionManager.kt и его помощниками (CFC, DAM, CSM, DSH).
+ * 1. Использует: BluetoothConnectionManager.kt и его помощниками (CFC, DAM, CSM, DSH).
  * 2. Использует: AppLogger.kt для диагностического вывода.
  * 3. Использует: BluetoothDeviceData как модель данных устройства.
  */
@@ -731,65 +731,65 @@ class AppBluetoothService : Service() {
     // ========== ПЕРЕДАЧА ДАННЫХ ==========
 
     /**
-     * Отправить строку данных на устройство через открытый Bluetooth сокет.
-     * Вызывается из: DataStreamHandler.kt.
+     * Отправить строковые данные (JSON) в подключенное устройство.
      * 
-     * @param data Строка (обычно в формате JSON) для отправки.
-     * @return true если данные успешно записаны в выходной поток.
+     * @param data Строка данных для отправки.
+     * @return true если отправка успешна.
      */
-    suspend fun sendData(data: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val socket = bluetoothSocket ?: return@withContext false
-            if (!socket.isConnected) return@withContext false
+    fun sendData(data: String): Boolean {
+        if (!isConnected) return false
+        
+        return try {
+            val outputStream = bluetoothSocket?.outputStream ?: return false
             
-            // Записываем байты строки в OutputStream сокета
-            socket.outputStream.write(data.toByteArray(Charsets.UTF_8))
-            socket.outputStream.flush()
+            // Хирургическая правка: добавление разделитель пакетов \n для стабильности протокола
+            val dataWithNewLine = if (data.endsWith("\n")) data else "$data\n"
+            
+            outputStream.write(dataWithNewLine.toByteArray(Charsets.UTF_8))
+            outputStream.flush()
             true
-        } catch (e: Exception) {
-            // Любой сбой при записи данных трактуется как потеря связи
-            cleanupSocket()
-            startInForeground("Ошибка передачи данных")
+        } catch (e: IOException) {
+            AppLogger.logError("Ошибка при отправке данных: ${e.message}", TAG)
             false
         }
     }
 
     /**
-     * Запустить асинхронное прослушивание входящих данных из сокета.
-     * Вызывается из: DataStreamHandler.kt.
+     * Запустить процесс прослушивания входящих данных.
+     * Использует Kotlin Flow для реактивной передачи данных.
      * 
-     * @return Flow с полученными строками данных для реактивной обработки.
+     * @return Flow со строками входящих данных.
      */
     fun startDataListening(): Flow<String> = channelFlow {
-        // Защита от запуска нескольких корутин прослушивания на одном сокете
-        if (isListeningForData.getAndSet(true)) return@channelFlow
+        val socket = bluetoothSocket ?: return@channelFlow
         
-        dataScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        dataListeningJob = dataScope?.launch {
-            try {
-                val socket = bluetoothSocket ?: return@launch
-                val inputStream = socket.inputStream
-                val buffer = ByteArray(1024)
-                
-                // Цикл чтения данных пока флаг активен и сокет сообщает о подключении
-                while (isListeningForData.get() && socket.isConnected) {
-                    val read = inputStream.read(buffer)
-                    if (read > 0) {
-                        // Эмитируем полученную строку в холодный поток Flow
-                        send(String(buffer, 0, read, Charsets.UTF_8))
+        dataListeningJob = launch(Dispatchers.IO) {
+            // Хирургическая правка: использование BufferedReader для корректного разделения пакетов по \n
+            val reader = socket.inputStream.bufferedReader(Charsets.UTF_8)
+            
+            while (isActive && isConnected) {
+                try {
+                    // Метод readLine() блокирует поток до появления \n или закрытия сокета
+                    val line = reader.readLine()
+                    if (line != null) {
+                        if (line.isNotBlank()) {
+                            send(line)
+                        }
+                    } else {
+                        // Поток закрыт
+                        break
                     }
+                } catch (e: IOException) {
+                    if (isActive) {
+                        AppLogger.logError("Ошибка чтения данных (фрагментация/разрыв): ${e.message}", TAG)
+                    }
+                    break
                 }
-            } catch (e: Exception) {
-                AppLogger.logError("Ошибка при чтении данных из Bluetooth: ${e.message}", TAG)
-            } finally {
-                isListeningForData.set(false)
             }
         }
-
-        // Очистка ресурсов корутины при закрытии или отмене Flow
-        awaitClose { 
-            isListeningForData.set(false) 
-            dataListeningJob?.cancel()
+        
+        awaitClose {
+            AppLogger.logInfo("Остановка прослушивания данных", TAG)
         }
     }
 

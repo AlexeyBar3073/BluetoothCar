@@ -80,6 +80,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.mockk.android) // ИСПОЛЬЗУЕМ mockk-android для инструментальных тестов
+    androidTestImplementation(libs.androidx.navigation.testing)
 
     // 7. Compose Testing (версии из BOM)
     androidTestImplementation(platform(libs.androidx.compose.bom))

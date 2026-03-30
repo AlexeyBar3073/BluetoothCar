@@ -12,6 +12,7 @@ import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.json.JsonObject
 
 /**
  * ФАЙЛ: data/bluetooth/BluetoothConnectionManager.kt
@@ -24,12 +25,12 @@ import kotlinx.coroutines.flow.*
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Координация работы 4 помощников (Checker, Monitor, StateManager, DataStreamHandler).
  * 2. Управление состояниями подключения (от поиска до установленного соединения).
- * 3. Транзит «сырых» данных из транспортного шлюза (DSH) в сторону AppController.
+ * 3. Транзит распарсенных JSON-объектов из транспортного шлюза (DSH) в сторону AppController.
  * 4. Предоставление интерфейса для отправки команд в очередь транспорта.
  *
  * КЛЮЧЕВОЙ ПРИНЦИП:
  * - Оркестрация: BCM знает КАК установить связь, но не знает ЧТО по ней передается.
- * - Сквозная передача: Входящие сообщения от DSH передаются в AppController без парсинга.
+ * - Сквозная передача: Входящие сообщения от DSH передаются в AppController без повторного парсинга.
  * - Отсутствие бизнес-логики: BCM не анализирует содержимое пакетов (например, CarData).
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
@@ -50,9 +51,9 @@ class BluetoothConnectionManager(
     private val _connectionStateFlow = MutableStateFlow<ConnectionState?>(null)
     val connectionStateFlow: StateFlow<ConnectionState?> = _connectionStateFlow.asStateFlow()
 
-    /** Поток входящих сообщений (сырой JSON) от устройства для AppController */
-    private val _incomingMessagesFlow = MutableSharedFlow<String>()
-    val incomingMessagesFlow: SharedFlow<String> = _incomingMessagesFlow.asSharedFlow()
+    /** Поток входящих сообщений (JsonObject) от устройства для AppController */
+    private val _incomingMessagesFlow = MutableSharedFlow<JsonObject>()
+    val incomingMessagesFlow: SharedFlow<JsonObject> = _incomingMessagesFlow.asSharedFlow()
 
     // ========== ВСЕ 4 ПОМОЩНИКА ==========
 
@@ -125,8 +126,8 @@ class BluetoothConnectionManager(
     }
 
     /**
-     * Запустить сбор сырых сообщений от DataStreamHandler.
-     * Транслирует входящий поток строк в свой поток для AppController.
+     * Запустить сбор сообщений от DataStreamHandler.
+     * Транслирует входящий поток объектов в свой поток для AppController.
      */
     private fun startCollectingIncomingMessages() {
         managerScope.launch {

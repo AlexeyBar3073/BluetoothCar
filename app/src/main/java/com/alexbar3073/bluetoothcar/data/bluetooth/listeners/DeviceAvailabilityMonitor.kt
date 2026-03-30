@@ -80,7 +80,8 @@ class DeviceAvailabilityMonitor(
      * @param address MAC-адрес найденного устройства
      */
     private val onDeviceFound: (String) -> Unit = { address ->
-        if (address == targetAddress) {
+        // Хирургическая правка: проверка isActive предотвращает обработку событий после остановки монитора (защита от дребезга)
+        if (isActive && address == targetAddress) {
             log("✓ Найдено целевое устройство с адресом: $address")
 
             // Останавливаем поиск
@@ -102,6 +103,7 @@ class DeviceAvailabilityMonitor(
     private val onDiscoveryFinished: () -> Unit = {
         log("Системный поиск завершен (попытка $currentAttempt/$MAX_SEARCH_ATTEMPTS)")
 
+        // Хирургическая правка: двойная проверка isActive для исключения запуска новых итераций после вызова stop()
         if (isActive) {
             currentAttempt++
 
@@ -155,8 +157,9 @@ class DeviceAvailabilityMonitor(
      */
     fun start(targetDeviceData: BluetoothDeviceData) {
         if (isActive) {
-            stateChangeCallback(ConnectionState.ERROR, "Поиск уже выполняется")
-            return
+            // Хирургическая правка: безопасный перезапуск ресурсов для исключения утечек при повторных вызовах
+            log("Предупреждение: Повторный запуск монитора. Сброс ресурсов.")
+            stop()
         }
 
         targetAddress = targetDeviceData.address
@@ -168,7 +171,8 @@ class DeviceAvailabilityMonitor(
         // СОГЛАСНО ТЗ: уведомление о начале поиска
         stateChangeCallback(ConnectionState.SEARCHING_DEVICE, null)
 
-        searchScope = CoroutineScope(ioDispatcher + Job())
+        // Хирургическая правка: SupervisorJob обеспечивает устойчивость цикла поиска к локальным ошибкам
+        searchScope = CoroutineScope(ioDispatcher + SupervisorJob())
 
         // Запускаем первую попытку поиска
         startDiscovery()

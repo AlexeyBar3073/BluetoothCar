@@ -13,13 +13,14 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import app.cash.turbine.test
+import kotlinx.serialization.json.*
 
 /**
  * ТЕГ: Тесты DataStreamHandler
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Тестирование транспортного шлюза. Проверяется только механизм доставки сообщений,
- * присвоение ID и фильтрация входящего потока.
+ * присвоение ID и трансляция входящего потока.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DataStreamHandlerTest {
@@ -95,10 +96,10 @@ class DataStreamHandlerTest {
 
     /**
      * Тест: Трансляция входящих данных.
-     * Проверяет, что обычные пакеты пробрасываются в incomingMessagesFlow, а ack_id фильтруются.
+     * Проверяет, что все пакеты пробрасываются в incomingMessagesFlow как JsonObject.
      */
     @Test
-    fun `should emit non-ack messages to incomingMessagesFlow`() = runTest(testDispatcher) {
+    fun `should emit all received messages as JsonObjects to incomingMessagesFlow`() = runTest(testDispatcher) {
         handler = DataStreamHandler(bluetoothService, backgroundScope, stateCallback, testDispatcher)
         handler.start()
 
@@ -106,12 +107,15 @@ class DataStreamHandlerTest {
             val dataPacket = "{\"data\":{\"val\":100}}"
             val ackPacket = "{\"ack_id\":\"5\"}"
 
+            // 1. Проверка обычного пакета
             incomingRawDataFlow.emit(dataPacket)
-            assertEquals(dataPacket, awaitItem())
+            val item1 = awaitItem()
+            assertEquals(100, item1["data"]?.jsonObject?.get("val")?.jsonPrimitive?.int)
 
+            // 2. Проверка пакета с ack_id (теперь тоже пробрасывается)
             incomingRawDataFlow.emit(ackPacket)
-            // ack_id не должен попасть в поток, поэтому awaitItem() тут не сработает
-            expectNoEvents()
+            val item2 = awaitItem()
+            assertEquals("5", item2["ack_id"]?.jsonPrimitive?.content)
         }
     }
 

@@ -25,7 +25,7 @@ import kotlinx.serialization.json.*
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Управление жизненным циклом BluetoothConnectionManager.
  * 2. Реализация СЦЕНАРИЕВ обмена данными (инициализация после подключения).
- * 3. ПАРСИНГ входящих сырых данных от BCM и преобразование их в CarData.
+ * 3. ПАРСИНГ входящих данных (JsonObject) от BCM и преобразование их в CarData.
  * 4. СИНХРОНИЗАЦИЯ настроек: прием изменений настроек от БК и обновление локального стейта.
  * 5. Хранение и дистрибуция настроек приложения.
  * 6. ФОРМИРОВАНИЕ финального статуса подключения для UI.
@@ -33,6 +33,7 @@ import kotlinx.serialization.json.*
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
  * - Разделение ответственности: Транспорт (DSH) и Оркестратор (BCM) не знают о бизнес-логике.
  * - Централизация: Вся логика «что и когда отправлять» сосредоточена здесь.
+ * - Оптимизация: Получает уже распарсенный JsonObject, исключая двойную десериализацию.
  *
  * КЛЮЧЕВОЙ ПРИНЦИП: Реактивность через StateFlow и обработка входящего потока сообщений.
  */
@@ -79,7 +80,7 @@ class AppController(
 
     /** 
      * Поток данных автомобиля.
-     * Формируется путем парсинга входящих сырых сообщений от BCM.
+     * Формируется путем обработки входящих JSON объектов от BCM.
      */
     private val _rawCarDataFlow = MutableSharedFlow<CarData>()
     
@@ -151,12 +152,12 @@ class AppController(
     }
 
     /**
-     * Слушает сырые сообщения от BCM и парсит их.
+     * Слушает распарсенные сообщения от BCM.
      */
     private fun startMessageListener() {
         appScope.launch {
-            bluetoothConnectionManager.incomingMessagesFlow.collect { rawJson ->
-                handleIncomingMessage(rawJson)
+            bluetoothConnectionManager.incomingMessagesFlow.collect { jsonObject ->
+                handleIncomingMessage(jsonObject)
             }
         }
     }
@@ -196,12 +197,10 @@ class AppController(
     }
 
     /**
-     * Разбор входящего сообщения.
+     * Разбор входящего JSON объекта.
      */
-    private fun handleIncomingMessage(rawJson: String) {
+    private fun handleIncomingMessage(jsonObject: JsonObject) {
         try {
-            val jsonObject = json.parseToJsonElement(rawJson).jsonObject
-            
             // 1. Пакет с данными автомобиля
             if (jsonObject.containsKey("data")) {
                 // Если пошли данные - переключаем статус в "Стриминг" (вилка)
@@ -209,9 +208,11 @@ class AppController(
                     _internalConnectionState.value = ConnectionState.LISTENING_DATA
                 }
 
-                val dataString = jsonObject["data"].toString()
-                val carData = json.decodeFromString<CarData>(dataString)
-                appScope.launch { _rawCarDataFlow.emit(carData) }
+                val dataElement = jsonObject["data"]
+                if (dataElement != null) {
+                    val carData = json.decodeFromJsonElement<CarData>(dataElement)
+                    appScope.launch { _rawCarDataFlow.emit(carData) }
+                }
             }
             
             // 2. Пакет с настройками от БК
@@ -228,7 +229,7 @@ class AppController(
             }
             
         } catch (e: Exception) {
-            AppLogger.logError("Ошибка парсинга: ${e.message}", TAG)
+            AppLogger.logError("Ошибка обработки пакета: ${e.message}", TAG)
         }
     }
 

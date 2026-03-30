@@ -25,16 +25,16 @@ import java.util.concurrent.atomic.AtomicReference
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Гарантированная доставка исходящих JSON-пакетов (циклическая переотправка до получения ack_id).
  * 2. Присвоение уникальных msg_id всем исходящим сообщениям.
- * 3. Трансляция входящего потока данных «как есть» (raw strings) для вышестоящих компонентов.
+ * 3. Трансляция входящего потока данных в виде JsonObject для вышестоящих компонентов.
  * 4. Управление низкоуровневыми потоками чтения/записи Bluetooth-сервиса.
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
  * - Чистый транспорт: не содержит бизнес-логики, не знает о структуре CarData или настройках.
- * - Работает исключительно со строковыми JSON-пакетами.
+ * - Работает исключительно с JSON-пакетами.
  * - Ответственность за контент сообщений лежит на вызывающем компоненте (оркестраторе).
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: AppBluetoothService.kt для низкоуровневой отправки/приема данных.
+ * 1. Использует: AppBluetoothService.kt для низкоуровневая отправки/приема данных.
  * 2. Уведомляет: BluetoothConnectionManager.kt через входящий поток сообщений.
  */
 class DataStreamHandler(
@@ -71,9 +71,9 @@ class DataStreamHandler(
 
     // ========== ПОТОКИ И ОЧЕРЕДИ ==========
 
-    /** Поток входящих сообщений (сырой JSON) для трансляции наверх */
-    private val _incomingMessagesFlow = MutableSharedFlow<String>()
-    val incomingMessagesFlow: SharedFlow<String> = _incomingMessagesFlow.asSharedFlow()
+    /** Поток входящих сообщений (распарсенный JsonObject) для трансляции наверх */
+    private val _incomingMessagesFlow = MutableSharedFlow<JsonObject>()
+    val incomingMessagesFlow: SharedFlow<JsonObject> = _incomingMessagesFlow.asSharedFlow()
 
     /** Очередь исходящих команд (Unlimited для предотвращения блокировки отправителей) */
     private val commandQueue = Channel<QueuedCommand>(Channel.UNLIMITED)
@@ -225,12 +225,12 @@ class DataStreamHandler(
                 log("Receiver: Получен AckID=$ackId")
                 lastAckId.set(ackId)
                 coroutineScope.launch { acknowledgmentsFlow.emit(ackId) }
-                return // Пакеты подтверждения не уходят наверх в бизнес-логику
+                // Убран return, так как пакет может быть комбинированным (Ack + Данные)
             }
 
-            // 2. Всё остальное — пробрасываем сквозняком в сторону оркестратора
+            // 2. Пробрасываем распарсенный объект наверх
             coroutineScope.launch {
-                _incomingMessagesFlow.emit(data)
+                _incomingMessagesFlow.emit(jsonObject)
             }
 
         } catch (e: Exception) {
