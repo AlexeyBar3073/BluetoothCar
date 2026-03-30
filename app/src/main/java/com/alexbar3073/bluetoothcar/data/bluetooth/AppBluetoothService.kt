@@ -587,7 +587,7 @@ class AppBluetoothService : Service() {
             // При любой ошибке закрываем сокет и уведомляем вызывающую сторону
             cleanupSocket()
             startInForeground("Ошибка подключения к ${deviceData.name}")
-            onDisconnected(deviceData)
+            // onDisconnected(deviceData) - убираем так как ниикакого соединения и не было!
             Pair(false, e.message ?: "Сбой при установке Bluetooth соединения")
         }
     }

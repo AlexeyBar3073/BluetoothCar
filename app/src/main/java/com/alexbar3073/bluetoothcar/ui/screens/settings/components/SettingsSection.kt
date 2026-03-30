@@ -49,12 +49,16 @@ fun SettingsSection(
         Column(
             modifier = Modifier.padding(vertical = 8.dp)
         ) {
+            // ИСПРАВЛЕНО: Проверка валидности устройства для отображения текста и кнопки очистки
+            val isDeviceValid = selectedDevice?.isValidDevice() == true
+            val deviceDisplayName = if (isDeviceValid) selectedDevice?.name else "Не выбрано"
+
             SimpleSettingItem(
                 title = "Устройство данных",
-                value = selectedDevice?.name ?: "Не выбрано",
+                value = deviceDisplayName ?: "Не выбрано",
                 icon = Icons.Default.Bluetooth,
                 iconColor = AppColors.PrimaryBlue,
-                hasClearButton = selectedDevice != null,
+                hasClearButton = isDeviceValid,
                 onClick = onDeviceSelect,
                 onClear = onDeviceClear
             )

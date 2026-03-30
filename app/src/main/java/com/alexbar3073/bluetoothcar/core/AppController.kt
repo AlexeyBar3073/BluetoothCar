@@ -276,11 +276,11 @@ class AppController(
     }
 
     fun disconnectFromDevice() {
-        updateSettings(_appSettings.value.copy(selectedDevice = null))
+        updateSettings(_appSettings.value.copy(selectedDevice = BluetoothDeviceData.empty()))
     }
 
     fun clearSelectedDevice() {
-        updateSettings(_appSettings.value.copy(selectedDevice = null))
+        updateSettings(_appSettings.value.copy(selectedDevice = BluetoothDeviceData.empty()))
     }
 
     fun retryConnection() {

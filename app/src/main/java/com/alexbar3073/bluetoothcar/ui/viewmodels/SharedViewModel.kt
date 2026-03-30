@@ -60,10 +60,21 @@ class SharedViewModel(
 
     // ========== ДАННЫЕ ИЗ APPCONTROLLER (БЕЗ ПРЕОБРАЗОВАНИЙ) ==========
 
-    /** 
+    /**
+     * Состояние инициализации приложения.
+     * Позволяет UI знать, когда AppController готов предоставлять данные (Bluetooth и т.д.).
+     */
+    val isInitialized: StateFlow<Boolean> = appController.isInitialized
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = false
+        )
+
+    /**
      * Полная структура статуса подключения, полученная из AppController.
      * Используется UI для отображения всей информации о состоянии подключения.
-     * Гарантированно не null - AppController всегда возвращает актуальный статус. 
+     * Гарантированно не null - AppController всегда возвращает актуальный статус.
      */
     val connectionStatusInfo: StateFlow<ConnectionStatusInfo> = appController.connectionStatusInfo
         .stateIn(
@@ -72,7 +83,7 @@ class SharedViewModel(
             initialValue = ConnectionState.UNDEFINED.toStatusInfo()
         )
 
-    /** 
+    /**
      * Данные от БК, полученные из AppController.
      * Содержат текущие параметры автомобиля (скорость, топливо, температуры).
      * Гарантированно не null — AppController возвращает CarData() при отсутствии связи.
@@ -84,7 +95,7 @@ class SharedViewModel(
             initialValue = CarData() 
         )
 
-    /** 
+    /**
      * Настройки приложения, полученные из AppController.
      * Используется UI для отображения и изменения конфигурации.
      * Гарантированно не null — AppController возвращает объект настроек (AppSettings) по умолчанию.
@@ -98,9 +109,9 @@ class SharedViewModel(
 
     // ========== ПРОИЗВОДНЫЕ ПОТОКИ ДЛЯ УДОБСТВА (МИНИМАЛЬНЫЕ) ==========
 
-    /** 
+    /**
      * Состояние подключения как ConnectionState enum.
-     * Используется для логики отображения элементов в UI и обратной совместимости. 
+     * Используется для логики отображения элементов в UI и обратной совместимости.
      */
     val connectionState: StateFlow<ConnectionState> = connectionStatusInfo
         .map { it.state }
@@ -112,19 +123,19 @@ class SharedViewModel(
 
     /** 
      * Выбранное Bluetooth устройство из настроек.
-     * Используется UI для отображения информации о текущем устройстве (имя, MAC). 
+     * Теперь возвращает не-nullable тип BluetoothDeviceData.
      */
-    val selectedDevice: StateFlow<BluetoothDeviceData?> = appSettings
+    val selectedDevice: StateFlow<BluetoothDeviceData> = appSettings
         .map { it.selectedDevice }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Lazily,
-            initialValue = null
+            initialValue = BluetoothDeviceData.empty()
         )
 
-    /** 
+    /**
      * Флаг подключения, вычисленный из статуса.
-     * Используется UI для быстрой индикации активного соединения (например, для свечения иконок). 
+     * Используется UI для быстрой индикации активного соединения (например, для свечения иконок).
      */
     val isConnected: StateFlow<Boolean> = connectionStatusInfo
         .map { it.isActive }

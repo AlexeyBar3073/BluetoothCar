@@ -36,6 +36,9 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  *   1. Исправлено логирование (используются методы BluetoothDeviceData)
  *   2. Добавлен импорт AppSettings (BluetoothDeviceData уже внутри)
  *   3. Улучшена читаемость кода логирования
+ * - 2026.02.04 15:00 UTC: ПРИВЕДЕНИЕ selectedDevice К НЕ-NULL ТИПУ
+ *   1. Удалены проверки на null для selectedDevice
+ *   2. Использование isValidDevice() для определения наличия выбора
  */
 class SettingsRepository(private val context: Context) {
 
@@ -146,14 +149,15 @@ class SettingsRepository(private val context: Context) {
      * Распечатать настройки в удобочитаемом формате.
      */
     private fun logAppSettings(settings: AppSettings) {
-        // Используем методы BluetoothDeviceData для получения данных
-        val deviceDisplayName = settings.selectedDevice?.getDisplayName() ?: "не выбрано"
-        val deviceAddress = settings.selectedDevice?.getDeviceAddress() ?: "нет"
-        val deviceShortAddress = settings.selectedDevice?.getShortAddress() ?: ""
+        // Свойство selectedDevice теперь гарантированно не null
+        val device = settings.selectedDevice
+        val deviceDisplayName = if (device.isValidDevice()) device.getDisplayName() else "не выбрано"
+        val deviceAddress = device.getDeviceAddress()
+        val deviceShortAddress = device.getShortAddress()
 
         AppLogger.logInfo("Bluetooth устройство: $deviceDisplayName", TAG)
 
-        if (deviceAddress.isNotBlank()) {
+        if (device.isValidDevice()) {
             AppLogger.logInfo("Адрес устройства: $deviceAddress", TAG)
             if (deviceShortAddress.isNotBlank() && deviceShortAddress != deviceAddress) {
                 AppLogger.logInfo("Короткий адрес: $deviceShortAddress", TAG)

@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothDisabled
@@ -36,6 +37,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -43,8 +45,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,30 +69,6 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Экран выбора Bluetooth устройств. Позволяет пользователю выбрать
  * Bluetooth устройство для подключения.
- *
- * КЛЮЧЕВОЙ ПРИНЦИП:
- * - Работает напрямую с SharedViewModel
- * - Отображает список сопряженных устройств из BluetoothConnectionManager
- * - Оформлен в стиле приложения (как SettingsScreen)
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.05 17:30: СОЗДАНИЕ минимальной версии
- *   Базовый экран с навигацией назад
- * - 2026.02.05 20:45: ПЕРЕРАБОТКА ДЛЯ РАБОТЫ С SharedViewModel
- *   1. Удалена временная функциональность
- *   2. Добавлено отображение списка сопряженных устройств
- *   3. Добавлена проверка состояния Bluetooth адаптера
- *   4. Добавлен выбор устройства через SharedViewModel
- * - 2026.02.05 21:15: СТИЛИЗАЦИЯ В СТИЛЕ ПРИЛОЖЕНИЯ
- *   1. Добавлено оформление как в SettingsScreen
- *   2. Карточки устройств стилизованы как SimpleSettingItem
- *   3. Добавлены разделители между устройствами
- *   4. Единый стиль с SettingsScreen
- * - 2026.02.05 21:30: УПРОЩЕНИЕ И УЛУЧШЕНИЕ ИНФОРМАТИВНОСТИ
- *   1. Удалена отдельная карточка состояния Bluetooth
- *   2. Состояние Bluetooth отображается в топ-баре
- *   3. Количество устройств перенесено в заголовок списка
- *   4. Добавлена иконка Bluetooth в заголовок списка
  */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,11 +78,20 @@ fun DevicesScreen(
     sharedViewModel: SharedViewModel
 ) {
     // Состояния из SharedViewModel
+    val isInitialized by sharedViewModel.isInitialized.collectAsStateWithLifecycle()
     val selectedDevice by sharedViewModel.selectedDevice.collectAsStateWithLifecycle()
+    
+    // Подписка на статус подключения обеспечивает реактивность при системных изменениях (например, выключении Bluetooth)
+    val connectionStatus by sharedViewModel.connectionStatusInfo.collectAsStateWithLifecycle()
 
-    // Используем remember для избежания рекомпозиций
-    val isBluetoothEnabled by remember { mutableStateOf(sharedViewModel.isBluetoothEnabled()) }
-    val pairedDevices by remember { mutableStateOf(sharedViewModel.getPairedDevices()) }
+    // Динамически получаем состояние Bluetooth и список устройств.
+    // Зависимость от connectionStatus гарантирует рекомпозицию и обновление данных при изменении состояния связи.
+    val isBluetoothEnabled = connectionStatus.run {
+        if (isInitialized) sharedViewModel.isBluetoothEnabled() else false
+    }
+    val pairedDevices = connectionStatus.run {
+        if (isInitialized) sharedViewModel.getPairedDevices() else emptyList()
+    }
 
     BluetoothCarTheme {
         Scaffold(
@@ -117,7 +102,6 @@ fun DevicesScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            // Иконка состояния Bluetooth в топ-баре (уже есть)
                             Icon(
                                 imageVector = if (isBluetoothEnabled) {
                                     Icons.Default.Bluetooth
@@ -140,14 +124,21 @@ fun DevicesScreen(
                             )
                         }
                     },
-                    // ... navigationIcon без изменений ...
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Назад"
+                            )
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = AppColors.SurfaceDark,
                         titleContentColor = AppColors.TextPrimary,
                         navigationIconContentColor = AppColors.TextSecondary
                     ),
                     modifier = Modifier
-                        .height(COMPACT_TOP_BAR_HEIGHT) // Меняем высоту
+                        .height(COMPACT_TOP_BAR_HEIGHT)
                         .background(
                             brush = Brush.verticalGradient(
                                 colors = AppColors.SurfaceGradient
@@ -169,7 +160,8 @@ fun DevicesScreen(
                         .padding(vertical = 20.dp)
                 ) {
                     // Карточка текущего выбранного устройства
-                    selectedDevice?.let { device ->
+                    if (selectedDevice.isValidDevice()) {
+                        val device = selectedDevice
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -183,7 +175,6 @@ fun DevicesScreen(
                             Column(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             ) {
-                                // Заголовок
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -206,14 +197,12 @@ fun DevicesScreen(
                                     )
                                 }
 
-                                // Разделитель
                                 Divider(
                                     color = AppColors.SurfaceMedium,
                                     thickness = 1.dp,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
 
-                                // Информация об устройстве
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -264,7 +253,6 @@ fun DevicesScreen(
                         Column(
                             modifier = Modifier.padding(vertical = 8.dp)
                         ) {
-                            // Заголовок списка с количеством устройств
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -288,7 +276,6 @@ fun DevicesScreen(
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                // Количество доступных устройств
                                 Text(
                                     text = "(доступно: ${pairedDevices?.size ?: 0})",
                                     style = MaterialTheme.typography.labelSmall,
@@ -300,7 +287,6 @@ fun DevicesScreen(
                                 )
                             }
 
-                            // Разделитель
                             Divider(
                                 color = AppColors.SurfaceMedium,
                                 thickness = 1.dp,
@@ -309,7 +295,6 @@ fun DevicesScreen(
 
                             if (isBluetoothEnabled) {
                                 if (pairedDevices.isNullOrEmpty()) {
-                                    // Сообщение если нет устройств
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -324,7 +309,6 @@ fun DevicesScreen(
                                         )
                                     }
                                 } else {
-                                    // Список устройств
                                     LazyColumn(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -333,15 +317,14 @@ fun DevicesScreen(
                                         items(pairedDevices!!) { device ->
                                             DeviceListItem(
                                                 device = device,
-                                                isSelected = selectedDevice?.address == device.address,
+                                                isSelected = selectedDevice.address == device.address,
                                                 onClick = {
                                                     sharedViewModel.selectBluetoothDevice(device)
                                                     navController.popBackStack()
                                                 }
                                             )
 
-                                            // Разделитель между элементами (кроме последнего)
-                                            if (device != pairedDevices!!.last()) {
+                                            if (device != pairedDevices.last()) {
                                                 Divider(
                                                     color = AppColors.SurfaceMedium,
                                                     thickness = 1.dp,
@@ -352,7 +335,6 @@ fun DevicesScreen(
                                     }
                                 }
                             } else {
-                                // Сообщение если Bluetooth выключен
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -377,12 +359,6 @@ fun DevicesScreen(
     }
 }
 
-/**
- * Элемент списка устройств в стиле SimpleSettingItem.
- * @param device Данные устройства
- * @param isSelected Флаг выбранного устройства
- * @param onClick Обработчик выбора устройства
- */
 @Composable
 private fun DeviceListItem(
     device: BluetoothDeviceData,
@@ -401,7 +377,6 @@ private fun DeviceListItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Иконка устройства по его типу
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -415,7 +390,6 @@ private fun DeviceListItem(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // Используем иконку по типу устройства
                 val deviceIcon = when (device.deviceType) {
                     DeviceType.CAR_AUDIO -> Icons.Default.DirectionsCar
                     DeviceType.HEADSET -> Icons.Default.Headset
@@ -439,7 +413,6 @@ private fun DeviceListItem(
                 )
             }
 
-            // Информация об устройстве
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -453,7 +426,6 @@ private fun DeviceListItem(
                     }
                 )
 
-                // Первая строка: тип устройства
                 Text(
                     text = device.deviceType.getDisplayName(),
                     style = MaterialTheme.typography.bodySmall,
@@ -464,7 +436,6 @@ private fun DeviceListItem(
                     }
                 )
 
-                // Вторая строка: адрес устройства
                 Text(
                     text = device.address,
                     style = MaterialTheme.typography.labelSmall,
@@ -476,7 +447,6 @@ private fun DeviceListItem(
                 )
             }
 
-            // Индикатор выбора
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,

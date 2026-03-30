@@ -38,11 +38,6 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  * 1. Использует: SettingsSection.kt, WidgetsSection.kt, InfoSection.kt
  * 2. Вызывается из: SettingsScreen.kt
  * 3. Использует: EditDialogData.kt для передачи данных в диалоги
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.05 16:40: Убран параметр scope для совместимости с текущей архитектурой
- * - 2026.02.05 16:45: Добавлено оформление согласно требованиям ТЗ
- * - 2026.02.05 17:10: Исправлен вызов SettingsSection (убраны параметры scope)
  */
 
 @Composable
@@ -71,9 +66,8 @@ fun SettingsContent(
             onThemeDialogShow = onThemeDialogShow,
             onDeviceClear = onDeviceClear,
             onDeviceSelect = {
-                if (selectedDevice == null) {
-                    navController.navigate("devices")
-                }
+                // ИСПРАВЛЕНО: Переход на экран выбора устройств должен работать всегда при клике на строку
+                navController.navigate("devices")
             }
         )
 

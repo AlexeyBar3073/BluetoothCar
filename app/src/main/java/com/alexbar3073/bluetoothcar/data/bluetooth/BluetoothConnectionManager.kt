@@ -72,8 +72,6 @@ class BluetoothConnectionManager(
     // ========== СОХРАНЕННЫЕ ДАННЫЕ ==========
     /** Текущее выбранное Bluetooth устройство из настроек */
     private var currentBluetoothDeviceData: BluetoothDeviceData? = null
-    /** Текущие настройки приложения (нужны для формирования JSON при обновлении) */
-    private var currentAppSettings: AppSettings? = null
 
     // ========== СТАТУС И ЛОГИРОВАНИЕ ==========
 
@@ -140,16 +138,20 @@ class BluetoothConnectionManager(
 
     /**
      * Обработать изменение состояния подключения от помощников.
-     * @param state Новое состояние подключения
-     * @param errorMessage Сообщение об ошибке или null если ошибки нет
+     * Является центральным узлом управления переходами (State Machine).
+     *
+     * @param state Новое состояние подключения от одного из 4-х помощников.
+     * @param errorMessage Опциональное описание ошибки для уведомления пользователя.
      */
     private fun handleConnectionState(state: ConnectionState, errorMessage: String? = null) {
-
+        // 1. Синхронно обновляем поток состояния для подписчиков (UI)
         _connectionStateFlow.value = state
         log("Получено оповещение о новом состоянии подключения ${state.name}")
 
+        // 2. Реагируем на изменение состояния согласно бизнес-логике переходов
         when (state) {
             ConnectionState.ERROR -> {
+                // Обработка критических ошибок от любого из компонентов
                 log("Ошибка от помощника: ${state.name}${errorMessage?.let { ": $it" } ?: ""}")
                 errorMessage?.let {
                     managerScope.launch {
@@ -159,27 +161,32 @@ class BluetoothConnectionManager(
             }
 
             ConnectionState.DEVICE_SELECTED -> {
+                // Шаг 2: После выбора устройства начинаем мониторинг его присутствия в эфире
                 deviceAvailabilityMonitor.start(currentBluetoothDeviceData ?: return)
             }
 
             ConnectionState.DEVICE_AVAILABLE -> {
+                // Шаг 3: Устройство найдено, пытаемся установить физическое соединение
                 connectionStateManager.start(currentBluetoothDeviceData ?: return)
             }
 
             ConnectionState.CONNECTED -> {
+                // Шаг 4: Соединение установлено, активируем транспортный шлюз данных
                 isConnected = true
                 startDataStreamHandler()
             }
 
             ConnectionState.DISCONNECTED -> {
+                // Обработка разрыва соединения: сброс флагов и инициация авто-переподключения
                 isConnected = false
                 managerScope.launch {
-                    _connectionStateFlow.value = ConnectionState.UNDEFINED
+                    // Удалена принудительная установка состояния UNDEFINED согласно задаче
                     startConnectionProcess()
                 }
             }
 
             else -> {
+                // Обработка информационных сообщений или уведомлений в прочих состояниях
                 errorMessage?.let {
                     managerScope.launch {
                         Toast.makeText(context, it, Toast.LENGTH_LONG).show()
@@ -202,13 +209,12 @@ class BluetoothConnectionManager(
     }
 
     /**
-     * Обновить настройки. 
-     * Если устройство изменилось — перезапуск. 
+     * Обновить настройки.
+     * Если устройство изменилось — перезапуск.
      * Если только настройки при живом соединении — отправка в очередь.
      */
     fun updateSettings(newSettings: AppSettings) {
         log("Получены новые настройки")
-        this.currentAppSettings = newSettings
         val newDeviceData = newSettings.selectedDevice
         val isDeviceChanged = (currentBluetoothDeviceData?.address != newDeviceData?.address || newDeviceData == null)
         currentBluetoothDeviceData = newDeviceData
@@ -255,7 +261,6 @@ class BluetoothConnectionManager(
         stopAllProcesses()
         managerScope.cancel()
         currentBluetoothDeviceData = null
-        currentAppSettings = null
         isConnected = false
     }
 

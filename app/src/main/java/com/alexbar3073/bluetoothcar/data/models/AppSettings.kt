@@ -20,7 +20,7 @@ import kotlinx.serialization.json.*
 data class AppSettings(
     // --- Bluetooth настройки ---
     @SerialName("selected_device")
-    val selectedDevice: BluetoothDeviceData? = null,
+    val selectedDevice: BluetoothDeviceData = BluetoothDeviceData.empty(),
 
     // --- Параметры топливной системы (для расчетов БК) ---
     @SerialName("fuel_tank_capacity")
