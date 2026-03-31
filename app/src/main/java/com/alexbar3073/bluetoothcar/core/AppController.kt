@@ -125,26 +125,39 @@ class AppController(
         startInitialization()
     }
 
+    /**
+     * Выполняет процедуру асинхронной инициализации контроллера.
+     * Процесс включает загрузку настроек, конфигурацию логгера и связывание с Bluetooth сервисом.
+     */
     private fun startInitialization() {
         appScope.launch {
             try {
+                // 1. Загружаем сохраненные настройки из репозитория (DataStore)
                 val settings = settingsRepository.getCurrentSettings()
                 _appSettings.value = settings
+                
+                // 2. Настраиваем глобальный логгер согласно требованиям отладки
                 AppLogger.configure(verbose = true, timestamps = true, packetNumbers = true)
 
+                // 3. Выполняем привязку к Android-сервису Bluetooth через ServiceLocator
                 ServiceLocator.bindBluetoothService(context) { service ->
+                    // 4. Создаем экземпляр оркестратора подключений (BCM)
                     _bluetoothConnectionManager = BluetoothConnectionManager(context, service)
-                    _bluetoothConnectionManager?.updateSettings(settings)
                     
-                    // Запускаем слушателей
+                    // 5. Передаем в BCM данные целевого устройства из загруженных настроек
+                    _bluetoothConnectionManager?.updateSelectedDevice(settings.selectedDevice)
+                    
+                    // 6. Активируем фоновых слушателей для обработки данных и состояний
                     startMessageListener()
                     startConnectionStateSychronizer()
                     
+                    // 7. Сигнализируем системе о завершении инициализации
                     _isInitialized.value = true
                     AppLogger.logInfo("AppController полностью инициализирован", TAG)
                 }
 
             } catch (e: Exception) {
+                // В случае критического сбоя логируем ошибку и блокируем работу контроллера
                 AppLogger.logError("Ошибка инициализации: ${e.message}", TAG)
                 _isInitialized.value = false
             }
@@ -152,28 +165,33 @@ class AppController(
     }
 
     /**
-     * Слушает распарсенные сообщения от BCM.
+     * Запускает корутину-слушатель для обработки входящих JSON-сообщений.
+     * Получает распарсенные объекты из BluetoothConnectionManager и передает их в обработчик.
      */
     private fun startMessageListener() {
         appScope.launch {
             bluetoothConnectionManager.incomingMessagesFlow.collect { jsonObject ->
+                // Перенаправляем каждый входящий JSON-пакет в метод бизнес-логики разбора
                 handleIncomingMessage(jsonObject)
             }
         }
     }
 
     /**
-     * Синхронизирует внутреннее состояние со статусом от BCM.
-     * Также отслеживает переход в CONNECTED для запуска сценария.
+     * Синхронизирует внутреннее состояние подключения со статусом из BCM.
+     * Также отслеживает момент установления физической связи (CONNECTED) 
+     * для запуска сценария начального обмена данными.
      */
     private fun startConnectionStateSychronizer() {
         appScope.launch {
             bluetoothConnectionManager.connectionStateFlow.collect { state ->
+                // Нормализуем состояние (null заменяем на UNDEFINED)
                 val newState = state ?: ConnectionState.UNDEFINED
                 
-                // Синхронизируем базовые статусы
+                // 1. Обновляем внутренний Flow, на который подписан UI
                 _internalConnectionState.value = newState
                 
+                // 2. Если достигнуто состояние CONNECTED, инициируем бизнес-сценарий
                 if (newState == ConnectionState.CONNECTED) {
                     log("Состояние CONNECTED: Запуск сценария инициализации обмена")
                     executeInitialSequence()
@@ -183,92 +201,129 @@ class AppController(
     }
 
     /**
-     * Первичная очередь команд согласно бизнес-логике.
+     * Реализует последовательность команд начальной инициализации при подключении.
+     * Устанавливает статус REQUESTING_DATA и запрашивает конфигурацию/поток данных.
      */
     private suspend fun executeInitialSequence() {
-        // Устанавливаем логический статус "Запрос данных"
+        // 1. Устанавливаем логический статус "Запрос данных" для информирования пользователя
         _internalConnectionState.value = ConnectionState.REQUESTING_DATA
 
-        // 1. Запрос текущих настроек БК
+        // 2. Отправляем команду на получение текущих настроек, хранящихся в бортовом компьютере
         sendJsonCommand("""{"command":"GET_SETTINGS"}""")
         
-        // 2. Запрос на начало стриминга данных
+        // 3. Отправляем команду на активацию циклической передачи данных автомобиля (стриминг)
         sendJsonCommand("""{"command":"GET_DATA"}""")
     }
 
     /**
-     * Разбор входящего JSON объекта.
+     * Центральный метод разбора входящих JSON-сообщений.
+     * Классифицирует пакеты по ключам (data, settings, error) и распределяет их по подсистемам.
+     * 
+     * @param jsonObject Объект, полученный из транспортного слоя.
      */
     private fun handleIncomingMessage(jsonObject: JsonObject) {
         try {
-            // 1. Пакет с данными автомобиля
+            // КЕЙС 1: Пакет содержит оперативные данные автомобиля (телеметрия)
             if (jsonObject.containsKey("data")) {
-                // Если пошли данные - переключаем статус в "Стриминг" (вилка)
+                // Если это первый пакет данных - переключаем статус в "Прослушивание" (визуальная индикация)
                 if (_internalConnectionState.value != ConnectionState.LISTENING_DATA) {
                     _internalConnectionState.value = ConnectionState.LISTENING_DATA
                 }
 
+                // Извлекаем вложенный объект данных
                 val dataElement = jsonObject["data"]
                 if (dataElement != null) {
+                    // Десериализуем JSON в доменную модель CarData
                     val carData = json.decodeFromJsonElement<CarData>(dataElement)
+                    // Эмитим обновленные данные в поток для UI
                     appScope.launch { _rawCarDataFlow.emit(carData) }
                 }
             }
             
-            // 2. Пакет с настройками от БК
+            // КЕЙС 2: Пакет содержит технические настройки, присланные бортовым компьютером
             if (jsonObject.containsKey("settings")) {
                 val settingsFromRemote = jsonObject["settings"]?.jsonObject
                 if (settingsFromRemote != null) {
+                    // Инициируем процедуру синхронизации удаленных настроек с локальными
                     syncSettingsFromRemote(settingsFromRemote)
                 }
             }
             
-            // 3. Ошибка от БК
+            // КЕЙС 3: Пакет содержит описание ошибки, возникшей на стороне БК
             jsonObject["error"]?.jsonPrimitive?.content?.let { errorMsg ->
                 AppLogger.logError("БК вернул ошибку: $errorMsg", TAG)
             }
             
         } catch (e: Exception) {
+            // Логируем ошибки десериализации без прерывания основного цикла слушателя
             AppLogger.logError("Ошибка обработки пакета: ${e.message}", TAG)
         }
     }
 
     /**
-     * Синхронизирует настройки, полученные от БК.
+     * Выполняет сравнение и слияние настроек, полученных от устройства, с локальными.
+     * Если данные отличаются, локальные настройки обновляются.
+     * 
+     * @param remoteJson JSON-объект с актуальными параметрами от БК.
      */
     private fun syncSettingsFromRemote(remoteJson: JsonObject) {
         val current = _appSettings.value
+        // Используем метод модели для логического слияния (merge)
         val updated = current.mergeWithRemote(remoteJson)
 
+        // Если объект изменился (поля не идентичны)
         if (updated !== current) {
             log("Настройки от БК отличаются от локальных. Синхронизация...")
+            // Обновляем локальное хранилище без обратной отправки на устройство (флаг fromRemote)
             updateSettings(updated, fromRemote = true)
         }
     }
 
-    // ========== ПУБЛИЧНЫЙ API ==========
+    // ========== ПУБЛИЧНЫЙ API ДЛЯ UI И ДРУГИХ СЛОЕВ ==========
 
+    /**
+     * Предоставляет список сопряженных устройств через проксирование к менеджеру.
+     * @return Список BluetoothDeviceData или null, если система не готова.
+     */
     fun getPairedDevices(): List<BluetoothDeviceData>? = 
         if (_isInitialized.value) bluetoothConnectionManager.getPairedDevices() else null
 
+    /**
+     * Проверяет статус Bluetooth-адаптера на устройстве пользователя.
+     * @return true если Bluetooth включен.
+     */
     fun isBluetoothEnabled(): Boolean = 
         if (_isInitialized.value) bluetoothConnectionManager.isBluetoothEnabled() else false
 
+    /**
+     * Возвращает текущий слепок настроек приложения.
+     */
     fun getCurrentSettings(): AppSettings = _appSettings.value
 
+    /**
+     * Главный метод обновления конфигурации приложения.
+     * Выполняет сохранение в DataStore и уведомляет менеджер подключений о смене устройства.
+     * 
+     * @param newSettings Новый объект настроек.
+     * @param fromRemote Флаг, указывающий что настройки пришли от БК (исключает циклическую отправку).
+     */
     fun updateSettings(newSettings: AppSettings, fromRemote: Boolean = false) {
         appScope.launch {
             try {
                 val current = _appSettings.value
+                // Оптимизация: если данные не изменились, игнорируем запрос
                 if (current == newSettings) return@launch
 
+                // 1. Сохраняем настройки в постоянное хранилище
                 settingsRepository.saveSettings(newSettings)
+                
+                // 2. Обновляем реактивное состояние для подписчиков
                 _appSettings.value = newSettings
                 
+                // 3. Если изменение инициировано пользователем и контроллер готов
                 if (_isInitialized.value && !fromRemote) {
-                    // Если меняем настройки вручную - ставим статус SENDING_SETTINGS
-                    _internalConnectionState.value = ConnectionState.SENDING_SETTINGS
-                    bluetoothConnectionManager.updateSettings(newSettings)
+                    // Передаем команду в менеджер подключений для анализа смены устройства
+                    bluetoothConnectionManager.updateSelectedDevice(newSettings.selectedDevice)
                 }
             } catch (e: Exception) {
                 AppLogger.logError("Ошибка сохранения настроек: ${e.message}", TAG)
@@ -276,27 +331,49 @@ class AppController(
         }
     }
 
+    /**
+     * Разрывает текущее соединение путем сброса выбранного устройства.
+     */
     fun disconnectFromDevice() {
         updateSettings(_appSettings.value.copy(selectedDevice = BluetoothDeviceData.empty()))
     }
 
+    /**
+     * Очищает выбор устройства в настройках.
+     */
     fun clearSelectedDevice() {
         updateSettings(_appSettings.value.copy(selectedDevice = BluetoothDeviceData.empty()))
     }
 
+    /**
+     * Инициирует повторную попытку подключения с текущими параметрами.
+     */
     fun retryConnection() {
         if (_isInitialized.value) bluetoothConnectionManager.startConnectionProcess()
     }
 
+    /**
+     * Возвращает текущее значение данных автомобиля.
+     */
     fun getCurrentCarData(): CarData = carData.value
 
+    /**
+     * Предоставляет отладочную информацию о состоянии канала связи.
+     */
     fun getConnectionStatistics(): String = 
         if (_isInitialized.value) bluetoothConnectionManager.getConnectionStatistics() else "Инициализация..."
 
+    /**
+     * Сбрасывает счетчики и статистику в менеджере подключений.
+     */
     fun resetConnectionStatistics() {
         if (_isInitialized.value) bluetoothConnectionManager.resetStatistics()
     }
 
+    /**
+     * Прокси-метод для отправки произвольных JSON-команд на устройство.
+     * @param jsonCommand Строка в формате JSON.
+     */
     fun sendJsonCommand(jsonCommand: String) {
         if (_isInitialized.value) {
             AppLogger.logInfo("Отправка команды: $jsonCommand", TAG)
@@ -304,21 +381,35 @@ class AppController(
         }
     }
 
+    /**
+     * Внутренняя обертка для логирования с тегом контроллера.
+     */
     private fun log(message: String) {
         AppLogger.logInfo(message, TAG)
     }
 
-    // ========== УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ ==========
+    // ========== УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ (LIFECYCLE) ==========
 
+    /**
+     * Выполняет полную очистку ресурсов контроллера перед уничтожением.
+     */
     fun cleanup() {
+        // Останавливаем все процессы в менеджере подключений
         _bluetoothConnectionManager?.cleanup()
+        // Отменяем все активные корутины в области видимости приложения
         appScope.cancel()
+        // Сбрасываем флаг готовности
         _isInitialized.value = false
     }
 
+    /**
+     * Выполняет "горячую" перезагрузку контроллера.
+     * Полезно при критических сбоях или необходимости переинициализации сервисов.
+     */
     fun reload() {
         cleanup()
         appScope.launch {
+            // Небольшая задержка для освобождения системных ресурсов
             delay(1000)
             startInitialization()
         }

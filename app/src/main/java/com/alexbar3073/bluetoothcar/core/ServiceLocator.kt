@@ -6,159 +6,139 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothConnectionManager
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
+ * ТЕГ: Core/DI/ServiceLocator
+ *
  * ФАЙЛ: core/ServiceLocator.kt
+ *
  * МЕСТОНАХОЖДЕНИЕ: core/
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Service Locator (контейнер зависимостей) для централизованного управления
- * зависимостями в приложении. Решает проблему жестких связей между компонентами.
+ * зависимостями в приложении. Работает по принципу реестра объектов, где каждый
+ * компонент может запросить необходимую ему зависимость по ключу (имени класса).
  *
- * ПРЕИМУЩЕСТВА:
- * 1. Устраняет жесткие зависимости между компонентами
- * 2. Упрощает тестирование (легко подменять реализации)
- * 3. Управляет жизненным циклом объектов
- * 4. Предотвращает дублирование кода создания объектов
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Устраняет жесткие зависимости между компонентами системы.
+ * 2. Управляет жизненным циклом singleton-объектов и провайдеров.
+ * 3. Обеспечивает потокобезопасный доступ к общим ресурсам (репозитории, сервисы).
  *
- * ПРИНЦИП РАБОТЫ:
- * - Все зависимости регистрируются при инициализации приложения
- * - Компоненты запрашивают зависимости через ServiceLocator
- * - ServiceLocator управляет созданием и жизненным циклом объектов
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Service Locator / Dependency Injection
  *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
- * 1. Используется: AppController.kt (главный координатор получает зависимости)
- * 2. Используется: MainActivity.kt (инициализирует ServiceLocator)
- * 3. Регистрирует: SettingsRepository, AppBluetoothService, BluetoothConnectionManager
- * 4. Позволяет: SharedViewModelFactory получать зависимости
+ * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное управление жизненным циклом и доступом к зависимостям.
  *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.02 18:30 UTC: Создание файла согласно ТЗ и обсуждению
- * - 2026.02.06 14:45: ДОБАВЛЕНА ИДЕМПОТЕНТНОСТЬ ИНИЦИАЛИЗАЦИИ
- * - 2026.02.07: Добавлена поддержка асинхронного биндинга AppBluetoothService
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: AppController.kt, AppBluetoothService.kt, SettingsRepository.kt.
+ * - Вызывается из: CoreModule.kt (через initialize).
+ * - Взаимодействует: со всеми компонентами системы, предоставляя им зависимости.
  */
+
 object ServiceLocator {
 
+    /** Хранилище экземпляров сервисов, где ключ — имя класса, значение — объект */
     private val services = mutableMapOf<String, Any>()
+    
+    /** Объекты синхронизации для обеспечения потокобезопасности при доступе к конкретным сервисам */
     private val locks = mutableMapOf<String, Any>()
-    private var isInitialized = false  // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Флаг инициализации
-
-    /** Соединение с Bluetooth сервисом */
-    private var serviceConnection: ServiceConnection? = null
+    
+    /** Атомарный флаг, предотвращающий повторную инициализацию локатора */
+    private val isInitialized = AtomicBoolean(false)
 
     /**
      * Инициализировать ServiceLocator с контекстом приложения.
-     * Должен вызываться один раз при запуске приложения.
+     * Создает базовые зависимости, необходимые для старта приложения.
      *
      * @param context Контекст приложения (ApplicationContext)
      */
     fun initialize(context: Context) {
-        synchronized(this) {
-            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Проверка на повторную инициализацию
-            if (isInitialized) {
-                logInfo("ServiceLocator уже инициализирован, пропускаем повторную инициализацию")
-                return
-            }
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Быстрая проверка флага инициализации
+        if (isInitialized.get()) {
+            logInfo("ServiceLocator уже инициализирован, пропускаем повторную инициализацию")
+            return
+        }
 
-            // 1. Создаем и регистрируем SettingsRepository (singleton)
+        synchronized(this) {
+            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Double-checked locking для безопасности
+            if (isInitialized.get()) return
+
+            // 1. Создаем репозиторий настроек и сохраняем его в контейнере
             val settingsRepository = SettingsRepository(context.applicationContext)
             register(SettingsRepository::class.java.name, settingsRepository)
 
-            // 2. Регистрация класса сервиса (для интентов)
+            // 2. Регистрируем класс Bluetooth-сервиса для возможности создания Intent-ов
             register(AppBluetoothService::class.java.name, AppBluetoothService::class.java)
 
-            // 3. AppController будет создан позже, после загрузки настроек
-            // 4. BluetoothConnectionManager будет создан AppController'ом
+            // 3. Инициализируем провайдер Bluetooth, отвечающий за связь с Service
+            val bluetoothProvider = BluetoothServiceProvider(context.applicationContext)
+            register(BluetoothServiceProvider::class.java.name, bluetoothProvider)
 
-            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Устанавливаем флаг инициализации
-            isInitialized = true
+            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Фиксируем успешное завершение инициализации
+            isInitialized.set(true)
 
             logInfo("ServiceLocator инициализирован с контекстом приложения")
         }
     }
 
     /**
-     * Асинхронно подключиться к Bluetooth сервису.
+     * Асинхронно подключиться к Bluetooth сервису через специализированный провайдер.
      * 
      * @param context Контекст приложения
-     * @param onReady Коллбэк, вызываемый при успешном биндинге
+     * @param onReady Коллбэк, который получит доступ к сервису после подключения
      */
     fun bindBluetoothService(context: Context, onReady: (AppBluetoothService) -> Unit) {
-        // Ключ для ЭКЗЕМПЛЯРА сервиса (отличается от ключа КЛАССА)
-        val instanceKey = "AppBluetoothService_Instance"
-        
-        if (contains(instanceKey)) {
-            val service = resolve<AppBluetoothService>(instanceKey)
-            onReady(service)
-            return
-        }
-
-        serviceConnection = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                val binder = service as AppBluetoothService.BluetoothBinder
-                val bluetoothService = binder.getService()
-                
-                // Регистрируем экземпляр сервиса в локаторе
-                register(instanceKey, bluetoothService)
-                
-                logInfo("AppBluetoothService успешно забиндин и зарегистрирован")
-                onReady(bluetoothService)
-            }
-
-            override fun onServiceDisconnected(name: ComponentName?) {
-                remove(instanceKey)
-                logInfo("AppBluetoothService отсоединился")
-            }
-        }
-
-        // Сначала запускаем сервис (чтобы он стал Foreground), затем биндим
-        AppBluetoothService.start(context)
-        
-        val intent = Intent(context, AppBluetoothService::class.java)
-        context.bindService(intent, serviceConnection!!, Context.BIND_AUTO_CREATE)
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Извлекаем провайдер и делегируем ему процесс биндинга
+        val provider = resolve<BluetoothServiceProvider>(BluetoothServiceProvider::class.java.name)
+        provider.bind(onReady)
     }
 
     /**
-     * Зарегистрировать сервис в контейнере.
+     * Зарегистрировать новый сервис или объект в контейнере.
      *
-     * @param key Ключ сервиса (обычно полное имя класса)
-     * @param service Сервис для регистрации
+     * @param key Уникальный ключ сервиса
+     * @param service Экземпляр объекта для регистрации
      */
     fun <T : Any> register(key: String, service: T) {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Блокируем доступ по конкретному ключу для безопасности записи
         synchronized(getLock(key)) {
+            // Добавляем объект в карту сервисов
             services[key] = service
             logInfo("Зарегистрирован сервис: $key")
         }
     }
 
     /**
-     * Получить сервис из контейнера.
+     * Получить зарегистрированный сервис из контейнера.
      *
      * @param key Ключ сервиса
-     * @return Сервис типа T
-     * @throws IllegalStateException если сервис не зарегистрирован
+     * @return Объект типа T
+     * @throws IllegalStateException если сервис не найден в контейнере
      */
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> resolve(key: String): T {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Блокируем чтение для исключения состояния гонки
         synchronized(getLock(key)) {
+            // Возвращаем объект с приведением типа или бросаем исключение
             return services[key] as? T
                 ?: throw IllegalStateException("Сервис не зарегистрирован: $key")
         }
     }
 
     /**
-     * Получить или создать сервис (lazy initialization).
+     * Получить сервис или создать его, если он еще не зарегистрирован.
      *
      * @param key Ключ сервиса
-     * @param factory Фабрика для создания сервиса при первом обращении
-     * @return Сервис типа T
+     * @param factory Лямбда-выражение для создания объекта
+     * @return Экземпляр сервиса
      */
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> getOrCreate(key: String, factory: () -> T): T {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Синхронизируем доступ по ключу
         synchronized(getLock(key)) {
+            // Проверяем наличие, если нет — создаем через фабрику и регистрируем
             return (services[key] as? T) ?: run {
                 val service = factory()
                 services[key] = service
@@ -169,24 +149,25 @@ object ServiceLocator {
     }
 
     /**
-     * Проверить, зарегистрирован ли сервис.
+     * Проверить наличие сервиса в контейнере.
      *
-     * @param key Ключ сервиса
-     * @return true если сервис зарегистрирован, false в противном случае
+     * @param key Ключ для поиска
+     * @return true если сервис существует
      */
     fun contains(key: String): Boolean {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Безопасно проверяем существование ключа в мапе
         synchronized(getLock(key)) {
             return services.containsKey(key)
         }
     }
 
     /**
-     * Удалить сервис из контейнера.
-     * Полезно для тестирования или пересоздания зависимостей.
+     * Удалить конкретный сервис из контейнера.
      *
-     * @param key Ключ сервиса
+     * @param key Ключ удаляемого сервиса
      */
     fun remove(key: String) {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Синхронизируем удаление по ключу
         synchronized(getLock(key)) {
             services.remove(key)
             logInfo("Удален сервис: $key")
@@ -194,68 +175,161 @@ object ServiceLocator {
     }
 
     /**
-     * Очистить все зарегистрированные сервисы.
-     * Использовать с осторожностью!
+     * Полная очистка ServiceLocator и деинициализация всех провайдеров.
      */
     fun clear() {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Блокируем весь объект на время глобальной очистки
         synchronized(this) {
+            logInfo("Начало очистки ServiceLocator")
+            
+            // 1. Проверяем наличие Bluetooth-провайдера и вызываем его очистку (unbind)
+            if (contains(BluetoothServiceProvider::class.java.name)) {
+                val provider = resolve<BluetoothServiceProvider>(BluetoothServiceProvider::class.java.name)
+                provider.cleanup()
+            }
+            
+            // 2. Очищаем все коллекции ссылок и объектов блокировки
             services.clear()
-            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Сбрасываем флаг при очистке
-            isInitialized = false
+            locks.clear()
+            
+            // 3. Сбрасываем флаг инициализации для возможности повторного запуска
+            isInitialized.set(false)
             logInfo("Все сервисы удалены из ServiceLocator")
         }
     }
 
-    // ========== ТИПОБЕЗОПАСНЫЕ МЕТОДЫ ДЛЯ КОНКРЕТНЫХ СЕРВИСОВ ==========
+    // ========== ТИПОБЕЗОПАСНЫЕ МЕТОДЫ ДОСТУПА ==========
 
     /**
-     * Получить SettingsRepository.
-     * Гарантированно возвращает экземпляр, так как регистрируется при инициализации.
+     * Упрощенный доступ к SettingsRepository.
      */
     fun getSettingsRepository(): SettingsRepository {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Извлекаем репозиторий из контейнера по его имени
         return resolve(SettingsRepository::class.java.name)
     }
 
     /**
-     * Получить класс AppBluetoothService для создания интентов.
+     * Получить ссылку на класс Bluetooth-сервиса.
      */
     fun getBluetoothServiceClass(): Class<AppBluetoothService> {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Извлекаем ранее зарегистрированный объект Class
         return resolve(AppBluetoothService::class.java.name)
     }
 
     /**
-     * Зарегистрировать AppController.
-     * Вызывается после создания AppController в MainActivity.
-     *
-     * @param appController Экземпляр AppController
+     * Зарегистрировать главный координатор приложения.
      */
     fun registerAppController(appController: AppController) {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Сохраняем экземпляр контроллера для общего доступа
         register(AppController::class.java.name, appController)
     }
 
     /**
-     * Получить AppController.
-     *
-     * @return Экземпляр AppController
-     * @throws IllegalStateException если AppController еще не зарегистрирован
+     * Получить экземпляр AppController.
      */
     fun getAppController(): AppController {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Извлекаем контроллер из общего хранилища
         return resolve(AppController::class.java.name)
     }
 
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+    // ========== СЛУЖЕБНЫЕ МЕТОДЫ ==========
 
+    /**
+     * Создать или получить объект блокировки для конкретного ключа.
+     */
     private fun getLock(key: String): Any {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Атомарно получаем существующий или создаем новый объект lock
         return locks.getOrPut(key) { Any() }
     }
 
+    /** Логирование информационной заметки */
     private fun logInfo(message: String) {
+        // Формируем метку времени для лога
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
+        // Вывод сообщения в консоль с меткой времени
         println("$timestamp [ServiceLocator] $message")
     }
 
+    /** Логирование сообщения об ошибке */
     private fun logError(message: String) {
+        // Формируем метку времени для лога ошибки
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
+        // Вывод ошибки в поток System.err
         System.err.println("$timestamp [ServiceLocator] ERROR: $message")
+    }
+}
+
+/**
+ * Провайдер, управляющий асинхронным жизненным циклом AppBluetoothService.
+ * Отвечает за безопасное подключение (bind) и отключение (unbind) от Android Service.
+ */
+class BluetoothServiceProvider(private val context: Context) {
+
+    /** Ссылка на активный экземпляр сервиса (доступна только при наличии соединения) */
+    @Volatile
+    private var boundService: AppBluetoothService? = null
+    
+    /** Объект для управления соединением с системным сервисом */
+    private var serviceConnection: ServiceConnection? = null
+
+    /**
+     * Инициировать процесс подключения к Bluetooth-сервису.
+     * 
+     * @param onReady Коллбэк, вызываемый по завершении процесса биндинга
+     */
+    fun bind(onReady: (AppBluetoothService) -> Unit) {
+        // 1. Проверяем, не забиндин ли сервис уже сейчас
+        boundService?.let {
+            onReady(it)
+            return
+        }
+
+        // 2. Создаем анонимную реализацию ServiceConnection
+        serviceConnection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                // Извлекаем сервис из переданного Binder-а
+                val binder = service as AppBluetoothService.BluetoothBinder
+                val bluetoothService = binder.getService()
+                
+                // Сохраняем ссылку для последующего использования
+                boundService = bluetoothService
+                
+                println("[BluetoothServiceProvider] AppBluetoothService успешно забиндин")
+                onReady(bluetoothService)
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {
+                // Обнуляем ссылку при непредвиденном разрыве соединения
+                boundService = null
+                println("[BluetoothServiceProvider] AppBluetoothService отсоединился")
+            }
+        }
+
+        // 3. Гарантируем, что сервис запущен в системе, прежде чем биндиться к нему
+        AppBluetoothService.start(context)
+        
+        // 4. Выполняем системный вызов bindService
+        val intent = Intent(context, AppBluetoothService::class.java)
+        context.bindService(intent, serviceConnection!!, Context.BIND_AUTO_CREATE)
+    }
+
+    /**
+     * Корректно разорвать связь с сервисом для предотвращения утечек памяти.
+     */
+    fun cleanup() {
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Проверяем наличие активного соединения перед unbind
+        serviceConnection?.let {
+            try {
+                // Выполняем системную процедуру отвязки от сервиса
+                context.unbindService(it)
+                println("[BluetoothServiceProvider] unbindService успешно выполнен")
+            } catch (e: Exception) {
+                // Логируем исключение, если сервис уже был удален или не был привязан
+                println("[BluetoothServiceProvider] Ошибка при попытке unbind: ${e.message}")
+            }
+        }
+        // Обнуляем все ресурсы
+        serviceConnection = null
+        boundService = null
     }
 }

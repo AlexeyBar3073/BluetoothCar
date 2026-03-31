@@ -71,8 +71,8 @@ class BluetoothConnectionManager(
     private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     // ========== СОХРАНЕННЫЕ ДАННЫЕ ==========
-    /** Текущее выбранное Bluetooth устройство из настроек */
-    private var currentBluetoothDeviceData: BluetoothDeviceData? = null
+    /** Текущее выбранное Bluetooth устройство из настроек. Всегда non-null. */
+    private var currentBluetoothDeviceData: BluetoothDeviceData = BluetoothDeviceData.empty()
 
     // ========== СТАТУС И ЛОГИРОВАНИЕ ==========
 
@@ -163,12 +163,12 @@ class BluetoothConnectionManager(
 
             ConnectionState.DEVICE_SELECTED -> {
                 // Шаг 2: После выбора устройства начинаем мониторинг его присутствия в эфире
-                deviceAvailabilityMonitor.start(currentBluetoothDeviceData ?: return)
+                deviceAvailabilityMonitor.start(currentBluetoothDeviceData)
             }
 
             ConnectionState.DEVICE_AVAILABLE -> {
                 // Шаг 3: Устройство найдено, пытаемся установить физическое соединение
-                connectionStateManager.start(currentBluetoothDeviceData ?: return)
+                connectionStateManager.start(currentBluetoothDeviceData)
             }
 
             ConnectionState.CONNECTED -> {
@@ -210,25 +210,22 @@ class BluetoothConnectionManager(
     }
 
     /**
-     * Обновить настройки.
-     * Если устройство изменилось — перезапуск.
-     * Если только настройки при живом соединении — отправка в очередь.
+     * Обновить выбранное Bluetooth устройство.
+     * Если адрес устройства изменился — инициирует перезапуск процесса подключения.
+     *
+     * @param device Данные нового выбранного устройства (не null).
      */
-    fun updateSettings(newSettings: AppSettings) {
-        log("Получены новые настройки")
-        val newDeviceData = newSettings.selectedDevice
-        val isDeviceChanged = (currentBluetoothDeviceData?.address != newDeviceData?.address || newDeviceData == null)
-        currentBluetoothDeviceData = newDeviceData
+    fun updateSelectedDevice(device: BluetoothDeviceData) {
+        log("Получено обновление выбранного устройства: ${device.name}")
 
-        when {
-            isDeviceChanged -> {
-                log("Устройство изменилось, перезапуск процесса подключения")
-                startConnectionProcess()
-            }
-            !isDeviceChanged && isConnected -> {
-                log("Обновление настроек при активном соединении")
-                sendJsonCommand("""{"settings":${newSettings.toDeviceSettingsJson()}}""")
-            }
+        val isDeviceChanged = currentBluetoothDeviceData.address != device.address
+        currentBluetoothDeviceData = device
+
+        if (isDeviceChanged) {
+            log("Устройство изменилось, перезапуск процесса подключения")
+            startConnectionProcess()
+        } else {
+            log("Устройство не изменилось, действие не требуется")
         }
     }
 
@@ -261,14 +258,15 @@ class BluetoothConnectionManager(
         log("Очистка ресурсов BluetoothConnectionManager")
         stopAllProcesses()
         managerScope.cancel()
-        currentBluetoothDeviceData = null
+        currentBluetoothDeviceData = BluetoothDeviceData.empty()
         isConnected = false
     }
 
     /** Статистика для отладки */
     fun getConnectionStatistics(): String {
         val currentState = _connectionStateFlow.value
-        return "Статус: ${currentState?.name ?: "null"}, Устройство: ${currentBluetoothDeviceData?.name ?: "нет"}, isConnected: $isConnected"
+        val deviceName = if (currentBluetoothDeviceData.address.isEmpty()) "не выбрано" else currentBluetoothDeviceData.name
+        return "Статус: ${currentState?.name ?: "null"}, Устройство: $deviceName, isConnected: $isConnected"
     }
 
     fun resetStatistics() {

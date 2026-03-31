@@ -1,11 +1,14 @@
-// Файл: core/CoreModule.kt
+// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/core/CoreModule.kt
 package com.alexbar3073.bluetoothcar.core
 
 import android.content.Context
 
 /**
- * ФАЙЛ: core/CoreModule.kt
- * МЕСТОНАХОЖДЕНИЕ: core/
+ * ТЕГ: Core+Init+CoreModule
+ *
+ * ФАЙЛ: CoreModule.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: app/src/main/java/com/alexbar3073/bluetoothcar/core/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Модуль инициализации ядра приложения. Содержит точку входа для инициализации
@@ -16,23 +19,20 @@ import android.content.Context
  * 2. Обеспечивает правильный порядок инициализации компонентов
  * 3. Предоставляет единую точку входа для инициализации ядра
  *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Service Locator / Singleton
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Единая точка входа для управления жизненным циклом ядра
+ *
+ * СВЯЗИ:
  * 1. Использует: ServiceLocator.kt, AppController.kt
  * 2. Вызывается из: MainActivity.kt при запуске приложения
- * 3. Инициализирует: все core-компоненты в правильном порядке
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.02 19:00 UTC: Создание файла
- * - 2026.02.06 14:50: ДОБАВЛЕНО СОХРАНЕНИЕ APPCONTROLLER
- *   1. Добавлено поле appControllerInstance для сохранения AppController между вызовами
- *   2. Метод initialize() теперь проверяет наличие существующего AppController
- *   3. Метод getAppController() возвращает сохраненный экземпляр
- *   4. Метод cleanup() очищает ссылку на AppController
- *   5. Соответствует жизненному циклу из дополнения к ТЗ
+ * 3. Взаимодействует: со всеми компонентами системы через AppController
  */
 object CoreModule {
 
-    // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Сохраняем AppController между вызовами
+    // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Сохраняем AppController между вызовами. 
+    // Volatile гарантирует видимость изменений для всех потоков.
+    @Volatile
     private var appControllerInstance: AppController? = null
 
     /**
@@ -42,6 +42,7 @@ object CoreModule {
      * @param context Контекст приложения (ApplicationContext предпочтительнее)
      * @return AppController - главный координатор системы
      */
+    @Synchronized
     fun initialize(context: Context): AppController {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
         println("$timestamp [CoreModule] Начало инициализации ядра приложения")
@@ -82,7 +83,7 @@ object CoreModule {
      * @throws IllegalStateException если ядро не инициализировано
      */
     fun getAppController(): AppController {
-        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Возвращаем сохраненный AppController
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Возвращаем сохраненный AppController или выбрасываем ошибку
         return appControllerInstance ?: throw IllegalStateException("CoreModule не инициализирован")
     }
 
@@ -92,7 +93,7 @@ object CoreModule {
      * @return true если ядро инициализировано, false в противном случае
      */
     fun isInitialized(): Boolean {
-        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Проверяем наличие сохраненного AppController
+        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Проверяем наличие валидной ссылки на экземпляр контроллера
         return appControllerInstance != null
     }
 
@@ -100,13 +101,14 @@ object CoreModule {
      * Очистить все core-компоненты.
      * Вызывается при завершении работы приложения или для тестирования.
      */
+    @Synchronized
     fun cleanup() {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
         println("$timestamp [CoreModule] Очистка ядра приложения")
 
         try {
             // 1. Получаем и очищаем AppController
-            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Используем сохраненный экземпляр
+            // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Используем сохраненный экземпляр для освобождения ресурсов
             appControllerInstance?.cleanup()
 
             // 2. Очищаем ссылку на AppController

@@ -123,7 +123,7 @@ class DeviceAvailabilityMonitor(
                 log("✗ Все $MAX_SEARCH_ATTEMPTS попыток поиска исчерпаны")
 
                 // Уведомляем о недоступности устройства
-                stateChangeCallback(ConnectionState.DEVICE_UNAVAILABLE, null)
+                stateChangeCallback(ConnectionState.DEVICE_UNAVAILABLE, "Устройство не найдено после $MAX_SEARCH_ATTEMPTS попыток поиска")
 
                 // Останавливаем монитор
                 stop()
