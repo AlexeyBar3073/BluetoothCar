@@ -41,8 +41,13 @@ data class AppSettings(
     val speedSensorSignalsPerMeter: Int = 3,
 
     // --- Настройки внешнего вида и поведения UI ---
+    /** 
+     * Выбранная тема оформления. 
+     * Возможные значения: "dark", "light", "blue_dark". 
+     * Значение "system" удалено для исключения неопределенности.
+     */
     @SerialName("selected_theme")
-    val selectedTheme: String = "system",
+    val selectedTheme: String = "dark",
 
     @SerialName("show_speedometer")
     val showSpeedometer: Boolean = true,

@@ -1,14 +1,11 @@
 // Файл: ui/screens/settings/components/WidgetsSection.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 
-import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -23,17 +20,34 @@ import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ColorPickerDialo
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
 /**
- * ТЕГ: Секция настроек виджетов
- * 
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Секция настроек отображения виджетов и кастомизации приборов.
+ * ТЕГ: Секция настроек виджетов / WidgetsSection
+ *
+ * ФАЙЛ: ui/screens/settings/components/WidgetsSection.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/components/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Секция настроек визуального оформления приборов и виджетов. 
+ * Позволяет пользователю выбирать цветовую схему и тему приложения.
+ *
+ * ОТВЕТСТВЕННОСТЬ: Отображение карточек настроек визуализации.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Compose Component
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Группировка связанных настроек интерфейса в единый блок.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: ColorSettingItem.kt, SimpleSettingItem.kt.
+ * - Вызывает: ColorPickerDialog.kt (диалог выбора).
+ * - Вызывается из: SettingsContent.kt.
  */
-
 @Composable
 fun WidgetsSection(
     appSettings: AppSettings,
+    onThemeDialogShow: () -> Unit,
     onUpdateSetting: (AppSettings) -> Unit
 ) {
+    /** Управление видимостью диалога выбора цвета */
     var showColorPicker by remember { mutableStateOf(false) }
 
     Card(
@@ -49,66 +63,48 @@ fun WidgetsSection(
         Column(
             modifier = Modifier.padding(vertical = 8.dp)
         ) {
-            // Показывать спидометр
-            SwitchSettingItem(
-                title = "Показывать спидометр",
-                subtitle = "Отображение виджета скорости",
-                icon = Icons.Default.Speed,
+            // Настройка темы оформления
+            SimpleSettingItem(
+                title = "Тема оформления",
+                value = when (appSettings.selectedTheme) {
+                    "system" -> "Системная"
+                    "dark" -> "Темная"
+                    "light" -> "Светлая"
+                    "blue_dark" -> "Синяя темная"
+                    else -> "Системная"
+                },
+                icon = Icons.Default.Palette,
                 iconColor = AppColors.TextSecondary,
-                isChecked = appSettings.showSpeedometer,
-                onCheckedChange = { isChecked ->
-                    onUpdateSetting(appSettings.copy(showSpeedometer = isChecked))
-                }
+                hasClearButton = false,
+                onClick = onThemeDialogShow
             )
 
-            HorizontalDivider(color = AppColors.SurfaceMedium, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
-
-            // Показывать уровень топлива
-            SwitchSettingItem(
-                title = "Показывать уровень топлива",
-                subtitle = "Отображение виджета топлива",
-                icon = Icons.Default.LocalGasStation,
-                iconColor = AppColors.TextSecondary,
-                isChecked = appSettings.showFuelGauge,
-                onCheckedChange = { isChecked ->
-                    onUpdateSetting(appSettings.copy(showFuelGauge = isChecked))
-                }
+            HorizontalDivider(
+                color = AppColors.SurfaceMedium,
+                thickness = 1.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
             )
 
-            HorizontalDivider(color = AppColors.SurfaceMedium, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
-
-            // Показывать напряжение
-            SwitchSettingItem(
-                title = "Показывать напряжение",
-                subtitle = "Отображение виджета напряжения",
-                icon = Icons.Default.BatteryChargingFull,
-                iconColor = AppColors.TextSecondary,
-                isChecked = appSettings.showVoltage,
-                onCheckedChange = { isChecked ->
-                    onUpdateSetting(appSettings.copy(showVoltage = isChecked))
-                }
-            )
-
-            HorizontalDivider(color = AppColors.SurfaceMedium, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
-
-            // Цвет дашборда
+            /** 
+             * Настройка цвета оформления.
+             * Иконка в элементе окрашена в текущий выбранный цвет.
+             */
             ColorSettingItem(
                 title = "Цвет оформления",
                 subtitle = "Основной цвет оформления приборов",
                 currentColor = Color(appSettings.currentDashboardColor),
-                onColorClick = { showColorPicker = true },
-                onResetClick = {
-                    onUpdateSetting(appSettings.copy(currentDashboardColor = appSettings.defaultDashboardColor))
-                }
+                onColorClick = { showColorPicker = true }
             )
         }
     }
 
+    /** Отображение диалога выбора цвета (HSV) */
     if (showColorPicker) {
         ColorPickerDialog(
             appSettings = appSettings,
             onDismiss = { showColorPicker = false },
             onColorSelected = { color ->
+                /** Сохранение нового цвета в настройки приложения */
                 onUpdateSetting(appSettings.copy(currentDashboardColor = color.toArgb().toLong()))
             }
         )

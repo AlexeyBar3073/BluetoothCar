@@ -14,6 +14,7 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
  * Основной акцент на спидометре в левой части экрана.
  * Правая часть разделена на сетку 2x2 для дополнительных виджетов.
  */
+@Deprecated("Используйте DashboardType4 для актуальной визуализации")
 @Composable
 fun DashboardType3(
     modifier: Modifier = Modifier,

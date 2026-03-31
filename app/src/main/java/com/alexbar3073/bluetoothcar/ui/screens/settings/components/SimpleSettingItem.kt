@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,6 +100,7 @@ fun SimpleSettingItem(
             }
 
             // Кнопка очистки (если нужно)
+            // Иконка стрелки удалена, так как кликабельна вся карточка
             if (hasClearButton) {
                 IconButton(
                     onClick = onClear,
@@ -123,14 +123,6 @@ fun SimpleSettingItem(
                         )
                     }
                 }
-            } else {
-                // Стрелка для перехода (если нет кнопки очистки)
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Перейти",
-                    tint = AppColors.TextSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
             }
         }
     }

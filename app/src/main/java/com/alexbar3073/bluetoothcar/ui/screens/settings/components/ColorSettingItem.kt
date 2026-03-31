@@ -1,48 +1,66 @@
+// Файл: ui/screens/settings/components/ColorSettingItem.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
+/**
+ * ТЕГ: Элемент выбора цвета / ColorSettingItem
+ *
+ * ФАЙЛ: ui/screens/settings/components/ColorSettingItem.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/components/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Компонент списка настроек для выбора цвета оформления.
+ * Отображает иконку палитры, окрашенную в текущий выбранный цвет,
+ * заголовок и описание.
+ *
+ * ОТВЕТСТВЕННОСТЬ: Визуализация текущего цвета и инициация диалога выбора.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Compose UI Component
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Наглядность выбора через окрашивание основной иконки.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Используется в: WidgetsSection.kt.
+ * - Взаимодействует: ColorPickerDialog.kt (через callback).
+ */
 @Composable
 fun ColorSettingItem(
     title: String,
+    /** Краткое описание настройки */
     subtitle: String,
+    /** Текущий выбранный цвет для окрашивания иконки */
     currentColor: Color,
-    onColorClick: () -> Unit,
-    onResetClick: () -> Unit
+    /** Callback при нажатии на элемент */
+    onColorClick: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onColorClick() }
             .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        // Иконка палитры
+        /** 
+         * Контейнер иконки.
+         * Иконка палитры теперь является индикатором текущего цвета.
+         */
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -55,14 +73,15 @@ fun ColorSettingItem(
             Icon(
                 imageVector = Icons.Default.Palette,
                 contentDescription = title,
-                tint = AppColors.TextSecondary,
+                /** Окрашивание иконки в выбранный пользователем цвет */
+                tint = currentColor,
                 modifier = Modifier.size(20.dp)
             )
         }
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        // Текст настройки
+        // Текстовая информация
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -76,31 +95,6 @@ fun ColorSettingItem(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = AppColors.TextTertiary
-            )
-        }
-
-        // Предпросмотр цвета
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(currentColor)
-                .border(1.dp, AppColors.WhiteAlpha30, CircleShape)
-                .clickable { onColorClick() }
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Кнопка сброса
-        IconButton(
-            onClick = onResetClick,
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Сбросить цвет",
-                tint = AppColors.TextSecondary,
-                modifier = Modifier.size(20.dp)
             )
         }
     }

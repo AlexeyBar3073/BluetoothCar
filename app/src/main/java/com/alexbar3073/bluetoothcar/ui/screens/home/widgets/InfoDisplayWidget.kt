@@ -36,6 +36,7 @@ data class CarInfo(
     val range: Int = 420          // запас хода, км
 )
 
+@Deprecated("Данный компонент не используется в текущей версии интерфейса")
 @Composable
 fun InfoDisplayWidget(
     modifier: Modifier = Modifier,

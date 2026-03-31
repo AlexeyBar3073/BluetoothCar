@@ -1,5 +1,7 @@
+// Файл: ui/screens/settings/dialogs/EditValueDialog.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,7 +37,26 @@ import androidx.compose.ui.window.DialogProperties
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
 /**
- * Диалог для редактирования числовых значений настроек
+ * ТЕГ: Диалог редактирования / EditValueDialog
+ *
+ * ФАЙЛ: ui/screens/settings/dialogs/EditValueDialog.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/dialogs/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Универсальный диалог для ввода и корректировки числовых значений.
+ * Используется для настроек приложения и корректировки данных одометра.
+ *
+ * ОТВЕТСТВЕННОСТЬ: Сбор и валидация числового ввода пользователя.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Compose Component
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Непрозрачный интерфейс с централизованным управлением оформлением через тему.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: EditDialogData.kt (модель параметров).
+ * - Использует: AppColors (для DialogBackground и DialogBorder).
+ * - Используется в: SettingsScreen.kt, DashboardType4TripWidget.kt.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +65,10 @@ fun EditValueDialog(
     onDismiss: () -> Unit,
     onConfirm: (Float) -> Unit
 ) {
+    /** Состояние текстового поля ввода */
     var currentValue by remember { mutableStateOf(data.currentValue.toString()) }
+    
+    /** Состояние ошибки валидации */
     var error by remember { mutableStateOf<String?>(null) }
 
     Dialog(
@@ -56,12 +80,17 @@ fun EditValueDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.9f) // 90% ширины экрана
-                .wrapContentHeight() // Автоматическая высота
+                .fillMaxWidth(0.9f)
+                .wrapContentHeight()
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             shape = RoundedCornerShape(16.dp),
+            /**
+             * Оформление границ диалога.
+             * Цвет берется из темы (AppColors.DialogBorder), что соответствует TextPrimary.
+             */
+            border = BorderStroke(1.dp, AppColors.DialogBorder),
             colors = CardDefaults.cardColors(
-                containerColor = AppColors.SurfaceLight,
+                containerColor = AppColors.DialogBackground,
                 contentColor = AppColors.TextPrimary
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -154,25 +183,26 @@ fun EditValueDialog(
 
                     Button(
                         onClick = {
+                            val value = currentValue.toFloatOrNull()
                             when {
                                 currentValue.isEmpty() -> {
                                     error = "Введите значение"
                                 }
 
-                                currentValue.toFloatOrNull() == null -> {
+                                value == null -> {
                                     error = "Некорректное число"
                                 }
 
-                                currentValue.toFloat() < data.minValue -> {
+                                value < data.minValue -> {
                                     error = "Минимальное значение: ${data.minValue}"
                                 }
 
-                                currentValue.toFloat() > data.maxValue -> {
+                                value > data.maxValue -> {
                                     error = "Максимальное значение: ${data.maxValue}"
                                 }
 
                                 else -> {
-                                    onConfirm(currentValue.toFloat())
+                                    onConfirm(value)
                                 }
                             }
                         },

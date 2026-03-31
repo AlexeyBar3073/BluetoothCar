@@ -1,4 +1,4 @@
-// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/widgets/dashboards/dashboard_type_4/DashboardType4TripWidget.kt
+// Файл: ui/screens/home/widgets/dashboards/dashboard_type_4/DashboardType4TripWidget.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4
 
 import androidx.compose.foundation.Canvas
@@ -30,17 +30,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
+import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
+import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
- * ТЕГ: Виджет поездки Тип 4
+ * ТЕГ: Виджет поездки Тип 4 / TripWidget4
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Отображение данных о пробеге (Trip A/B, Total), запасе хода и расходе топлива.
- * Поддерживает переключение между Trip A и Trip B коротким нажатием
- * и сброс значения длительным нажатием.
+ * ФАЙЛ: ui/screens/home/widgets/dashboards/dashboard_type_4/DashboardType4TripWidget.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/widgets/dashboards/dashboard_type_4/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Отображение данных о пробеге (Trip A/B, Total Odo), запасе хода и расходе топлива.
+ * Поддерживает переключение между Trip A и Trip B, сброс поездок и корректировку одометра.
+ *
+ * ОТВЕТСТВЕННОСТЬ: Визуализация данных пробега и расхода в стиле Dashboard Type 4.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Compose Component
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Интерактивность (клики для переключения, лонг-клики для сброса/редактирования).
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: CarData.kt, AppSettings.kt (модели данных).
+ * - Использует: EditValueDialog.kt (для корректировки одометра).
+ * - Вызывается из: DashboardType4.kt.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -52,18 +68,34 @@ internal fun TripWidget(
     onTripReset: (String) -> Unit = {},
     onLongPress: () -> Unit = {}
 ) {
+    /** Состояние отображения Trip B (false = Trip A) */
     var showTripB by remember { mutableStateOf(false) }
+    
+    /** Состояние отображения диалога корректировки одометра */
+    var showOdoDialog by remember { mutableStateOf(false) }
+    
+    /** Данные для диалога редактирования одометра */
+    var odoEditData by remember { mutableStateOf(EditDialogData()) }
 
-    // Расчеты данных
+    /** Расчет емкости бака из настроек (по умолчанию 60) */
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
+    
+    /** Расход топлива (минимум 8.5 для визуализации при 0) */
     val consumption = if (carData.fuelConsumption > 0f) carData.fuelConsumption else 8.5f
+    
+    /** Максимально возможный запас хода на полном баке */
     val maxPossibleRange = (fuelTankCapacity / consumption) * 100f
+    
+    /** Оставшийся запас хода на текущем топливе */
     val remainingRange = if (carData.remainingRange > 0f) carData.remainingRange else (carData.fuel / consumption) * 100f
+    
+    /** Прогресс запаса хода (0.0 - 1.0) для индикатора */
     val rangeProgress = (remainingRange / maxPossibleRange).coerceIn(0f, 1f)
 
+    /** Плотность экрана для расчетов размеров */
     val density = geometry.density.density
     
-    // РАЗМЕРЫ ШРИФТОВ
+    // РАЗМЕРЫ ШРИФТОВ (динамически от геометрии)
     val valueFontSize = (geometry.textSizePx / density).sp
     val tripTotalValueFontSize = (geometry.textSizePx * 0.8f / density).sp
     val smallValueFontSize = (geometry.textSizePx * 0.7f / density).sp
@@ -76,6 +108,7 @@ internal fun TripWidget(
     val tickLargeDp = (geometry.tickLarge / density).dp
     val gapHeightDp = ((geometry.textOffsetFromTick - geometry.textSizePx / 2f) / density).dp
 
+    /** Прозрачность основных значений */
     val valueAlpha = 0.8f
 
     // СТИЛИ ТЕКСТА
@@ -107,7 +140,7 @@ internal fun TripWidget(
     val smallValueStyle = tightValueStyle.copy(fontSize = smallValueFontSize)
 
     Box(modifier = modifier.fillMaxSize()) {
-        // 1. ДЕКОРАТИВНЫЕ ГРАНИЦЫ
+        // 1. ДЕКОРАТИВНЫЕ ГРАНИЦЫ (Отрисовка дуг и линий)
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = geometry.outerStrokeWidth
             val radius = geometry.tripArcRadius
@@ -129,7 +162,7 @@ internal fun TripWidget(
             drawLine(color = Color.White, start = Offset(x = screenCenter.x - dxLine, y = size.height - strokeWidth / 2f), end = Offset(x = screenCenter.x + dxLine, y = size.height - strokeWidth / 2f), strokeWidth = strokeWidth, cap = StrokeCap.Round)
         }
 
-        // 2. КОНТЕНТ
+        // 2. КОНТЕНТ (Данные)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -137,7 +170,7 @@ internal fun TripWidget(
                 .padding(top = 0.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.Top
         ) {
-            // ЛИНИЯ-ГРАНИЦА
+            // ВЕРХНЯЯ ЛИНИЯ-ГРАНИЦА
             Canvas(modifier = Modifier.fillMaxWidth().height(1.5.dp)) {
                 drawRect(brush = Brush.horizontalGradient(0f to Color.White.copy(alpha = 0.1f), 0.5f to Color.White, 1f to Color.White.copy(alpha = 0.1f)))
             }
@@ -156,8 +189,12 @@ internal fun TripWidget(
                         modifier = Modifier.combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { showTripB = !showTripB },
+                            onClick = { 
+                                /** Переключение между Trip A и Trip B */
+                                showTripB = !showTripB 
+                            },
                             onLongClick = {
+                                /** Сброс текущей поездки */
                                 val command = if (showTripB) "{\"command\":\"RESET_TRIP_B\"}" else "{\"command\":\"RESET_TRIP_A\"}"
                                 onTripReset(command)
                             }
@@ -165,18 +202,42 @@ internal fun TripWidget(
                     )
                 }
 
-                // --- TOTAL (Справа) ---
+                // --- TOTAL / ODO (Справа) ---
                 Column(modifier = Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
                     Text(text = "TOTAL, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
-                    Text(text = "${carData.odometer.toInt()}", style = tripTotalValueStyle)
+                    Text(
+                        text = "${carData.odometer.toInt()}",
+                        style = tripTotalValueStyle,
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { /* Клик по ODO не задействован */ },
+                            onLongClick = {
+                                /** Вызов диалога корректировки одометра */
+                                odoEditData = EditDialogData(
+                                    title = "Корректировка одометра",
+                                    currentValue = carData.odometer,
+                                    minValue = 0f,
+                                    maxValue = 999999f,
+                                    unit = "км",
+                                    onSave = { newValue ->
+                                        /** Отправка команды корректировки в БК */
+                                        val command = "{\"command\":\"CORRECT_ODO\", \"ODO\": ${newValue.toInt()}}"
+                                        onTripReset(command)
+                                    }
+                                )
+                                showOdoDialog = true
+                            }
+                        )
+                    )
                 }
 
-                // --- ЦЕНТРАЛЬНАЯ ЧАСТЬ (Индикатор и его метки) ---
+                // --- Метки топлива и расхода ---
                 Text(text = "FUEL, л", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
                 Text(text = "AVG, л/100", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(0.75f, -1f)))
 
-                // СЕГМЕНТНЫЙ ИНДИКАТОР
+                // СЕГМЕНТНЫЙ ИНДИКАТОР ЗАПАСА ХОДА
                 Box(modifier = Modifier.fillMaxWidth(0.5f).height(tickLargeDp).align(Alignment.TopCenter)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val segments = 12
@@ -193,28 +254,23 @@ internal fun TripWidget(
                             val isPartial = startX < currentProgress && endX > currentProgress
                             
                             if (isFull) {
-                                // Полностью активный сектор
                                 drawRect(color = baseColor.copy(alpha = 0.8f), topLeft = Offset(startX, 0f), size = Size(segW, tickMediumDp.toPx()))
                             } else if (isPartial) {
-                                // Частично активный сектор (тот самый "таящий")
                                 val partialWidth = currentProgress - startX
-                                // Отрисовываем активную часть
                                 drawRect(color = baseColor.copy(alpha = 0.8f), topLeft = Offset(startX, 0f), size = Size(partialWidth, tickMediumDp.toPx()))
-                                // Отрисовываем неактивную часть
                                 drawRect(color = baseColor.copy(alpha = 0.15f), topLeft = Offset(startX + partialWidth, 0f), size = Size(segW - partialWidth, tickMediumDp.toPx()))
                             } else {
-                                // Неактивный сектор
                                 drawRect(color = baseColor.copy(alpha = 0.15f), topLeft = Offset(startX, 0f), size = Size(segW, tickMediumDp.toPx()))
                             }
                         }
                         
                         val rH = geometry.tickLarge
                         drawLine(color = baseColor.copy(alpha = 0.8f), start = Offset(0f, 0f), end = Offset(0f, rH), strokeWidth = 1.2f * geometry.unit)
-                        drawLine(color = baseColor.copy(alpha = 0.8f), start = Offset(size.width, 0f), end = Offset(size.width, rH), strokeWidth = 1.2f * geometry.unit)
+                        drawLine(color = baseColor.copy(alpha = 0.8f), start = Offset(size.width, 0f), end = Offset(size.width, rH) , strokeWidth = 1.2f * geometry.unit)
                     }
                 }
 
-                // --- ТРЕУГОЛЬНИК (Теперь строго совпадает с прогрессом индикатора) ---
+                // --- ТРЕУГОЛЬНИК-УКАЗАТЕЛЬ ПРОГРЕССА ---
                 Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = tickLargeDp).fillMaxWidth(0.5f).height(gapHeightDp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val baseColor = Color.White
@@ -254,5 +310,17 @@ internal fun TripWidget(
                 }
             }
         }
+    }
+
+    /** Отрисовка диалога корректировки одометра */
+    if (showOdoDialog) {
+        EditValueDialog(
+            data = odoEditData,
+            onDismiss = { showOdoDialog = false },
+            onConfirm = { newValue ->
+                odoEditData.onSave(newValue)
+                showOdoDialog = false
+            }
+        )
     }
 }

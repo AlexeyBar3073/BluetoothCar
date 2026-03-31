@@ -33,6 +33,7 @@ import kotlin.math.sin
  * @param rpm Текущие обороты двигателя (об/мин)
  * @param trackColor Цвет фона дуги тахометра
  */
+@Deprecated("Используйте DashboardType4 для отображения данных автомобиля")
 @Composable
 fun TachometerWidget( // Если конфликт сохраняется — переименуйте в TachometerWidgetV2 или ModernTachometer
     modifier: Modifier = Modifier,

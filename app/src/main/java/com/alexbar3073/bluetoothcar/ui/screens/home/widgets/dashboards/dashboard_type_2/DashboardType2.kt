@@ -23,6 +23,7 @@ object Dashboard2Coords {
     val RangeCenter = Offset(1032f, 328f)
 }
 
+@Deprecated("Используйте DashboardType4 для актуальной визуализации")
 @Composable
 fun DashboardType2(
     modifier: Modifier = Modifier,

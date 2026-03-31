@@ -8,11 +8,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.EvStation
 import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PrecisionManufacturing
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -32,7 +30,6 @@ fun SettingsSection(
     selectedDevice: BluetoothDeviceData?,
     navController: NavController,
     onEditDialogShow: (EditDialogData) -> Unit,
-    onThemeDialogShow: () -> Unit,
     onDeviceClear: () -> Unit,
     onDeviceSelect: () -> Unit
 ) {
@@ -51,7 +48,7 @@ fun SettingsSection(
         ) {
             // ИСПРАВЛЕНО: Проверка валидности устройства для отображения текста и кнопки очистки
             val isDeviceValid = selectedDevice?.isValidDevice() == true
-            val deviceDisplayName = if (isDeviceValid) selectedDevice?.name else "Не выбрано"
+            val deviceDisplayName = if (isDeviceValid) selectedDevice.name else "Не выбрано"
 
             SimpleSettingItem(
                 title = "Устройство данных",
@@ -187,53 +184,6 @@ fun SettingsSection(
                             minValue = 100f,
                             maxValue = 10000f,
                             unit = "сигналов/метр",
-                            step = 100f
-                        )
-                    )
-                }
-            )
-
-            HorizontalDivider(
-                color = AppColors.SurfaceMedium,
-                thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            SimpleSettingItem(
-                title = "Тема оформления",
-                value = when (appSettings.selectedTheme) {
-                    "system" -> "Системная"
-                    "dark" -> "Темная"
-                    "light" -> "Светлая"
-                    "blue_dark" -> "Синяя темная"
-                    else -> "Системная"
-                },
-                icon = Icons.Default.Palette,
-                iconColor = AppColors.TextSecondary,
-                hasClearButton = false,
-                onClick = onThemeDialogShow
-            )
-
-            HorizontalDivider(
-                color = AppColors.SurfaceMedium,
-                thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            SimpleSettingItem(
-                title = "Интервал обновления",
-                value = "${appSettings.updateInterval} мс",
-                icon = Icons.Default.Update,
-                iconColor = AppColors.TextSecondary,
-                hasClearButton = false,
-                onClick = {
-                    onEditDialogShow(
-                        EditDialogData(
-                            title = "Интервал обновления",
-                            currentValue = appSettings.updateInterval.toFloat(),
-                            minValue = 100f,
-                            maxValue = 5000f,
-                            unit = "мс",
                             step = 100f
                         )
                     )

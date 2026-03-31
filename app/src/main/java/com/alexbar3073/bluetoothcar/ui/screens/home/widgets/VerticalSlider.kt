@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 
+@Deprecated("Данный компонент не используется в текущей версии интерфейса")
 @Composable
 fun VerticalSlider(
     value: Float,

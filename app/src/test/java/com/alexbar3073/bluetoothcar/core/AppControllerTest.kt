@@ -1,4 +1,4 @@
-// Файл: app/src/test/java/com/alexbar3073/bluetoothcar/core/AppControllerTest.kt
+// Файл: core/AppControllerTest.kt
 package com.alexbar3073.bluetoothcar.core
 
 import android.content.Context
@@ -23,28 +23,51 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * ТЕГ: Тесты AppController
+ * ТЕГ: Core/AppController/Test
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Модульные тесты для главного координатора системы — AppController.
- * Проверяют логику инициализации, комбинирования данных и расчета производных полей (isFuelLow).
+ * ФАЙЛ: core/AppControllerTest.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: core/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Модульное тестирование главного координатора системы — AppController.
+ * Проверяет логику инициализации приложения, управления настройками (сохранение/загрузка),
+ * комбинирования входящих данных от автомобиля и расчета производных полей (например, критический уровень топлива).
+ *
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Проверка автоматической загрузки настроек из репозитория при старте.
+ * 2. Тестирование логики обновления настроек и их сохранения.
+ * 3. Верификация корректности расчета флага "низкий уровень топлива" (isFuelLow) на основе текущих настроек.
+ * 4. Проверка сброса данных о состоянии автомобиля (CarData) при потере Bluetooth-соединения.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Unit Testing с использованием MockK и Turbine для тестирования реактивных потоков (Flow).
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП:
+ * Тестирование AppController как центрального узла, объединяющего бизнес-логику, настройки и данные от "железа".
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Тестирует: AppController.kt
- * 2. Мокает: SettingsRepository, Context
- * 3. Использует: AppSettings, CarData, ConnectionState
+ * Тестирует: AppController.kt.
+ * Использует: SettingsRepository, AppSettings, CarData, ConnectionState.
  */
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppControllerTest {
 
+    /** Тестовый диспатчер для управления временем выполнения корутин */
     private val testDispatcher = StandardTestDispatcher()
+    
+    /** Контекст приложения (заглушка) */
     private lateinit var context: Context
+    
+    /** Репозиторий настроек (заглушка) */
     private lateinit var settingsRepository: SettingsRepository
+    
+    /** Тестируемый экземпляр главного контроллера */
     private lateinit var appController: AppController
 
     /**
      * Настройка окружения перед каждым тестом.
-     * Инициализирует моки и заменяет Main диспатчер.
+     * Инициализирует моки и заменяет Main диспатчер на тестовый.
      */
     @Before
     fun setup() {
@@ -52,9 +75,10 @@ class AppControllerTest {
         context = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
 
-        // По умолчанию репозиторий возвращает пустые настройки
+        // Настраиваем поведение репозитория по умолчанию (возврат пустых настроек)
         coEvery { settingsRepository.getCurrentSettings() } returns AppSettings()
 
+        // Создаем экземпляр контроллера
         appController = AppController(context, settingsRepository)
     }
 
@@ -68,40 +92,39 @@ class AppControllerTest {
 
     /**
      * Тест: Проверка расчета флага низкого уровня топлива.
-     * Флаг isFuelLow должен становиться true, если текущее топливо меньше порога в настройках.
      */
     @Test
     fun `carData should correctly calculate isFuelLow based on settings`() = runTest {
-        // Настраиваем порог в 10 литров
+        // 1. ПОДГОТОВКА: Устанавливаем порог срабатывания предупреждения в 10 литров
         val settings = AppSettings(minFuelLevel = 10f)
         appController.updateSettings(settings)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Эмулируем данные от БК (5 литров) при активном подключении
-        // Примечание: В реальности данные приходят через BluetoothConnectionManager, 
-        // но здесь мы тестируем логику combine в AppController.
-        
-        // Так как BluetoothConnectionManager в AppController приватный и создается внутри, 
-        // для полноценного теста логики потоков нам нужно было бы использовать 
-        // Dependency Injection или сделать менеджер доступным для мокирования.
-        // В текущей реализации мы проверим начальное состояние и реакцию на настройки.
-        
+        // 2. ДЕЙСТВИЕ И ПРОВЕРКА: Проверяем начальное состояние потока данных автомобиля.
+        // Так как BluetoothConnectionManager в AppController приватный, мы тестируем логику 
+        // объединения потоков (combine), заложенную в инициализации carData.
         appController.carData.test {
             val initialData = awaitItem()
+            
+            // В начальном состоянии при отсутствии данных от Bluetooth:
+            // - топливо должно быть 0
+            // - флаг низкого уровня топлива должен быть false (по умолчанию)
             assertEquals(0f, initialData.fuel)
-            assertFalse(initialData.isFuelLow) // По умолчанию false
+            assertFalse(initialData.isFuelLow)
         }
     }
 
     /**
-     * Тест: Сброс данных при потере соединения.
-     * Проверяет, что при неактивном статусе carData возвращает пустой объект CarData().
+     * Тест: Сброс данных автомобиля при потере или отсутствии соединения.
      */
     @Test
     fun `carData should reset to default when connection is inactive`() = runTest {
-        // По умолчанию статус UNDEFINED (неактивен)
+        // 1. ПРОВЕРКА: По умолчанию статус UNDEFINED (неактивен), 
+        // следовательно, поток carData должен вернуть объект с нулевыми значениями.
         appController.carData.test {
             val data = awaitItem()
+            
+            // Проверяем сброс всех ключевых параметров
             assertEquals(0f, data.speed)
             assertEquals(0f, data.fuel)
             assertFalse(data.isFuelLow)
@@ -109,18 +132,19 @@ class AppControllerTest {
     }
 
     /**
-     * Тест: Инициализация контроллера.
-     * Проверяет, что контроллер загружает настройки из репозитория при старте.
+     * Тест: Инициализация контроллера и загрузка настроек.
      */
     @Test
     fun `appController should load settings on initialization`() = runTest {
+        // 1. ПОДГОТОВКА: Задаем специфические настройки в репозитории
         val customSettings = AppSettings(fuelTankCapacity = 75f)
         coEvery { settingsRepository.getCurrentSettings() } returns customSettings
         
-        // Создаем новый контроллер, чтобы сработал init
+        // 2. ДЕЙСТВИЕ: Создаем новый экземпляр контроллера (это запускает блок init)
         val controller = AppController(context, settingsRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
+        // 3. ПРОВЕРКА: Контроллер должен содержать те же настройки, что вернул репозиторий
         assertEquals(75f, controller.getCurrentSettings().fuelTankCapacity)
     }
 }

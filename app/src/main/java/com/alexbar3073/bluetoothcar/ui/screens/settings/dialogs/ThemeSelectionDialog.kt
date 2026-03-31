@@ -1,27 +1,12 @@
+// Файл: ui/screens/settings/dialogs/ThemeSelectionDialog.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +18,26 @@ import androidx.compose.ui.window.DialogProperties
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
 /**
- * Диалог для выбора темы оформления с поддержкой скроллинга
+ * ТЕГ: Диалог выбора темы / ThemeSelectionDialog
+ *
+ * ФАЙЛ: ui/screens/settings/dialogs/ThemeSelectionDialog.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/dialogs/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Диалог для выбора визуальной темы приложения (темная, светлая, синяя темная).
+ * Реализован в виде списка с радиокнопками и поддержкой прокрутки.
+ * "Системная" тема удалена для обеспечения предсказуемости интерфейса.
+ *
+ * ОТВЕТСТВЕННОСТЬ: Предоставление пользователю возможности смены темы оформления.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Compose Component
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Непрозрачный интерфейс с централизованным управлением оформлением через тему.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: AppColors (для DialogBackground и DialogBorder).
+ * - Вызывается из: SettingsScreen.kt.
  */
 @Composable
 fun ThemeSelectionDialog(
@@ -41,8 +45,11 @@ fun ThemeSelectionDialog(
     onDismiss: () -> Unit,
     onThemeSelected: (String) -> Unit
 ) {
+    /** 
+     * Список доступных тем и их отображаемых названий.
+     * Вариант "system" удален по требованию.
+     */
     val themes = listOf(
-        "system" to "Системная",
         "dark" to "Темная",
         "light" to "Светлая",
         "blue_dark" to "Синяя темная"
@@ -57,12 +64,13 @@ fun ThemeSelectionDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.9f) // 90% ширины экрана
-                .wrapContentHeight() // Автоматическая высота
+                .fillMaxWidth(0.9f)
+                .wrapContentHeight()
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, AppColors.DialogBorder),
             colors = CardDefaults.cardColors(
-                containerColor = AppColors.SurfaceLight,
+                containerColor = AppColors.DialogBackground,
                 contentColor = AppColors.TextPrimary
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -72,7 +80,7 @@ fun ThemeSelectionDialog(
                     .fillMaxWidth()
                     .padding(24.dp)
             ) {
-                // Заголовок
+                // Заголовок диалога
                 Text(
                     text = "Выбор темы оформления",
                     style = MaterialTheme.typography.titleLarge,
@@ -84,7 +92,7 @@ fun ThemeSelectionDialog(
                 // Список тем с ограниченной высотой и прокруткой
                 Column(
                     modifier = Modifier
-                        .heightIn(max = 300.dp) // Максимальная высота списка
+                        .heightIn(max = 300.dp)
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 4.dp)
                 ) {
@@ -103,12 +111,12 @@ fun ThemeSelectionDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
-
                 // Кнопка закрытия
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.SurfaceMedium,
                         contentColor = AppColors.TextPrimary
@@ -122,9 +130,6 @@ fun ThemeSelectionDialog(
     }
 }
 
-/**
- * Компонент для отображения одного варианта темы
- */
 @Composable
 private fun ThemeOptionItem(
     themeId: String,
@@ -169,14 +174,6 @@ private fun ThemeOptionItem(
                     color = AppColors.TextPrimary,
                     fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
                 )
-                if (isSelected) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        "Текущая тема",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.PrimaryBlue
-                    )
-                }
             }
         }
     }

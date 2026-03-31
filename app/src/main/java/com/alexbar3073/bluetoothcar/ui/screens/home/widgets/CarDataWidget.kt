@@ -35,6 +35,7 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
  * Виджет для отображения данных от бортового компьютера.
  * Показывает основные параметры автомобиля.
  */
+@Deprecated("Используйте DashboardType4 для отображения данных автомобиля")
 @Composable
 fun CarDataWidget(
     carData: CarData,

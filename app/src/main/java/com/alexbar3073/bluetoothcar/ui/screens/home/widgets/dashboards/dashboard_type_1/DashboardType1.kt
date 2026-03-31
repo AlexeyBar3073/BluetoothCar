@@ -21,6 +21,7 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
  * 1. Приборы (Спидометр и Топливо) - 85% высоты
  * 2. Данные о поездке (Trip) - 15% высоты
  */
+@Deprecated("Используйте DashboardType4 для актуальной визуализации")
 @Composable
 fun DashboardType1(
     modifier: Modifier = Modifier,

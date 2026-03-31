@@ -1,7 +1,6 @@
 // Файл: ui/screens/settings/SettingsScreen.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -27,7 +26,6 @@ import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ThemeSelectionDialog
-import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ColorPickerDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
@@ -157,7 +155,6 @@ fun SettingsScreenContent(
                                 "Производительность форсунки" -> appSettings.copy(injectorPerformance = newValue)
                                 "Количество форсунок" -> appSettings.copy(injectorCount = newValue.toInt())
                                 "Сигналы датчика скорости" -> appSettings.copy(speedSensorSignalsPerMeter = newValue.toInt())
-                                "Интервал обновления" -> appSettings.copy(updateInterval = newValue.toInt())
                                 else -> appSettings
                             }
                             onUpdateSettings(updatedSettings)
@@ -166,9 +163,6 @@ fun SettingsScreenContent(
                     },
                     onThemeDialogShow = { showThemeDialog = true },
                     onDeviceClear = onClearSelectedDevice,
-                    onTestButtonClick = {
-                        onUpdateSettings(appSettings.copy(showSpeedometer = !appSettings.showSpeedometer))
-                    },
                     onUpdateSetting = onUpdateSettings
                 )
             }

@@ -7,7 +7,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -26,7 +25,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Основное содержимое экрана настроек. Объединяет все секции настроек:
  * 1. Основные настройки (SettingsSection)
- * 2. Настройки виджетов (WidgetsSection)
+ * 2. Настройки виджетов и оформления (WidgetsSection)
  * 3. Информация о приложении (InfoSection)
  *
  * КЛЮЧЕВОЙ ПРИНЦИП:
@@ -48,7 +47,6 @@ fun SettingsContent(
     onEditDialogShow: (EditDialogData) -> Unit,
     onThemeDialogShow: () -> Unit,
     onDeviceClear: () -> Unit,
-    onTestButtonClick: () -> Unit,
     onUpdateSetting: (AppSettings) -> Unit
 ) {
     Column(
@@ -57,34 +55,31 @@ fun SettingsContent(
             .verticalScroll(rememberScrollState())
             .padding(vertical = 20.dp)
     ) {
-        // 1. Секция основных настроек
+        // 1. Секция основных настроек (устройство, топливо, форсунки, скорость)
         SettingsSection(
             appSettings = appSettings,
             selectedDevice = selectedDevice,
             navController = navController,
             onEditDialogShow = onEditDialogShow,
-            onThemeDialogShow = onThemeDialogShow,
             onDeviceClear = onDeviceClear,
             onDeviceSelect = {
-                // ИСПРАВЛЕНО: Переход на экран выбора устройств должен работать всегда при клике на строку
                 navController.navigate("devices")
             }
         )
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 2. Секция настроек виджетов
+        // 2. Секция настроек оформления (тема и цвета)
         WidgetsSection(
             appSettings = appSettings,
+            onThemeDialogShow = onThemeDialogShow,
             onUpdateSetting = onUpdateSetting
         )
 
         Spacer(modifier = Modifier.height(20.dp))
 
         // 3. Секция информации о приложении
-        InfoSection(
-            onTestClick = onTestButtonClick
-        )
+        InfoSection()
 
         Spacer(modifier = Modifier.height(40.dp))
 

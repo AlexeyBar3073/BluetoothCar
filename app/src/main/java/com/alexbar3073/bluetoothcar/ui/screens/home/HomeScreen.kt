@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
@@ -102,7 +104,7 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenContent(
-    selectedDevice: BluetoothDeviceData?,
+    selectedDevice: BluetoothDeviceData,
     carData: CarData,
     connectionStatusInfo: ConnectionStatusInfo,
     appSettings: AppSettings,
@@ -118,57 +120,75 @@ fun HomeScreenContent(
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                        Box(
+                            modifier = Modifier.fillMaxHeight(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // Иконка авто, активна при наличии выбранного устройства
-                            Icon(
-                                imageVector = Icons.Filled.DirectionsCar,
-                                contentDescription = "Бортовой компьютер",
-                                tint = if (selectedDevice != null) AppColors.PrimaryBlue else AppColors.TextTertiary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "БОРТОВОЙ КОМПЬЮТЕР",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = AppColors.TextPrimary
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                // Иконка авто, активна при наличии выбранного устройства
+                                Icon(
+                                    imageVector = Icons.Filled.DirectionsCar,
+                                    contentDescription = "Бортовой компьютер",
+                                    tint = if (selectedDevice.isValidDevice()) AppColors.PrimaryBlue else AppColors.TextTertiary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "БОРТОВОЙ КОМПЬЮТЕР",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontSize = 12.sp,
+                                        letterSpacing = 0.5.sp
+                                    ),
+                                    color = AppColors.TextPrimary
+                                )
+                            }
                         }
                     },
                     navigationIcon = {
-                        // Кнопка статуса. Разрешаем клик всегда для инициирования процесса проверки в BCM.
-                        StatusCircleButton(
-                            connectionStatusInfo = connectionStatusInfo,
-                            onClick = {
-                                // Блокировка снята: вызываем переподключение в любом состоянии,
-                                // чтобы BCM мог проанализировать ситуацию и выдать уведомление (Toast) через CFC.
-                                onRetryConnection()
-                            }
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxHeight().padding(start = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Кнопка статуса. Разрешаем клик всегда для инициирования процесса проверки в BCM.
+                            StatusCircleButton(
+                                connectionStatusInfo = connectionStatusInfo,
+                                onClick = {
+                                    // Блокировка снята: вызываем переподключение в любом состоянии,
+                                    // чтобы BCM мог проанализировать ситуацию и выдать уведомление (Toast) через CFC.
+                                    onRetryConnection()
+                                }
+                            )
+                        }
                     },
                     actions = {
-                        // Кнопка перехода в раздел настроек
-                        IconButton(
-                            onClick = navigateToSettings,
-                            modifier = Modifier.size(36.dp)
+                        Box(
+                            modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .background(
-                                        AppColors.SurfaceMedium,
-                                        shape = CircleShape
-                                    )
+                            // Кнопка перехода в раздел настроек
+                            IconButton(
+                                onClick = navigateToSettings,
+                                modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Настройки",
-                                    tint = AppColors.TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .background(
+                                            AppColors.SurfaceMedium,
+                                            shape = CircleShape
+                                        )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Настройки",
+                                        tint = AppColors.TextSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                         }
                     },

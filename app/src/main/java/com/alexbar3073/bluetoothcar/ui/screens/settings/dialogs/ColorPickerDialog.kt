@@ -1,6 +1,7 @@
-// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/settings/dialogs/ColorPickerDialog.kt
+// Файл: ui/screens/settings/dialogs/ColorPickerDialog.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
@@ -34,24 +36,28 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 
 /**
- * ТЕГ: Диалог выбора цвета
- * 
- * НАЗНАЧЕНИЕ ФАЙЛА:
+ * ТЕГ: Диалог выбора цвета / ColorPickerDialog
+ *
+ * ФАЙЛ: ui/screens/settings/dialogs/ColorPickerDialog.kt
+ *
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/dialogs/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Реализация профессионального диалога выбора цвета (HSV Picker) для настройки 
  * основного цвета оформления приборов. Включает в себя панель насыщенности/яркости, 
  * слайдер оттенка и живой предпросмотр на базе комбинированного прибора.
- * 
- * СВЯЗЬ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Вызывается из: WidgetsSection.kt (при нажатии на пункт выбора цвета).
- * 2. Использует: DashboardType4CombinedGauge.kt для отображения результата в реальном времени.
- * 3. Взаимодействует: AppSettings для получения цветов по умолчанию и текущего.
- */
-
-/**
- * Основная функция-обертка для вызова диалога.
- * @param appSettings Объект настроек приложения.
- * @param onDismiss Закрытие без сохранения.
- * @param onColorSelected Применение выбранного цвета.
+ *
+ * ОТВЕТСТВЕННОСТЬ: Предоставление интерфейса для точного подбора цвета интерфейса.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Compose Component
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Непрозрачный интерфейс с централизованным управлением оформлением через тему.
+ * Адаптивная верстка для малых экранов.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: DashboardType4CombinedGauge.kt (для превью).
+ * - Использует: AppColors (для DialogBackground и DialogBorder).
+ * - Вызывается из: WidgetsSection.kt, HomeScreen.kt.
  */
 @Composable
 fun ColorPickerDialog(
@@ -73,7 +79,10 @@ fun ColorPickerDialog(
 
 /**
  * Основное содержимое диалога выбора цвета.
- * Содержит область предпросмотра и инструменты управления HSV.
+ * Модифицировано для лучшей адаптивности на маленьких экранах:
+ * 1. Окно предпросмотра и панель выбора цвета выровнены по высоте.
+ * 2. Прибор в превью динамически масштабируется под всю доступную область Box.
+ * 3. Кнопки управления имеют естественный размер и выровнены по правому краю.
  */
 @Composable
 fun ColorPickerContent(
@@ -84,14 +93,14 @@ fun ColorPickerContent(
     val initialColor = Color(appSettings.currentDashboardColor)
     val defaultColor = Color(appSettings.defaultDashboardColor)
 
-    // Состояние HSV для текущего подбора
+    /** Состояние HSV для текущего подбора */
     val hsv = remember {
         val hsvArray = FloatArray(3)
         android.graphics.Color.colorToHSV(initialColor.toArgb(), hsvArray)
         mutableStateListOf(hsvArray[0], hsvArray[1], hsvArray[2])
     }
 
-    // Результирующий цвет подбора
+    /** Результирующий цвет подбора */
     val selectedColor = remember(hsv[0], hsv[1], hsv[2]) {
         Color(android.graphics.Color.HSVToColor(floatArrayOf(hsv[0], hsv[1], hsv[2])))
     }
@@ -102,116 +111,151 @@ fun ColorPickerContent(
             .fillMaxHeight(0.85f)
             .padding(8.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A24))
+        border = BorderStroke(1.dp, AppColors.DialogBorder),
+        colors = CardDefaults.cardColors(
+            containerColor = AppColors.DialogBackground,
+            contentColor = AppColors.TextPrimary
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .padding(20.dp)
-                .fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
+                .fillMaxSize()
         ) {
-            // --- ЛЕВАЯ ЧАСТЬ: Предпросмотр ---
-            Box(
+            // ВЕРХНЯЯ ЧАСТЬ: Предпросмотр и выбор цвета (выровнены по высоте)
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .border(1.dp, AppColors.WhiteAlpha10, RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                val density = LocalDensity.current
-                val geometry = remember(selectedColor) {
-                    DashboardType4Geometry.fromSize(
-                        size = Size(240f * density.density, 240f * density.density),
-                        density = density,
-                        ringColor = selectedColor
+                // --- ЛЕВАЯ ЧАСТЬ: Предпросмотр ---
+                // Используем BoxWithConstraints для получения размеров области в реальном времени
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .border(1.dp, AppColors.WhiteAlpha10, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val density = LocalDensity.current
+                    
+                    /**
+                     * Расчет максимального размера квадрата, который впишется в доступную область.
+                     * Берем минимальную из сторон (ширина или высота).
+                     */
+                    val gaugeSizeDp = min(maxWidth, maxHeight) * 0.9f // Оставляем небольшой отступ 10%
+                    val gaugeSizePx = with(density) { gaugeSizeDp.toPx() }
+                    
+                    /**
+                     * Геометрия прибора пересчитывается строго под размер холста.
+                     * Это устраняет смещения "вправо и вниз", так как центр Offset теперь совпадает с центром Box.
+                     */
+                    val geometry = remember(selectedColor, gaugeSizePx) {
+                        DashboardType4Geometry.fromSize(
+                            size = Size(gaugeSizePx, gaugeSizePx),
+                            density = density,
+                            ringColor = selectedColor
+                        )
+                    }
+
+                    DashboardType4CombinedGauge(
+                        modifier = Modifier.size(gaugeSizeDp),
+                        carData = CarData(fuel = 45f, coolantTemp = 90f, transmissionTemp = 85f),
+                        appSettings = appSettings,
+                        geometry = geometry
                     )
                 }
 
-                DashboardType4CombinedGauge(
-                    modifier = Modifier.size(220.dp),
-                    carData = CarData(fuel = 45f, coolantTemp = 90f, transmissionTemp = 85f),
-                    appSettings = appSettings,
-                    geometry = geometry
-                )
-            }
-
-            // --- ПРАВАЯ ЧАСТЬ: Управление цветом ---
-            Column(
-                modifier = Modifier
-                    .weight(1.2f)
-                    .fillMaxHeight()
-            ) {
+                // --- ПРАВАЯ ЧАСТЬ: Управление цветом (Saturation + Hue) ---
                 Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
+                        .weight(1.2f)
+                        .fillMaxHeight(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     SaturationValuePanel(
                         hue = hsv[0],
                         saturation = hsv[1],
                         value = hsv[2],
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                         onChanged = { s, v -> hsv[1] = s; hsv[2] = v }
                     )
 
                     VerticalHueBar(
                         hue = hsv[0],
-                        modifier = Modifier.width(32.dp).fillMaxHeight(),
+                        modifier = Modifier
+                            .width(32.dp)
+                            .fillMaxHeight(),
                         onHueChanged = { hsv[0] = it }
                     )
                 }
+            }
 
-                // --- НИЖНЯЯ ПАНЕЛЬ КНОПОК ---
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+            // --- НИЖНЯЯ ПАНЕЛЬ КНОПОК ---
+            // Кнопки имеют размер по контенту и выровнены по правому краю
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.height(40.dp)
                 ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text("ОТМЕНА", color = AppColors.TextSecondary)
-                    }
+                    Text(
+                        "ОТМЕНА",
+                        color = AppColors.TextSecondary,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-                    // СБРОС: устанавливает значения HSV из дефолтного цвета настроек
-                    Button(
-                        onClick = {
-                            val hsvArray = FloatArray(3)
-                            android.graphics.Color.colorToHSV(defaultColor.toArgb(), hsvArray)
-                            hsv[0] = hsvArray[0]
-                            hsv[1] = hsvArray[1]
-                            hsv[2] = hsvArray[2]
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = defaultColor),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(40.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp)
-                    ) {
-                        Text("СБРОС", color = Color.White)
-                    }
+                Button(
+                    onClick = {
+                        val hsvArray = FloatArray(3)
+                        android.graphics.Color.colorToHSV(defaultColor.toArgb(), hsvArray)
+                        hsv[0] = hsvArray[0]
+                        hsv[1] = hsvArray[1]
+                        hsv[2] = hsvArray[2]
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = defaultColor),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(40.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Text(
+                        "СБРОС",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
-                        onClick = {
-                            onColorSelected(selectedColor)
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.PrimaryBlue),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(40.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp)
-                    ) {
-                        Text("ПРИМЕНИТЬ", color = Color.White)
-                    }
+                Button(
+                    onClick = {
+                        onColorSelected(selectedColor)
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.PrimaryBlue),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(40.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Text(
+                        "ПРИМЕНИТЬ",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
             }
         }
@@ -307,7 +351,7 @@ fun VerticalHueBar(
 }
 
 /**
- * Превью диалога выбора цвета в ландшафтной ориентации.
+ * Превью диалога выбора цвета.
  */
 @Preview(showBackground = true, widthDp = 800, heightDp = 480, backgroundColor = 0xFF0A0A0F)
 @Composable

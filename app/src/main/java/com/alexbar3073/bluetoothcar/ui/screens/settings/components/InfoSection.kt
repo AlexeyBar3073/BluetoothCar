@@ -1,3 +1,4 @@
+// Файл: ui/screens/settings/components/InfoSection.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 
 import androidx.compose.foundation.background
@@ -13,8 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -34,13 +33,9 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  * - Название приложения
  * - Версию
  * - Дополнительную информацию
- *
- * @param onTestClick Callback для тестовой кнопки
  */
 @Composable
-fun InfoSection(
-    onTestClick: () -> Unit
-) {
+fun InfoSection() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -79,32 +74,26 @@ fun InfoSection(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        "BluetoothCar Control",
+                        "BluetoothCar Monitor",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = AppColors.TextPrimary
                     )
                     Text(
-                        "Версия 1.0.0",
+                        "Версия 1.3.0",
                         style = MaterialTheme.typography.bodySmall,
                         color = AppColors.TextTertiary
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Тестовая кнопка
-            Button(
-                onClick = onTestClick,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AppColors.PrimaryBlue,
-                    contentColor = androidx.compose.ui.graphics.Color.White
-                )
-            ) {
-                Text("Тест переключателя (инвертировать спидометр)")
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                "Программа предназначения для визуализации данных с бортового компьютера по Bluetooth каналу.",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
         }
     }
 }

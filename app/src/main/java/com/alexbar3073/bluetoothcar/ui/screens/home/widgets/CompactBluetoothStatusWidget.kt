@@ -39,6 +39,7 @@ import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
  * @param connectionStatusInfo Полная структура данных о статусе подключения (гарантированно не null)
  * @param onClick Функция, вызываемая при клике на виджет (опционально)
  */
+@Deprecated("Используйте StatusCircleButton в TopBar")
 @Composable
 fun CompactBluetoothStatusWidget(
     modifier: Modifier = Modifier,

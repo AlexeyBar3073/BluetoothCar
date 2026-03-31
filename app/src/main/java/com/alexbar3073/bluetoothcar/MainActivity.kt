@@ -4,7 +4,6 @@ package com.alexbar3073.bluetoothcar
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -21,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,95 +31,108 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.alexbar3073.bluetoothcar.core.CoreModule
+import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.navigation.SetupNavigation
 import com.alexbar3073.bluetoothcar.ui.screens.PermissionsScreen
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModelFactory
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 
 /**
+ * ТЕГ: Главная активность / MainActivity
+ *
  * ФАЙЛ: MainActivity.kt
- * МЕСТОНАХОЖДЕНИЕ: корневая папка проекта
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Главная активность приложения BluetoothCar. Точка входа в приложение.
+ * МЕСТОНАХОЖДЕНИЕ: /
  *
- * ИЗМЕНЕНИЯ ДЛЯ КОРРЕКТНОЙ ИНИЦИАЛИЗАЦИИ:
- * 1. УДАЛЕНЫ жесткие задержки (delay)
- * 2. Добавлено ожидание инициализации AppController через StateFlow
- * 3. Правильная последовательность: CoreModule → AppController → SharedViewModel
- * 4. Улучшена обработка ошибок инициализации
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Главная точка входа в приложение BluetoothCar. Отвечает за инициализацию ядра (CoreModule),
+ * управление жизненным циклом приложения, запрос критических разрешений и выбор темы оформления.
+ * Использует Jetpack Compose для отрисовки всего UI.
  *
- * ПРАВИЛЬНАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ:
- * 1. Инициализация CoreModule (создает AppController)
- * 2. Ожидание, пока AppController.isInitialized станет true
- * 3. Запрос разрешений (если нужно)
- * 4. Создание SharedViewModel (только когда AppController готов)
- * 5. Запуск основного приложения
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Инициализация CoreModule и ожидание готовности AppController.
+ * 2. Обработка разрешений Bluetooth и уведомлений.
+ * 3. Реактивное управление темой приложения на основе настроек пользователя.
+ * 4. Контейнер для графа навигации.
  *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
- * 1. Инициализирует: CoreModule.kt → AppController.kt
- * 2. Ожидает: AppController.isInitialized StateFlow
- * 3. Создает: SharedViewModel через SharedViewModelFactory
- * 4. Отображает: UI через SetupNavigation
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Single Activity Architecture (MVVM)
  *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * ... [существующая история] ...
- * - 2026.02.03 12:15 UTC: ИСПРАВЛЕНИЕ ИНИЦИАЛИЗАЦИИ СОГЛАСНО MVVM
- *   1. Удалены все жесткие задержки (delay)
- *   2. Добавлено ожидание AppController.isInitialized StateFlow
- *   3. SharedViewModel создается ТОЛЬКО после готовности AppController
- *   4. Улучшена обработка ошибок инициализации
- *   5. Добавлены статусы инициализации для лучшего UX
- * - 2026.02.06 14:55: ИСПРАВЛЕНИЕ СОЗДАНИЯ ФАБРИКИ
- *   1. Убрано remember {} при создании SharedViewModelFactory
- *   2. Фабрика создается напрямую для правильной работы при повороте экрана
- *   3. Удален дублирующий метод logWarning()
- *   4. Соответствует жизненному циклу из дополнения к ТЗ
- * - 2026.02.06 15:30: ИСПРАВЛЕНИЕ ОЧИСТКИ ПРИ ПОВОРОТЕ ЭКРАНА
- *   1. Добавлена проверка isFinishing() перед очисткой CoreModule
- *   2. CoreModule очищается только при реальном завершении приложения
- *   3. При повороте экрана CoreModule сохраняется, данные не теряются
+ * КЛЮЧЕВОЙ ПРИНЦИП: Поэтапная инициализация (Core -> Permissions -> UI) для предотвращения ошибок доступа к ресурсам.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: CoreModule.kt (инициализация), SharedViewModel.kt (бизнес-логика), SetupNavigation.kt (навигация).
+ * - Вызывается из: Android OS при запуске.
+ * - Взаимодействует: BluetoothCarTheme.kt (применение тем).
  */
+
 class MainActivity : ComponentActivity() {
 
     companion object {
+        /** Тег для логирования событий активности */
         private const val TAG = "MainActivity"
 
+        /**
+         * Вспомогательный метод для логирования обычных событий.
+         * @param message Текст сообщения.
+         */
         private fun log(message: String) {
             val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
             println("$timestamp [$TAG] $message")
         }
 
+        /**
+         * Вспомогательный метод для логирования ошибок.
+         * @param message Текст ошибки.
+         */
         private fun logError(message: String) {
             val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
             System.err.println("$timestamp [$TAG] ERROR: $message")
         }
     }
 
+    /**
+     * Точка входа в жизненный цикл Activity.
+     * Здесь настраивается Compose контент и запускается процесс инициализации.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         log("=== ЗАПУСК ПРИЛОЖЕНИЯ ===")
 
         setContent {
-            BluetoothCarTheme {
+            // Состояния для управления этапами загрузки (вынесено выше для ключей remember)
+            var coreModuleState by remember { mutableStateOf<CoreModuleState>(CoreModuleState.NOT_STARTED) }
+            var appControllerState by remember { mutableStateOf<AppControllerState>(AppControllerState.WAITING) }
+
+            // 1. Получаем ссылку на AppController.
+            // Ключ appControllerState заставляет remember пересчитаться после завершения инициализации.
+            val appController = remember(appControllerState) { 
+                if (CoreModule.isInitialized()) CoreModule.getAppController() else null 
+            }
+            
+            // 2. Подписываемся на поток настроек. 
+            // Благодаря реактивности, тема обновится сразу после того, как appController станет доступен.
+            val settings by if (appController != null) {
+                appController.appSettings.collectAsStateWithLifecycle()
+            } else {
+                remember { mutableStateOf(AppSettings()) }
+            }
+
+            // 3. Оборачиваем всё приложение в тему, передавая выбранный пользователем режим
+            BluetoothCarTheme(themeMode = settings.selectedTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val context = LocalContext.current
-
-                    // Состояния инициализации
-                    var coreModuleState by remember { mutableStateOf<CoreModuleState>(CoreModuleState.NOT_STARTED) }
-                    var appControllerState by remember { mutableStateOf<AppControllerState>(AppControllerState.WAITING) }
                     var hasPermissions by remember { mutableStateOf(checkAllBluetoothPermissions(context)) }
 
-                    // Лаунчер для разрешений
+                    // Лаунчер для запроса группы разрешений
                     val permissionLauncher = rememberLauncherForActivityResult(
                         ActivityResultContracts.RequestMultiplePermissions()
                     ) { permissions ->
@@ -131,7 +144,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Эффект для инициализации CoreModule
+                    // ШАГ 1: Инициализация CoreModule при старте
                     LaunchedEffect(Unit) {
                         if (coreModuleState == CoreModuleState.NOT_STARTED) {
                             initializeCoreModule(context)
@@ -139,7 +152,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Эффект для ожидания инициализации AppController
+                    // ШАГ 2: Ожидание готовности бизнес-логики (AppController)
                     LaunchedEffect(coreModuleState) {
                         if (coreModuleState == CoreModuleState.INITIALIZED &&
                             appControllerState == AppControllerState.WAITING) {
@@ -148,20 +161,20 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Отображение соответствующего экрана
+                    // Отрисовка UI в зависимости от текущего состояния инициализации
                     when {
-                        // 1. Инициализация CoreModule
+                        // Состояние: Загрузка ядра
                         coreModuleState == CoreModuleState.NOT_STARTED -> {
                             LoadingScreen(message = "Инициализация ядра приложения...")
                         }
 
-                        // 2. Инициализация AppController
+                        // Состояние: Загрузка логики
                         coreModuleState == CoreModuleState.INITIALIZED &&
                                 appControllerState == AppControllerState.WAITING -> {
                             LoadingScreen(message = "Инициализация бизнес-логики...")
                         }
 
-                        // 3. Ошибка инициализации
+                        // Состояние: Критическая ошибка
                         appControllerState == AppControllerState.ERROR -> {
                             ErrorScreen(
                                 message = "Ошибка инициализации приложения",
@@ -172,7 +185,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 4. Проверка разрешений
+                        // Состояние: Ожидание разрешений
                         appControllerState == AppControllerState.READY && !hasPermissions -> {
                             PermissionsScreen(
                                 onRequestPermissions = {
@@ -185,7 +198,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 5. Основное приложение
+                        // Состояние: Готово к работе
                         appControllerState == AppControllerState.READY && hasPermissions -> {
                             MainApplicationScreen(context = context)
                         }
@@ -196,11 +209,13 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Инициализация CoreModule.
+     * Выполняет первичную инициализацию CoreModule.
+     * @param context Контекст приложения.
      */
     private suspend fun initializeCoreModule(context: android.content.Context) {
         log("Инициализация CoreModule...")
         try {
+            // Вызов статического метода инициализации синглтона
             CoreModule.initialize(context)
             log("CoreModule успешно инициализирован")
         } catch (e: Exception) {
@@ -210,31 +225,33 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Ожидание инициализации AppController через его StateFlow.
+     * Ожидает, пока AppController внутри CoreModule закончит свои внутренние процессы.
+     * Использует механизм опроса состояния Flow.
      */
     private suspend fun waitForAppControllerInitialization() {
         log("Ожидание инициализации AppController...")
         try {
-            // Получаем AppController
+            // Пытаемся получить экземпляр контроллера
             val appController = CoreModule.getAppController()
             if (appController == null) {
                 throw IllegalStateException("AppController не создан CoreModule")
             }
 
-            // Ждем, пока isInitialized станет true
-            // Используем timeout 10 секунд
+            // Реализуем таймаут ожидания в 10 секунд
             val startTime = System.currentTimeMillis()
-            val timeout = 10000L // 10 секунд
+            val timeout = 10000L 
 
             while (System.currentTimeMillis() - startTime < timeout) {
+                // Проверяем флаг инициализации из контроллера
                 if (appController.isInitialized.value) {
                     log("AppController инициализирован успешно")
                     return
                 }
-                delay(100) // Проверяем каждые 100 мс
+                // Небольшая задержка перед следующей проверкой для экономии ресурсов
+                delay(100)
             }
 
-            // Timeout
+            // Если за 10 секунд не инициализировались — выбрасываем исключение
             throw IllegalStateException("Таймаут ожидания инициализации AppController")
 
         } catch (e: Exception) {
@@ -244,7 +261,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Экран загрузки.
+     * Компонент экрана загрузки со спиннером.
+     * @param message Текст, поясняющий этап загрузки.
      */
     @Composable
     private fun LoadingScreen(message: String) {
@@ -252,6 +270,7 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
+            @Suppress("DEPRECATION")
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -267,7 +286,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Экран ошибки.
+     * Компонент экрана ошибки с кнопкой повтора.
+     * @param message Описание возникшей ошибки.
+     * @param onRetry Действие при нажатии кнопки "Повторить".
      */
     @Composable
     private fun ErrorScreen(message: String, onRetry: () -> Unit) {
@@ -298,34 +319,38 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Основной экран приложения.
+     * Основная точка входа в UI после успешной инициализации и получения разрешений.
+     * Создает SharedViewModel и запускает навигацию.
+     * @param context Контекст для создания фабрики ViewModel.
      */
     @Composable
     private fun MainApplicationScreen(context: android.content.Context) {
         log("Запуск основного приложения")
 
-        // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Создаем фабрику без remember {}
-        // При повороте экрана будет создана новая фабрика, но AppController останется тем же
+        // 1. Создаем фабрику для SharedViewModel (без remember, согласно ТЗ по жизненному циклу)
         val viewModelFactory = SharedViewModelFactory(context)
 
-        // Создаем SharedViewModel через фабрику
-        // Теперь AppController гарантированно инициализирован
+        // 2. Инициализируем ViewModel через стандартный провайдер
         val sharedViewModel: SharedViewModel = viewModel(
             factory = viewModelFactory
         )
 
-        // Передаем SharedViewModel в навигацию
+        // 3. Запускаем навигационный граф
         SetupNavigation(
             sharedViewModel = sharedViewModel,
             context = context
         )
     }
 
+    /**
+     * Обработка завершения работы Activity.
+     * Выполняет очистку ресурсов, если приложение действительно закрывается.
+     */
     override fun onDestroy() {
         super.onDestroy()
         log("Завершение работы приложения")
 
-        // Очищаем CoreModule ТОЛЬКО при реальном завершении приложения
+        // Очищаем ресурсы CoreModule только если это не поворот экрана
         if (isFinishing()) {
             try {
                 CoreModule.cleanup()
@@ -339,7 +364,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Состояние инициализации CoreModule.
+     * Перечисление состояний инициализации CoreModule.
      */
     private sealed class CoreModuleState {
         object NOT_STARTED : CoreModuleState()
@@ -348,7 +373,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Состояние инициализации AppController.
+     * Перечисление состояний готовности AppController.
      */
     private sealed class AppControllerState {
         object WAITING : AppControllerState()
@@ -357,11 +382,13 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Определяет ВСЕ необходимые разрешения Bluetooth.
+     * Формирует список всех разрешений, необходимых приложению в зависимости от версии Android.
+     * @return Массив строк с названиями разрешений.
      */
     private fun getAllRequiredPermissions(): Array<String> {
         val permissions = mutableListOf<String>()
         
+        // Для Android 12 (API 31) и выше нужны специфичные Bluetooth разрешения
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_SCAN)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -369,13 +396,14 @@ class MainActivity : ComponentActivity() {
             permissions.add(Manifest.permission.BLUETOOTH)
             permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
         } else {
+            // Для старых версий достаточно классических разрешений
             permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
             permissions.add(Manifest.permission.BLUETOOTH)
             permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
             permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
 
-        // РАЗРЕШЕНИЕ НА УВЕДОМЛЕНИЯ: Необходимо для работы Foreground Service на Android 13+
+        // Разрешение на уведомления для Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -384,7 +412,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Проверяет, получены ли ВСЕ необходимые разрешения Bluetooth.
+     * Выполняет проверку статуса всех необходимых разрешений.
+     * @param context Контекст для проверки.
+     * @return true, если все разрешения даны пользователем.
      */
     private fun checkAllBluetoothPermissions(context: android.content.Context): Boolean {
         val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -403,7 +433,6 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
-            // Добавлена проверка уведомлений для Android 13+
             val hasNotifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 ContextCompat.checkSelfPermission(
                     context,
