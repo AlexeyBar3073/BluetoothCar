@@ -2,19 +2,7 @@
 package com.alexbar3073.bluetoothcar.ui.screens.devices
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -31,24 +19,12 @@ import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.Divider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -56,19 +32,31 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.DeviceType
+import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
-import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
+ * ТЕГ: Устройства/Bluetooth/Screen
+ * 
  * ФАЙЛ: ui/screens/devices/DevicesScreen.kt
+ * 
  * МЕСТОНАХОЖДЕНИЕ: ui/screens/devices/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Экран выбора Bluetooth устройств. Позволяет пользователю выбрать
- * Bluetooth устройство для подключения.
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ: Экран управления Bluetooth-подключениями. 
+ * Позволяет выбирать устройства из списка сопряженных в системе.
+ * 
+ * ОТВЕТСТВЕННОСТЬ: Отображение списка сопряженных устройств, выбор активного устройства,
+ * индикация статуса Bluetooth.
+ * 
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM (использует SharedViewModel).
+ * 
+ * КЛЮЧЕВОЙ ПРИНЦИП: Реактивное обновление состояния списка устройств через StateFlow.
+ * 
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Вызывается из навигации (NavHost), использует SharedViewModel 
+ * для бизнес-логики и AppColors для оформления. Использует CompactTopBar для заголовка.
  */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,77 +65,30 @@ fun DevicesScreen(
     navController: NavController,
     sharedViewModel: SharedViewModel
 ) {
-    // Состояния из SharedViewModel
+    // Подписка на состояния из ViewModel с учетом жизненного цикла
     val isInitialized by sharedViewModel.isInitialized.collectAsStateWithLifecycle()
     val selectedDevice by sharedViewModel.selectedDevice.collectAsStateWithLifecycle()
-    
-    // Подписка на статус подключения обеспечивает реактивность при системных изменениях (например, выключении Bluetooth)
-    val connectionStatus by sharedViewModel.connectionStatusInfo.collectAsStateWithLifecycle()
+    val appSettings by sharedViewModel.appSettings.collectAsStateWithLifecycle()
 
-    // Динамически получаем состояние Bluetooth и список устройств.
-    // Зависимость от connectionStatus гарантирует рекомпозицию и обновление данных при изменении состояния связи.
-    val isBluetoothEnabled = connectionStatus.run {
-        if (isInitialized) sharedViewModel.isBluetoothEnabled() else false
-    }
-    val pairedDevices = connectionStatus.run {
-        if (isInitialized) sharedViewModel.getPairedDevices() else emptyList()
-    }
+    // Проверка состояния Bluetooth и получение списка сопряженных устройств
+    val isBluetoothEnabled = if (isInitialized) sharedViewModel.isBluetoothEnabled() else false
+    val pairedDevices = if (isInitialized) sharedViewModel.getPairedDevices() ?: emptyList() else emptyList()
 
-    BluetoothCarTheme {
+    // Применение темы оформления приложения
+    BluetoothCarTheme(themeMode = appSettings.selectedTheme) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isBluetoothEnabled) {
-                                    Icons.Default.Bluetooth
-                                } else {
-                                    Icons.Default.BluetoothDisabled
-                                },
-                                contentDescription = "Bluetooth",
-                                tint = if (isBluetoothEnabled) {
-                                    AppColors.PrimaryBlue
-                                } else {
-                                    AppColors.Error
-                                },
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "УСТРОЙСТВА BLUETOOTH",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = AppColors.TextPrimary
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Назад"
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = AppColors.SurfaceDark,
-                        titleContentColor = AppColors.TextPrimary,
-                        navigationIconContentColor = AppColors.TextSecondary
-                    ),
-                    modifier = Modifier
-                        .height(COMPACT_TOP_BAR_HEIGHT)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = AppColors.SurfaceGradient
-                            )
-                        ),
-                    windowInsets = WindowInsets(0.dp)
+                // Использование унифицированного компактного Топбара (40 DP)
+                CompactTopBar(
+                    title = "УСТРОЙСТВА BLUETOOTH",
+                    titleIcon = if (isBluetoothEnabled) Icons.Default.Bluetooth else Icons.Default.BluetoothDisabled,
+                    titleIconTint = if (isBluetoothEnabled) AppColors.PrimaryBlue else AppColors.Error,
+                    navigationIcon = Icons.Default.ArrowBack,
+                    onNavigationClick = { navController.popBackStack() }
                 )
             }
         ) { paddingValues ->
+            // Основной контент экрана с градиентным фоном
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -159,22 +100,16 @@ fun DevicesScreen(
                         .fillMaxSize()
                         .padding(vertical = 20.dp)
                 ) {
-                    // Карточка текущего выбранного устройства
+                    // 1. Отображение карточки текущего выбранного устройства
                     if (selectedDevice.isValidDevice()) {
-                        val device = selectedDevice
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = AppColors.SurfaceLight
-                            ),
-                            shape = MaterialTheme.shapes.medium,
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            ) {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                // Заголовок блока текущего устройства
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -182,27 +117,26 @@ fun DevicesScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.BluetoothConnected,
-                                        contentDescription = "Выбрано",
+                                        Icons.Default.BluetoothConnected,
+                                        null,
                                         tint = AppColors.PrimaryBlue,
                                         modifier = Modifier.size(20.dp)
                                     )
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
+                                    Spacer(Modifier.width(12.dp))
                                     Text(
-                                        text = "ТЕКУЩЕЕ УСТРОЙСТВО",
+                                        "ТЕКУЩЕЕ УСТРОЙСТВО",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = AppColors.PrimaryBlue
                                     )
                                 }
-
+                                
+                                // Разделитель
                                 Divider(
                                     color = AppColors.SurfaceMedium,
-                                    thickness = 1.dp,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
-
+                                
+                                // Информация об устройстве (Имя, Тип и MAC-адрес)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -211,48 +145,45 @@ fun DevicesScreen(
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Bluetooth,
-                                        contentDescription = "Устройство",
+                                        Icons.Default.Bluetooth,
+                                        null,
                                         tint = AppColors.TextSecondary,
                                         modifier = Modifier.size(24.dp)
                                     )
-
-                                    Column(
-                                        modifier = Modifier.weight(1f)
-                                    ) {
+                                    Column(Modifier.weight(1f)) {
                                         Text(
-                                            text = device.name,
+                                            selectedDevice.name,
                                             style = MaterialTheme.typography.bodyLarge,
                                             color = AppColors.TextPrimary
                                         )
-
+                                        // Отображение типа устройства
                                         Text(
-                                            text = device.address,
+                                            selectedDevice.deviceType.getDisplayName(),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = AppColors.TextSecondary
+                                        )
+                                        // MAC-адрес
+                                        Text(
+                                            selectedDevice.address,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = AppColors.TextSecondary.copy(alpha = 0.7f)
                                         )
                                     }
                                 }
                             }
                         }
-
                         Spacer(modifier = Modifier.height(20.dp))
                     }
 
-                    // Список сопряженных устройств
+                    // 2. Список сопряженных устройств
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = AppColors.SurfaceLight
-                        ),
-                        shape = MaterialTheme.shapes.medium,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                            // Заголовок списка сопряженных устройств
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -260,41 +191,33 @@ fun DevicesScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Bluetooth,
-                                    contentDescription = "Устройства",
+                                    Icons.Default.Bluetooth,
+                                    null,
                                     tint = AppColors.TextSecondary,
                                     modifier = Modifier.size(20.dp)
                                 )
-
                                 Spacer(modifier = Modifier.width(12.dp))
-
                                 Text(
-                                    text = "СОПРЯЖЕННЫЕ УСТРОЙСТВА",
+                                    "СОПРЯЖЕННЫЕ УСТРОЙСТВА",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = AppColors.TextSecondary
                                 )
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
+                                Spacer(modifier = Modifier.weight(1f))
                                 Text(
-                                    text = "(доступно: ${pairedDevices?.size ?: 0})",
+                                    "(${pairedDevices.size})",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (pairedDevices.isNullOrEmpty()) {
-                                        AppColors.TextSecondary
-                                    } else {
-                                        AppColors.PrimaryBlue
-                                    }
+                                    color = AppColors.PrimaryBlue
                                 )
                             }
 
                             Divider(
                                 color = AppColors.SurfaceMedium,
-                                thickness = 1.dp,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
 
+                            // Отображение списка или заглушки в зависимости от состояния Bluetooth
                             if (isBluetoothEnabled) {
-                                if (pairedDevices.isNullOrEmpty()) {
+                                if (pairedDevices.isEmpty()) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -302,7 +225,7 @@ fun DevicesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "Нет сопряженных устройств\n\nСопрягите устройство в настройках Bluetooth системы",
+                                            "Нет сопряженных устройств\n\nДобавьте устройство в настройках системы",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = AppColors.TextSecondary,
                                             textAlign = TextAlign.Center
@@ -314,20 +237,20 @@ fun DevicesScreen(
                                             .fillMaxWidth()
                                             .heightIn(max = 400.dp)
                                     ) {
-                                        items(pairedDevices!!) { device ->
+                                        items(pairedDevices) { device ->
                                             DeviceListItem(
                                                 device = device,
                                                 isSelected = selectedDevice.address == device.address,
                                                 onClick = {
+                                                    // Сохраняем выбор и возвращаемся на предыдущий экран
                                                     sharedViewModel.selectBluetoothDevice(device)
                                                     navController.popBackStack()
                                                 }
                                             )
-
+                                            // Разделитель между элементами списка
                                             if (device != pairedDevices.last()) {
                                                 Divider(
                                                     color = AppColors.SurfaceMedium,
-                                                    thickness = 1.dp,
                                                     modifier = Modifier.padding(horizontal = 16.dp)
                                                 )
                                             }
@@ -335,6 +258,7 @@ fun DevicesScreen(
                                     }
                                 }
                             } else {
+                                // Заглушка при выключенном Bluetooth
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -342,7 +266,7 @@ fun DevicesScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "Bluetooth выключен\n\nВключите Bluetooth в настройках системы для отображения устройств",
+                                        "Bluetooth выключен\n\nВключите его в настройках системы",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = AppColors.TextSecondary,
                                         textAlign = TextAlign.Center
@@ -351,14 +275,20 @@ fun DevicesScreen(
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
         }
     }
 }
 
+/**
+ * Вспомогательный компонент для отображения отдельного устройства в списке.
+ * 
+ * @param device Данные устройства для отображения
+ * @param isSelected Флаг, указывающий является ли устройство текущим выбранным
+ * @param onClick Обработчик нажатия на элемент
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeviceListItem(
     device: BluetoothDeviceData,
@@ -377,20 +307,18 @@ private fun DeviceListItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Иконка типа устройства в круглой подложке
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isSelected) {
-                            AppColors.PrimaryBlue.copy(alpha = 0.2f)
-                        } else {
-                            AppColors.SurfaceMedium
-                        }
+                        if (isSelected) AppColors.PrimaryBlue.copy(alpha = 0.2f) else AppColors.SurfaceMedium
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                val deviceIcon = when (device.deviceType) {
+                // Выбор иконки на основе типа устройства
+                val icon = when (device.deviceType) {
                     DeviceType.CAR_AUDIO -> Icons.Default.DirectionsCar
                     DeviceType.HEADSET -> Icons.Default.Headset
                     DeviceType.HEADPHONES -> Icons.Default.Headphones
@@ -398,58 +326,41 @@ private fun DeviceListItem(
                     DeviceType.COMPUTER -> Icons.Default.Computer
                     DeviceType.PHONE -> Icons.Default.PhoneAndroid
                     DeviceType.PERIPHERAL -> Icons.Default.Keyboard
-                    DeviceType.UNKNOWN -> Icons.Default.Bluetooth
+                    else -> Icons.Default.Bluetooth
                 }
-
                 Icon(
-                    imageVector = deviceIcon,
-                    contentDescription = "Тип устройства",
-                    tint = if (isSelected) {
-                        AppColors.PrimaryBlue
-                    } else {
-                        AppColors.TextSecondary
-                    },
+                    icon, 
+                    contentDescription = null,
+                    tint = if (isSelected) AppColors.PrimaryBlue else AppColors.TextSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
 
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            // Название и MAC-адрес устройства
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = device.name,
+                    device.name,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (isSelected) {
-                        AppColors.PrimaryBlue
-                    } else {
-                        AppColors.TextPrimary
-                    }
+                    color = if (isSelected) AppColors.PrimaryBlue else AppColors.TextPrimary
                 )
-
+                // Отображение типа устройства
                 Text(
-                    text = device.deviceType.getDisplayName(),
+                    device.deviceType.getDisplayName(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isSelected) {
-                        AppColors.PrimaryBlue.copy(alpha = 0.7f)
-                    } else {
-                        AppColors.TextSecondary
-                    }
+                    color = if (isSelected) AppColors.PrimaryBlue.copy(alpha = 0.7f) else AppColors.TextSecondary
                 )
-
+                // MAC-адрес
                 Text(
-                    text = device.address,
+                    device.address,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) {
-                        AppColors.PrimaryBlue.copy(alpha = 0.5f)
-                    } else {
-                        AppColors.TextSecondary.copy(alpha = 0.7f)
-                    }
+                    color = if (isSelected) AppColors.PrimaryBlue.copy(alpha = 0.5f) else AppColors.TextSecondary.copy(alpha = 0.7f)
                 )
             }
 
+            // Индикатор выбора
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    Icons.Default.CheckCircle,
                     contentDescription = "Выбрано",
                     tint = AppColors.PrimaryBlue,
                     modifier = Modifier.size(20.dp)

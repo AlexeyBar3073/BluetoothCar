@@ -3,7 +3,6 @@ package com.alexbar3073.bluetoothcar.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
@@ -13,9 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,36 +20,49 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
+import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ThemeSelectionDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
-import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
- * ТЕГ: Экран настроек
+ * ТЕГ: Настройки/Конфигурация/Screen
  * 
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Главный экран настроек приложения. Отображает все настройки приложения,
- * управляет диалогами редактирования и взаимодействует с SharedViewModel.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует SettingsContent.kt для основного содержимого.
- * 2. Использует SharedViewModel.kt для получения и обновления данных.
- * 3. Использует диалоги (EditValueDialog, ThemeSelectionDialog, ColorPickerDialog).
+ * ФАЙЛ: ui/screens/settings/SettingsScreen.kt
+ * 
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ: Главный экран настроек приложения. 
+ * Предоставляет интерфейс для изменения параметров автомобиля и внешнего вида приложения.
+ * 
+ * ОТВЕТСТВЕННОСТЬ: Отображение разделов настроек, управление диалогами редактирования 
+ * значений и выбора темы.
+ * 
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM (использует SharedViewModel).
+ * 
+ * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное управление конфигурацией пользователя.
+ * 
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Вызывается из HomeScreen. Взаимодействует с SettingsContent, 
+ * диалогами EditValueDialog и ThemeSelectionDialog. Использует CompactTopBar для заголовка.
  */
 
+/**
+ * Входная точка экрана настроек. Связывает состояния ViewModel с контентом.
+ */
 @Composable
 fun SettingsScreen(
     navController: NavController,
     viewModel: SharedViewModel
 ) {
+    // Подписка на настройки и выбранное устройство
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
 
+    // Делегирование отрисовки контентной функции
     SettingsScreenContent(
         appSettings = appSettings,
         selectedDevice = selectedDevice,
@@ -62,6 +72,9 @@ fun SettingsScreen(
     )
 }
 
+/**
+ * Основной UI-контент экрана настроек с поддержкой Scaffold и TopBar.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreenContent(
@@ -71,83 +84,38 @@ fun SettingsScreenContent(
     onUpdateSettings: (AppSettings) -> Unit,
     onClearSelectedDevice: () -> Unit
 ) {
+    // Состояния для управления диалогами редактирования
     var showEditDialog by remember { mutableStateOf(false) }
     var editDialogData by remember { mutableStateOf(EditDialogData()) }
     var showThemeDialog by remember { mutableStateOf(false) }
 
-    BluetoothCarTheme {
+    // Обертка темы приложения
+    BluetoothCarTheme(themeMode = appSettings.selectedTheme) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Настройки",
-                                tint = AppColors.PrimaryBlue,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "НАСТРОЙКИ",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = AppColors.TextPrimary
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = { navController.popBackStack() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .background(
-                                        AppColors.SurfaceMedium,
-                                        shape = CircleShape
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Назад",
-                                    tint = AppColors.TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = AppColors.SurfaceDark,
-                        titleContentColor = AppColors.TextPrimary,
-                        navigationIconContentColor = AppColors.TextSecondary
-                    ),
-                    modifier = Modifier
-                        .height(COMPACT_TOP_BAR_HEIGHT)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = AppColors.SurfaceGradient
-                            )
-                        ),
-                    windowInsets = WindowInsets(0.dp)
+                // Использование унифицированного компактного Топбара (40 DP)
+                CompactTopBar(
+                    title = "НАСТРОЙКИ",
+                    titleIcon = Icons.Default.Settings,
+                    navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                    onNavigationClick = { navController.popBackStack() }
                 )
             }
         ) { paddingValues ->
+            // Область контента с градиентным фоном
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
             ) {
+                // Вызов композиции со списком настроек
                 SettingsContent(
                     appSettings = appSettings,
                     selectedDevice = selectedDevice,
                     navController = navController,
                     onEditDialogShow = { data ->
+                        // Логика подготовки данных для диалога редактирования
                         editDialogData = data.copy(onSave = { newValue ->
                             val updatedSettings = when (data.title) {
                                 "Объем топливного бака" -> appSettings.copy(fuelTankCapacity = newValue)
@@ -168,6 +136,7 @@ fun SettingsScreenContent(
             }
         }
 
+        // Диалог редактирования числовых значений
         if (showEditDialog) {
             EditValueDialog(
                 data = editDialogData,
@@ -179,6 +148,7 @@ fun SettingsScreenContent(
             )
         }
 
+        // Диалог выбора цветовой темы
         if (showThemeDialog) {
             ThemeSelectionDialog(
                 currentTheme = appSettings.selectedTheme,
@@ -192,11 +162,11 @@ fun SettingsScreenContent(
     }
 }
 
-@Preview(showBackground = true, widthDp = 800, heightDp = 480)
+@Preview(showBackground = true, widthDp = 642, heightDp = 360)
 @Composable
-fun SettingsScreenPreview() {
+fun PreviewSettingsLight() {
     SettingsScreenContent(
-        appSettings = AppSettings(),
+        appSettings = AppSettings(selectedTheme = "light"),
         selectedDevice = null,
         navController = rememberNavController(),
         onUpdateSettings = {},

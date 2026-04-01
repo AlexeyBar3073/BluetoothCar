@@ -3,7 +3,6 @@ package com.alexbar3073.bluetoothcar.ui.theme
 
 import android.app.Activity
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -14,22 +13,35 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
+/**
+ * ТЕГ: Theme/Core/Colors
+ * 
+ * ФАЙЛ: ui/theme/Theme.kt
+ * 
+ * МЕСТОНАХОЖДЕНИЕ: ui/theme/Theme.kt
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ: Центральный файл темы приложения. Определяет цветовые палитры,
+ * типографику и общие константы размеров для обеспечения консистентного UI.
+ * 
+ * ОТВЕТСТВЕННОСТЬ: Управление визуальным стилем, поддержка светлой, темной и динамических тем.
+ * 
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Jetpack Compose Theme (Material3).
+ * 
+ * КЛЮЧЕВОЙ ПРИНЦИП: Single Source of Truth для всех стилистических параметров приложения.
+ */
+
 /** 
  * Высота компактного топбара. 
- * Установлена в 48.dp по требованию пользователя.
  */
-val COMPACT_TOP_BAR_HEIGHT = 48.dp
+val COMPACT_TOP_BAR_HEIGHT = 40.dp
 
-/**
- * Темная цветовая схема (основная для приложения).
- * Основана на темно-синих и угольных оттенках для комфорта в ночное время.
- */
 private val DarkColorScheme = darkColorScheme(
     primary = Blue80,
     secondary = Blue40,
@@ -46,11 +58,6 @@ private val DarkColorScheme = darkColorScheme(
     outline = Color.White.copy(alpha = 0.12f)
 )
 
-/**
- * Светлая цветовая схема.
- * Оптимизирована для использования днем при ярком солнце.
- * Использует высокий контраст и чистые поверхности.
- */
 private val LightColorScheme = lightColorScheme(
     primary = Blue40,
     secondary = Blue30,
@@ -67,9 +74,6 @@ private val LightColorScheme = lightColorScheme(
     outline = Color.Black.copy(alpha = 0.12f)
 )
 
-/**
- * Глубокая синяя темная схема.
- */
 private val BlueDarkColorScheme = darkColorScheme(
     primary = Blue80,
     secondary = Blue40,
@@ -83,15 +87,11 @@ private val BlueDarkColorScheme = darkColorScheme(
     onSurface = Blue90,
 )
 
-/**
- * Объект AppColors предоставляет доступ к специфическим цветам приложения,
- * которые выходят за рамки стандартной MaterialTheme.ColorScheme.
- */
 object AppColors {
-    /** Основной акцентный цвет приложения (адаптивный) */
+    /** Основной синий цвет бренда */
     val PrimaryBlue: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.primary
     
-    /** Прозрачный акцентный цвет для подложек */
+    /** Полупрозрачный основной синий для подложек */
     val TransparentPrimary: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
     
     /** Основной цвет текста */
@@ -100,47 +100,81 @@ object AppColors {
     /** Второстепенный цвет текста */
     val TextSecondary: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurfaceVariant
     
-    /** Третичный (неактивный) цвет текста */
-    val TextTertiary: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    /** 
+     * Третичный (неактивный) цвет текста.
+     * Скорректирован для светлой темы: уменьшена альфа до 0.22f для создания видимого контраста 
+     * с активным синим цветом в топбаре.
+     */
+    val TextTertiary: Color @Composable @ReadOnlyComposable get() = 
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f)
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+        else
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     
-    // Статусные цвета
+    /** Цвет успеха (зеленый) */
     val Success = Green80
-    val SuccessAlpha = Color(0x224ADE80)
-    val Warning = Yellow80
-    val WarningAlpha = Color(0x22FACC15)
-    val Error = Red80
-    val ErrorAlpha = Color(0x22F87171)
 
-    /** Светлая полупрозрачная поверхность */
+    /** Цвет активного состояния получения данных (BT) */
+    val StatusListening: Color @Composable @ReadOnlyComposable get() = 
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) ListeningGreenDim else ListeningGreenBright
+    
+    /** Цвет предупреждения (желтый) */
+    val Warning = Yellow80
+    
+    /** Цвет ошибки (красный) */
+    val Error = Red80
+    
+    /** Полупрозрачный цвет ошибки для фона уведомлений */
+    val ErrorAlpha: Color @Composable @ReadOnlyComposable get() = Error.copy(alpha = 0.15f)
+
+    /** Легкое выделение поверхности */
     val SurfaceLight: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
     
-    /** Средняя полупрозрачная поверхность */
+    /** Среднее выделение поверхности */
     val SurfaceMedium: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
     
-    /** Темная полупрозрачная поверхность */
+    /** Сильное выделение поверхности */
     val SurfaceDark: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
 
-    // Константы прозрачности белого (оставляем как есть, так как они специфичны)
+    /** Белый с прозрачностью */
     val WhiteAlpha10 = Color.White.copy(alpha = 0.1f)
     val WhiteAlpha20 = Color.White.copy(alpha = 0.2f)
     val WhiteAlpha30 = Color.White.copy(alpha = 0.3f)
     val WhiteAlpha60 = Color.White.copy(alpha = 0.6f)
     val WhiteAlpha80 = Color.White.copy(alpha = 0.8f)
 
-    /** Цвета для оформления диалоговых окон */
+    /** Фон диалоговых окон */
     val DialogBackground: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surface
+    
+    /** Цвет границы диалоговых окон */
     val DialogBorder: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.outline
 
-    /** Градиент для подложек */
+    /** Градиент для поверхностей */
     val SurfaceGradient: List<Color> @Composable @ReadOnlyComposable get() = listOf(
         MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
         MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
     )
     
+    /** Цвет подключенного Bluetooth-устройства */
     val BluetoothDeviceConnected = Blue80
+    
+    /** Цвет доступного для подключения Bluetooth-устройства */
     val BluetoothDeviceAvailable: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
 
-    // Цвета для спидометра (оставляем базовые, их можно будет адаптировать позже)
+    // ===== ЦВЕТА ПРИБОРОВ (DASHBOARD) =====
+
+    val GaugeStroke: Color @Composable @ReadOnlyComposable get() = 
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFF2A2A34)
+        else Color.White
+
+    val GaugeValue: Color @Composable @ReadOnlyComposable get() = 
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFF1A1A24)
+        else Color.White
+
+    val GaugeSecondary: Color @Composable @ReadOnlyComposable get() = 
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFF2A2A34).copy(alpha = 0.7f)
+        else Color.White.copy(alpha = 0.6f)
+
     val SpeedometerGradient = listOf(Blue80, Blue40)
     val SpeedometerDialStroke: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
     val SpeedometerCenterStroke: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
@@ -151,48 +185,24 @@ object AppColors {
     val SpeedometerArrowStroke: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
 }
 
-/**
- * Возвращает адаптивный градиентный фон на основе текущей цветовой схемы.
- * Решает проблему "черного фона в светлой теме".
- */
 @Composable
 fun verticalGradientBackground(): Brush {
     val colorScheme = MaterialTheme.colorScheme
-    
-    // Проверяем, темная ли сейчас тема по цвету фона. 
-    val isDark = colorScheme.background.toArgb() == DarkBackground.toArgb() || 
-                 colorScheme.background.toArgb() == Blue10.toArgb()
-    
+    val isDark = colorScheme.background.luminance() < 0.5f
     val colors = if (isDark) {
-        listOf(
-            colorScheme.background,
-            colorScheme.background.copy(alpha = 0.8f),
-            colorScheme.surface
-        )
+        listOf(colorScheme.background, colorScheme.background.copy(alpha = 0.8f), colorScheme.surface)
     } else {
-        // Для светлой темы используем мягкий переход от фона к варианту поверхности
-        listOf(
-            colorScheme.background,
-            colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            colorScheme.surface
-        )
+        listOf(colorScheme.background, colorScheme.surfaceVariant.copy(alpha = 0.5f), colorScheme.surface)
     }
     return Brush.verticalGradient(colors = colors)
 }
 
-/**
- * Главная тема приложения.
- * 
- * @param themeMode Режим темы: "dark", "light", "blue_dark".
- * @param dynamicColor Использовать ли динамические цвета (Android 12+). По умолчанию выключено.
- */
 @Composable
 fun BluetoothCarTheme(
     themeMode: String = "dark",
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // Определение цветовой схемы
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -207,32 +217,19 @@ fun BluetoothCarTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            
-            /** 
-             * Синхронизация системного UI.
-             * Устанавливаем цвет статус-бара и навигационной панели в цвет фона темы.
-             */
             val statusBarColor = colorScheme.background.toArgb()
-            
             @Suppress("DEPRECATION")
             window.statusBarColor = statusBarColor
-            
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 @Suppress("DEPRECATION")
                 window.navigationBarColor = statusBarColor
             }
-
             val controller = WindowCompat.getInsetsController(window, view)
-            // Иконки (часы, заряд) должны быть темными на светлой теме и наоборот
             val isLightTheme = themeMode == "light"
             controller.isAppearanceLightStatusBars = isLightTheme
             controller.isAppearanceLightNavigationBars = isLightTheme
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }

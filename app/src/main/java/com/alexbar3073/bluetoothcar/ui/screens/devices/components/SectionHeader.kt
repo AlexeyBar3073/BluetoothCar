@@ -1,3 +1,4 @@
+// Файл: ui/screens/devices/components/SectionHeader.kt
 package com.alexbar3073.bluetoothcar.ui.screens.devices.components
 
 import androidx.compose.foundation.background
@@ -21,18 +22,46 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
+/**
+ * ТЕГ: UI/Components/SectionHeader
+ * 
+ * ФАЙЛ: ui/screens/devices/components/SectionHeader.kt
+ * 
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/devices/components/
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ: Компонент заголовка логической секции. 
+ * Используется для визуального разделения групп элементов в списках (например, "Сопряженные устройства").
+ * 
+ * ОТВЕТСТВЕННОСТЬ: Отображение названия секции с цветовым акцентом и дополнительным описанием.
+ * 
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Stateless компонент.
+ * 
+ * КЛЮЧЕВОЙ ПРИНЦИП: Визуальная иерархия и компактность.
+ * 
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Используется в DevicesScreen и других экранах со списками.
+ */
+
+/**
+ * Заголовок секции.
+ * 
+ * @param title Основной текст заголовка.
+ * @param subtitle Дополнительный поясняющий текст.
+ * @param modifier Модификатор оформления.
+ */
 @Composable
 fun SectionHeader(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier
 ) {
+    // Горизонтальный контейнер с уменьшенными вертикальными отступами (8 dp) для компактности
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Левый декоративный элемент: вертикальная полоса акцентного цвета
         Box(
             modifier = Modifier
                 .width(4.dp)
@@ -45,6 +74,7 @@ fun SectionHeader(
 
         Spacer(modifier = Modifier.width(12.dp))
 
+        // Текстовый блок: Заголовок и подзаголовок
         Column {
             Text(
                 text = title,
@@ -63,6 +93,7 @@ fun SectionHeader(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // Правый декоративный элемент: точка индикации (неактивная по умолчанию)
         Box(
             modifier = Modifier
                 .size(8.dp)

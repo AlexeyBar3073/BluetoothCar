@@ -65,7 +65,7 @@ class AppController(
 
     /** 
      * Внутреннее состояние подключения, управляемое бизнес-логикой.
-     * По умолчанию синхронизируется с BCM, но дополняется логическими статусами (REQUESTING_DATA, LISTENING_DATA).
+     * По умолчанию синхронизируется с BCM, но дополняется логическими статусах (REQUESTING_DATA, LISTENING_DATA).
      */
     private val _internalConnectionState = MutableStateFlow<ConnectionState>(ConnectionState.UNDEFINED)
 
@@ -108,15 +108,20 @@ class AppController(
 
     /** 
      * Поток информации о состоянии подключения для UI.
-     * Базируется на внутреннем состоянии _internalConnectionState.
+     * Базируется на внутреннем состоянии _internalConnectionState и текущей теме оформления.
      */
-    val connectionStatusInfo: StateFlow<ConnectionStatusInfo> = _internalConnectionState
-        .map { it.toStatusInfo() }
-        .stateIn(
-            scope = appScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ConnectionState.UNDEFINED.toStatusInfo()
-        )
+    val connectionStatusInfo: StateFlow<ConnectionStatusInfo> = combine(
+        _internalConnectionState,
+        _appSettings
+    ) { state, settings ->
+        // Определяем, используется ли темная тема для адаптации цветов статуса
+        val isDark = settings.selectedTheme != "light"
+        state.toStatusInfo(isDark)
+    }.stateIn(
+        scope = appScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ConnectionState.UNDEFINED.toStatusInfo(isDarkTheme = true)
+    )
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
 

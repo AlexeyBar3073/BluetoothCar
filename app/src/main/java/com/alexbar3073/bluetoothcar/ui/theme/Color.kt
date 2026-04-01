@@ -29,6 +29,11 @@ val LightSurface = Color(0xFFFFFFFF)
 val LightSurfaceVariant = Color(0xFFEEEEFF)
 
 // ===== Успех/Ошибка/Предупреждение =====
+/** Цвет для состояния LISTENING_DATA в темной теме */
+val ListeningGreenBright = Color(0xFF32D74B)
+/** Цвет для состояния LISTENING_DATA в светлой теме */
+val ListeningGreenDim = Color(0xFF2E7D32)
+
 val Green10 = Color(0xFF00210A)
 val Green20 = Color(0xFF003915)
 val Green30 = Color(0xFF005220)

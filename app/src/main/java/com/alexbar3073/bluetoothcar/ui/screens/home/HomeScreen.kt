@@ -1,85 +1,73 @@
-// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/screens/home/HomeScreen.kt
+// Файл: ui/screens/home/HomeScreen.kt
 package com.alexbar3073.bluetoothcar.ui.screens.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
+import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
+import com.alexbar3073.bluetoothcar.ui.components.TopBarButton
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.StatusCircleButton
 import com.alexbar3073.bluetoothcar.ui.screens.home.widgets.dashboards.dashboard_type_4.DashboardType4
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ColorPickerDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
-import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
-import androidx.compose.runtime.Composable
 
 /**
- * ТЕГ: Домашний экран
- *
+ * ТЕГ: Главный/Домашний/Экран
+ * 
+ * ФАЙЛ: ui/screens/home/HomeScreen.kt
+ * 
  * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Главный экран приложения. Отвечает за визуализацию панели приборов (Dashboard) 
- * и предоставление доступа к основным функциям управления (статус связи, настройки).
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Получает данные из: SharedViewModel.kt (реактивные StateFlow).
- * 2. Вызывает: DashboardType4.kt.
- * 3. Навигация: Инициирует переход в SettingsScreen.kt.
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ: Основной экран приложения. 
+ * Предоставляет интерфейс бортового компьютера с визуализацией данных в реальном времени.
+ * 
+ * ОТВЕТСТВЕННОСТЬ: Отображение панели приборов, индикация статуса подключения, 
+ * переход к настройкам и управление сбросом параметров поездки.
+ * 
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM.
+ * 
+ * КЛЮЧЕВОЙ ПРИНЦИП: Центральный хаб приложения для мониторинга состояния автомобиля.
+ * 
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Вызывается из NavHost. Взаимодействует с SharedViewModel, 
+ * отображает DashboardType4. Использует CompactTopBar для заголовка.
  */
 
 /**
- * Основная точка входа для Домашнего экрана.
- * Подписывается на потоки данных и делегирует отрисовку функции контента.
+ * Входная точка домашнего экрана. Связывает ViewModel с UI-контентом.
  */
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
     navigateToSettings: () -> Unit
 ) {
-    // Получение текущего состояния приложения (гарантированно не null)
+    // Подписка на ключевые StateFlow из ViewModel
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val carData by viewModel.carData.collectAsStateWithLifecycle()
     val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
@@ -98,8 +86,7 @@ fun HomeScreen(
 }
 
 /**
- * Контентная часть Домашнего экрана.
- * Реализована без прямой привязки к ViewModel для возможности использования в Preview.
+ * Основной UI-контент домашнего экрана.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,128 +100,63 @@ fun HomeScreenContent(
     onSettingsUpdate: (AppSettings) -> Unit = {},
     navigateToSettings: () -> Unit
 ) {
+    // Состояние отображения диалога выбора цвета
     var showColorPicker by remember { mutableStateOf(false) }
 
-    BluetoothCarTheme {
+    // Инициализация контекста темы
+    BluetoothCarTheme(themeMode = appSettings.selectedTheme) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Box(
-                            modifier = Modifier.fillMaxHeight(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                // Иконка авто, активна при наличии выбранного устройства
-                                Icon(
-                                    imageVector = Icons.Filled.DirectionsCar,
-                                    contentDescription = "Бортовой компьютер",
-                                    tint = if (selectedDevice.isValidDevice()) AppColors.PrimaryBlue else AppColors.TextTertiary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "БОРТОВОЙ КОМПЬЮТЕР",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontSize = 12.sp,
-                                        letterSpacing = 0.5.sp
-                                    ),
-                                    color = AppColors.TextPrimary
-                                )
-                            }
-                        }
+                // Использование унифицированного компактного Топбара (40 DP)
+                CompactTopBar(
+                    title = "БОРТОВОЙ КОМПЬЮТЕР",
+                    titleIcon = Icons.Filled.DirectionsCar,
+                    // Использование BluetoothDeviceConnected (Blue80) вместо PrimaryBlue 
+                    // обеспечивает яркую и заметную индикацию даже в светлой теме.
+                    titleIconTint = if (selectedDevice.isValidDevice()) AppColors.BluetoothDeviceConnected else AppColors.TextTertiary,
+                    leftContent = {
+                        // Кнопка статуса унифицирована через TopBarButton (32/28 dp)
+                        StatusCircleButton(
+                            connectionStatusInfo = connectionStatusInfo,
+                            onClick = onRetryConnection
+                        )
                     },
-                    navigationIcon = {
-                        Box(
-                            modifier = Modifier.fillMaxHeight().padding(start = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // Кнопка статуса. Разрешаем клик всегда для инициирования процесса проверки в BCM.
-                            StatusCircleButton(
-                                connectionStatusInfo = connectionStatusInfo,
-                                onClick = {
-                                    // Блокировка снята: вызываем переподключение в любом состоянии,
-                                    // чтобы BCM мог проанализировать ситуацию и выдать уведомление (Toast) через CFC.
-                                    onRetryConnection()
-                                }
-                            )
-                        }
-                    },
-                    actions = {
-                        Box(
-                            modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // Кнопка перехода в раздел настроек
-                            IconButton(
-                                onClick = navigateToSettings,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .background(
-                                            AppColors.SurfaceMedium,
-                                            shape = CircleShape
-                                        )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Настройки",
-                                        tint = AppColors.TextSecondary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = AppColors.SurfaceDark,
-                        titleContentColor = AppColors.TextPrimary
-                    ),
-                    modifier = Modifier
-                        .height(COMPACT_TOP_BAR_HEIGHT)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = AppColors.SurfaceGradient
-                            )
-                        ),
-                    windowInsets = WindowInsets(0.dp)
+                    rightContent = {
+                        // Кнопка настроек унифицирована через TopBarButton (32/28 dp)
+                        TopBarButton(
+                            icon = Icons.Default.Settings,
+                            onClick = navigateToSettings,
+                            contentDescription = "Настройки",
+                            tint = AppColors.TextSecondary
+                        )
+                    }
                 )
             }
         ) { paddingValues ->
-            // Основное рабочее пространство экрана
+            // Основная рабочая область экрана
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
                     .pointerInput(Unit) {
-                        // Обработка длительного нажатия на пустую область экрана (подложку)
-                        detectTapGestures(
-                            onLongPress = {
-                                showColorPicker = true
-                            }
-                        )
+                        // Вызов настройки цвета по длинному нажатию на фон
+                        detectTapGestures(onLongPress = { showColorPicker = true })
                     }
             ) {
+                // Область отрисовки панели приборов
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Отрисовка выбранного типа дашборда (Дашборд 4)
                     DashboardType4(
                         modifier = Modifier.fillMaxSize(),
                         carData = carData,
                         appSettings = appSettings,
                         onTripReset = onTripReset,
-                        onLongPress = { showColorPicker = true } // Передаем вызов диалога внутрь дашборда
+                        onLongPress = { showColorPicker = true }
                     )
                 }
             }
 
-            // Отображение диалога выбора цвета
+            // Диалог выбора акцентного цвета приборов
             if (showColorPicker) {
                 ColorPickerDialog(
                     appSettings = appSettings,
@@ -249,66 +171,27 @@ fun HomeScreenContent(
     }
 }
 
-// ==================== PREVIEWS ====================
-
-/**
- * Превью домашнего экрана в стандартном рабочем режиме.
- */
-@Preview(
-    name = "Home - Normal",
-    device = "spec:width=642dp,height=360dp,dpi=480",
-    showBackground = true
-)
+@Preview(name = "Dark Theme", device = "spec:width=642dp,height=360dp,dpi=480", showBackground = true)
 @Composable
-fun HomeScreenNormalPreview() {
-    val fakeCarData = CarData(
-        speed = 60f,
-        voltage = 14.2f,
-        fuel = 35f, 
-        coolantTemp = 90f,
-        transmissionTemp = 80f,
-        isFuelLow = false,
-        tirePressureLow = false,
-        washerFluidLow = false
-    )
-
+fun PreviewDark() {
     HomeScreenContent(
         selectedDevice = BluetoothDeviceData("My Car", "00:11:22:33:44:55"),
-        carData = fakeCarData,
+        carData = CarData(speed = 60f),
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
-        appSettings = AppSettings(fuelTankCapacity = 60f, minFuelLevel = 5f),
+        appSettings = AppSettings(selectedTheme = "dark"),
         onRetryConnection = {},
         navigateToSettings = {}
     )
 }
 
-/**
- * Превью домашнего экрана с активными предупреждениями.
- */
-@Preview(
-    name = "Home - Warnings",
-    device = "spec:width=642dp,height=360dp,dpi=480",
-    showBackground = true
-)
+@Preview(name = "Light Theme", device = "spec:width=642dp,height=360dp,dpi=480", showBackground = true)
 @Composable
-fun HomeScreenWarningsPreview() {
-    val fakeCarData = CarData(
-        speed = 0f,
-        voltage = 11.8f,
-        fuel = 3f, 
-        coolantTemp = 105f,
-        transmissionTemp = 95f,
-        ecuErrors = "P0300",
-        tirePressureLow = true,
-        washerFluidLow = true,
-        isFuelLow = true
-    )
-
+fun PreviewLight() {
     HomeScreenContent(
         selectedDevice = BluetoothDeviceData("My Car", "00:11:22:33:44:55"),
-        carData = fakeCarData,
+        carData = CarData(speed = 45f),
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
-        appSettings = AppSettings(fuelTankCapacity = 60f, minFuelLevel = 5f),
+        appSettings = AppSettings(selectedTheme = "light"),
         onRetryConnection = {},
         navigateToSettings = {}
     )

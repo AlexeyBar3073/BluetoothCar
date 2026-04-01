@@ -149,7 +149,7 @@ internal fun DashboardType4CombinedGauge(
     val washingIcon = painterResource(R.drawable.ic_washing)
 
     // Кэширование статической подложки (шкалы) в битмап. 
-    // Добавляем geometry.ringColor в ключи для обновления при смене настроек.
+    // Добавляем geometry.ringColor in ключи для обновления при смене настроек.
     val bitmapKey = remember(geometry.width, geometry.height, geometry.ringColor) { 
         Triple(geometry.width, geometry.height, geometry.ringColor) 
     }

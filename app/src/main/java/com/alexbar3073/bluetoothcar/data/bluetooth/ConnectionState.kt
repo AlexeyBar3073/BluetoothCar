@@ -14,8 +14,11 @@ import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.alexbar3073.bluetoothcar.ui.theme.ListeningGreenBright
+import com.alexbar3073.bluetoothcar.ui.theme.ListeningGreenDim
 
 /**
  * ФАЙЛ: data/bluetooth/ConnectionState.kt
@@ -223,10 +226,11 @@ enum class ConnectionState(
     /**
      * Получить цвет иконки для состояния подключения (Compose Color).
      * Используется для окрашивания иконок в виджетах.
+     * @param isDarkTheme Флаг темной темы для выбора адаптивного цвета.
      */
-    fun getIconColor(): Color {
+    fun getIconColor(isDarkTheme: Boolean = true): Color {
         return when (this) {
-            LISTENING_DATA -> Color(0xFF2E7D32) // Темно-зеленый
+            LISTENING_DATA -> if (isDarkTheme) ListeningGreenBright else ListeningGreenDim
             CONNECTED, SENDING_SETTINGS, REQUESTING_DATA ->
                 Color(0xFF1565C0) // Темно-синий
             CONNECTING -> Color(0xFFF57C00) // Оранжевый
@@ -396,9 +400,10 @@ enum class ConnectionState(
     /**
      * Получить полную структуру данных о статусе для передачи в UI.
      * Соответствует требованиям ТЗ: "структура статуса, в которой тот вернет все необходимое".
+     * @param isDarkTheme Флаг темной темы для выбора адаптивного цвета иконки.
      * @return ConnectionStatusInfo с ВСЕМИ данными для отображения
      */
-    fun toStatusInfo(): ConnectionStatusInfo {
+    fun toStatusInfo(isDarkTheme: Boolean = true): ConnectionStatusInfo {
         return ConnectionStatusInfo(
             state = this,
             displayName = getStatusText(),
@@ -406,7 +411,7 @@ enum class ConnectionState(
             icon = getIcon(),
             compactDisplayType = getCompactDisplayType(),
             compactIcon = getCompactIcon(),
-            iconColor = getIconColor(),
+            iconColor = getIconColor(isDarkTheme),
             backgroundColor = getBackgroundColor(),
             textColor = getTextColor(),
             shortStatusText = getShortStatusText(),
