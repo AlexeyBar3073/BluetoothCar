@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -28,6 +29,8 @@ import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
  * Обеспечивает единый визуальный стиль и фиксированную высоту (40 dp) для всех экранов.
  * 
  * ОТВЕТСТВЕННОСТЬ: Отображение заголовка, навигационных кнопок и статусных индикаторов.
+ * 
+ * ОБНОВЛЕНИЕ: В темной теме использует градиент и оверлей согласно DASHBOARD_4_SPEC.
  */
 
 @Composable
@@ -41,12 +44,14 @@ fun CompactTopBar(
     leftContent: @Composable (BoxScope.() -> Unit)? = null,
     rightContent: @Composable (BoxScope.() -> Unit)? = null,
 ) {
-    Surface(
+    // Используем Box вместо Surface для поддержки градиентного фона из AppColors
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(COMPACT_TOP_BAR_HEIGHT),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp
+            .height(COMPACT_TOP_BAR_HEIGHT)
+            .background(Brush.verticalGradient(AppColors.SurfaceGradient))
+            // Дополнительный слой оверлея (0x0AFFFFFF для темной темы)
+            .background(AppColors.SurfaceDark)
     ) {
         Box(
             modifier = Modifier
@@ -69,13 +74,12 @@ fun CompactTopBar(
                 }
             }
 
-            // ЦЕНТРАЛЬНАЯ СЕКЦИЯ: Иконка и заголовок (увеличены на 10%)
+            // ЦЕНТРАЛЬНАЯ СЕКЦИЯ: Иконка и заголовок
             Row(
                 modifier = Modifier.align(Alignment.Center),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (titleIcon != null) {
-                    // Иконка увеличена с 16.dp до 18.dp (+10%)
                     Icon(
                         imageVector = titleIcon,
                         contentDescription = null,
@@ -85,7 +89,6 @@ fun CompactTopBar(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 
-                // Текст заголовка увеличен с 12.sp до 13.5.sp (+10%)
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall.copy(
@@ -125,7 +128,7 @@ fun TopBarButton(
             .clip(CircleShape)
             .clickable(onClick = onClick)
     ) {
-        // Единый фоновый круг для всех кнопок (фиксированный размер 28dp)
+        // Фоновый круг (AppColors.SurfaceMedium = 0x15FFFFFF в темной теме)
         Box(
             modifier = Modifier
                 .size(28.dp)
@@ -137,7 +140,6 @@ fun TopBarButton(
 
 /**
  * Кнопка с иконкой для Топбара.
- * Используется для кнопок навигации и действий в панели.
  */
 @Composable
 fun TopBarButton(

@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
@@ -54,20 +55,13 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM.
  * 
  * КЛЮЧЕВОЙ ПРИНЦИП: Центральный хаб приложения для мониторинга состояния автомобиля.
- * 
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Вызывается из NavHost. Взаимодействует с SharedViewModel, 
- * отображает DashboardType4. Использует CompactTopBar для заголовка.
  */
 
-/**
- * Входная точка домашнего экрана. Связывает ViewModel с UI-контентом.
- */
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
     navigateToSettings: () -> Unit
 ) {
-    // Подписка на ключевые StateFlow из ViewModel
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val carData by viewModel.carData.collectAsStateWithLifecycle()
     val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
@@ -85,9 +79,6 @@ fun HomeScreen(
     )
 }
 
-/**
- * Основной UI-контент домашнего экрана.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenContent(
@@ -100,29 +91,25 @@ fun HomeScreenContent(
     onSettingsUpdate: (AppSettings) -> Unit = {},
     navigateToSettings: () -> Unit
 ) {
-    // Состояние отображения диалога выбора цвета
     var showColorPicker by remember { mutableStateOf(false) }
 
-    // Инициализация контекста темы
-    BluetoothCarTheme(themeMode = appSettings.selectedTheme) {
+    // Принудительно используем темную тему, согласно задаче "Dark Only"
+    BluetoothCarTheme(themeMode = "dark") {
         Scaffold(
+            // Устанавливаем прозрачный фон для контейнера, чтобы видеть наш градиент
+            containerColor = Color.Transparent,
             topBar = {
-                // Использование унифицированного компактного Топбара (40 DP)
                 CompactTopBar(
                     title = "БОРТОВОЙ КОМПЬЮТЕР",
                     titleIcon = Icons.Filled.DirectionsCar,
-                    // Использование BluetoothDeviceConnected (Blue80) вместо PrimaryBlue 
-                    // обеспечивает яркую и заметную индикацию даже в светлой теме.
                     titleIconTint = if (selectedDevice.isValidDevice()) AppColors.BluetoothDeviceConnected else AppColors.TextTertiary,
                     leftContent = {
-                        // Кнопка статуса унифицирована через TopBarButton (32/28 dp)
                         StatusCircleButton(
                             connectionStatusInfo = connectionStatusInfo,
                             onClick = onRetryConnection
                         )
                     },
                     rightContent = {
-                        // Кнопка настроек унифицирована через TopBarButton (32/28 dp)
                         TopBarButton(
                             icon = Icons.Default.Settings,
                             onClick = navigateToSettings,
@@ -133,18 +120,16 @@ fun HomeScreenContent(
                 )
             }
         ) { paddingValues ->
-            // Основная рабочая область экрана
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Наш эталонный градиент из DASHBOARD_4_SPEC
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
                     .pointerInput(Unit) {
-                        // Вызов настройки цвета по длинному нажатию на фон
                         detectTapGestures(onLongPress = { showColorPicker = true })
                     }
             ) {
-                // Область отрисовки панели приборов
                 Box(modifier = Modifier.fillMaxSize()) {
                     DashboardType4(
                         modifier = Modifier.fillMaxSize(),
@@ -156,7 +141,6 @@ fun HomeScreenContent(
                 }
             }
 
-            // Диалог выбора акцентного цвета приборов
             if (showColorPicker) {
                 ColorPickerDialog(
                     appSettings = appSettings,
@@ -171,27 +155,62 @@ fun HomeScreenContent(
     }
 }
 
-@Preview(name = "Dark Theme", device = "spec:width=642dp,height=360dp,dpi=480", showBackground = true)
+// ================== PREVIEWS ==================
+
+/**
+ * Данные для превью в рабочем режиме. 
+ * Используются для проверки корректности масштабирования элементов при разной плотности пикселей.
+ */
+private val previewData = CarData(
+    speed = 85f,
+    voltage = 14.2f,
+    fuel = 42f, 
+    coolantTemp = 90f,
+    transmissionTemp = 82f,
+    tripA = 125.4f,
+    odometer = 54320f,
+    isFuelLow = false,
+    tirePressureLow = false,
+    washerFluidLow = false
+)
+
+/**
+ * Превью домашнего экрана для формата Full HD (1080P).
+ * Параметры устройства (642dp x 360dp, 480dpi) соответствуют расчетным пропорциям для 1080P панелей.
+ */
+@Preview(
+    name = "Home - 1080P",
+    device = "spec:width=642dp,height=360dp,dpi=480",
+    showBackground = true
+)
 @Composable
-fun PreviewDark() {
+fun Preview1080() {
     HomeScreenContent(
         selectedDevice = BluetoothDeviceData("My Car", "00:11:22:33:44:55"),
-        carData = CarData(speed = 60f),
+        carData = previewData,
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
-        appSettings = AppSettings(selectedTheme = "dark"),
+        appSettings = AppSettings(selectedTheme = "dark", fuelTankCapacity = 60f),
         onRetryConnection = {},
         navigateToSettings = {}
     )
 }
 
-@Preview(name = "Light Theme", device = "spec:width=642dp,height=360dp,dpi=480", showBackground = true)
+/**
+ * Превью домашнего экрана для формата HD (720P).
+ * Параметры устройства (624dp x 360dp, 320dpi) соответствуют расчетным пропорциям для 720P панелей.
+ */
+@Preview(
+    name = "Home - 720P",
+    device = "spec:width=624dp,height=360dp,dpi=320",
+    showBackground = true
+)
 @Composable
-fun PreviewLight() {
+fun Preview720() {
     HomeScreenContent(
         selectedDevice = BluetoothDeviceData("My Car", "00:11:22:33:44:55"),
-        carData = CarData(speed = 45f),
+        carData = previewData,
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
-        appSettings = AppSettings(selectedTheme = "light"),
+        appSettings = AppSettings(selectedTheme = "dark", fuelTankCapacity = 60f),
         onRetryConnection = {},
         navigateToSettings = {}
     )

@@ -41,6 +41,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModelFactory
 import kotlinx.coroutines.delay
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * ТЕГ: Главная активность / MainActivity
@@ -147,8 +148,14 @@ class MainActivity : ComponentActivity() {
                     // ШАГ 1: Инициализация CoreModule при старте
                     LaunchedEffect(Unit) {
                         if (coreModuleState == CoreModuleState.NOT_STARTED) {
-                            initializeCoreModule(context)
-                            coreModuleState = CoreModuleState.INITIALIZED
+                            try {
+                                initializeCoreModule(context)
+                                coreModuleState = CoreModuleState.INITIALIZED
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                logError("Ошибка инициализации ядра: ${e.message}")
+                                coreModuleState = CoreModuleState.ERROR
+                            }
                         }
                     }
 
@@ -156,8 +163,14 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(coreModuleState) {
                         if (coreModuleState == CoreModuleState.INITIALIZED &&
                             appControllerState == AppControllerState.WAITING) {
-                            waitForAppControllerInitialization()
-                            appControllerState = AppControllerState.READY
+                            try {
+                                waitForAppControllerInitialization()
+                                appControllerState = AppControllerState.READY
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                logError("Ошибка инициализации логики: ${e.message}")
+                                appControllerState = AppControllerState.ERROR
+                            }
                         }
                     }
 
@@ -175,7 +188,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // Состояние: Критическая ошибка
-                        appControllerState == AppControllerState.ERROR -> {
+                        appControllerState == AppControllerState.ERROR || coreModuleState == CoreModuleState.ERROR -> {
                             ErrorScreen(
                                 message = "Ошибка инициализации приложения",
                                 onRetry = {
@@ -219,6 +232,7 @@ class MainActivity : ComponentActivity() {
             CoreModule.initialize(context)
             log("CoreModule успешно инициализирован")
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             logError("Ошибка инициализации CoreModule: ${e.message}")
             throw e
         }
@@ -255,6 +269,7 @@ class MainActivity : ComponentActivity() {
             throw IllegalStateException("Таймаут ожидания инициализации AppController")
 
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             logError("Ошибка ожидания AppController: ${e.message}")
             throw e
         }

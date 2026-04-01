@@ -3,6 +3,7 @@ package com.alexbar3073.bluetoothcar.ui.theme
 
 import android.app.Activity
 import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -52,9 +53,9 @@ private val DarkColorScheme = darkColorScheme(
     onPrimary = Color.Black,
     onSecondary = Color.White,
     onTertiary = Color.White,
-    onBackground = Color.White,
-    onSurface = Color.White,
-    onSurfaceVariant = Color.White.copy(alpha = 0.7f),
+    onBackground = DarkTextPrimary,
+    onSurface = DarkTextPrimary,
+    onSurfaceVariant = DarkBlueGrey80,
     outline = Color.White.copy(alpha = 0.12f)
 )
 
@@ -102,14 +103,13 @@ object AppColors {
     
     /** 
      * Третичный (неактивный) цвет текста.
-     * Скорректирован для светлой темы: уменьшена альфа до 0.22f для создания видимого контраста 
-     * с активным синим цветом в топбаре.
+     * Скорректирован для соответствия DASHBOARD_4_SPEC в темной теме.
      */
     val TextTertiary: Color @Composable @ReadOnlyComposable get() = 
         if (MaterialTheme.colorScheme.background.luminance() > 0.5f)
             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
         else
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            DarkBlueGrey40
     
     /** Цвет успеха (зеленый) */
     val Success = Green80
@@ -128,13 +128,13 @@ object AppColors {
     val ErrorAlpha: Color @Composable @ReadOnlyComposable get() = Error.copy(alpha = 0.15f)
 
     /** Легкое выделение поверхности */
-    val SurfaceLight: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+    val SurfaceLight: Color @Composable @ReadOnlyComposable get() = Color(0x1AFFFFFF)
     
     /** Среднее выделение поверхности */
-    val SurfaceMedium: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+    val SurfaceMedium: Color @Composable @ReadOnlyComposable get() = Color(0x15FFFFFF)
     
-    /** Сильное выделение поверхности */
-    val SurfaceDark: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+    /** Сильное выделение поверхности (SurfaceOverlay из спецификации) */
+    val SurfaceDark: Color @Composable @ReadOnlyComposable get() = Color(0x0AFFFFFF)
 
     /** Белый с прозрачностью */
     val WhiteAlpha10 = Color.White.copy(alpha = 0.1f)
@@ -149,11 +149,16 @@ object AppColors {
     /** Цвет границы диалоговых окон */
     val DialogBorder: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.outline
 
-    /** Градиент для поверхностей */
-    val SurfaceGradient: List<Color> @Composable @ReadOnlyComposable get() = listOf(
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-    )
+    /** Градиент для поверхностей (TopBar и т.д.) согласно DASHBOARD_4_SPEC */
+    val SurfaceGradient: List<Color> @Composable @ReadOnlyComposable get() = 
+        if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+            listOf(DarkBackground.copy(alpha = 0.6f), DarkBackground.copy(alpha = 0.4f))
+        } else {
+            listOf(
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            )
+        }
     
     /** Цвет подключенного Bluetooth-устройства */
     val BluetoothDeviceConnected = Blue80
@@ -190,7 +195,8 @@ fun verticalGradientBackground(): Brush {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = colorScheme.background.luminance() < 0.5f
     val colors = if (isDark) {
-        listOf(colorScheme.background, colorScheme.background.copy(alpha = 0.8f), colorScheme.surface)
+        // Возвращаем наш эталонный глубокий градиент из спецификации
+        listOf(DarkBackground, DarkTransitionGray, DarkSurface)
     } else {
         listOf(colorScheme.background, colorScheme.surfaceVariant.copy(alpha = 0.5f), colorScheme.surface)
     }
@@ -216,18 +222,21 @@ fun BluetoothCarTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            val statusBarColor = colorScheme.background.toArgb()
-            @Suppress("DEPRECATION")
-            window.statusBarColor = statusBarColor
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            val context = view.context
+            if (context is Activity) {
+                val window = context.window
+                val statusBarColor = colorScheme.background.toArgb()
                 @Suppress("DEPRECATION")
-                window.navigationBarColor = statusBarColor
+                window.statusBarColor = statusBarColor
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    @Suppress("DEPRECATION")
+                    window.navigationBarColor = statusBarColor
+                }
+                val controller = WindowCompat.getInsetsController(window, view)
+                val isLightTheme = themeMode == "light"
+                controller.isAppearanceLightStatusBars = isLightTheme
+                controller.isAppearanceLightNavigationBars = isLightTheme
             }
-            val controller = WindowCompat.getInsetsController(window, view)
-            val isLightTheme = themeMode == "light"
-            controller.isAppearanceLightStatusBars = isLightTheme
-            controller.isAppearanceLightNavigationBars = isLightTheme
         }
     }
 

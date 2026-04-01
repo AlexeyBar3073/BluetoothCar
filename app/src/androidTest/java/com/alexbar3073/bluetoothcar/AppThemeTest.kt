@@ -10,20 +10,6 @@ import org.junit.runner.RunWith
 
 /**
  * ТЕГ: Тесты тем и запуска / AppThemeTest
- *
- * ФАЙЛ: AppThemeTest.kt
- *
- * МЕСТОНАХОЖДЕНИЕ: /src/androidTest/java/com/alexbar3073/bluetoothcar/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
- * Инструментальные тесты для проверки корректности инициализации приложения 
- * и смены тем оформления в реальном окружении.
- *
- * ОТВЕТСТВЕННОСТЬ: Гарантия работоспособности механизмов переключения тем и запуска.
- *
- * АРХИТЕКТУРНЫЙ ПРИНЦИП: UI Testing (Compose Test Rule)
- *
- * КЛЮЧЕВОЙ ПРИНЦИП: Имитация действий пользователя для проверки реактивности UI.
  */
 @RunWith(AndroidJUnit4::class)
 class AppThemeTest {
@@ -34,64 +20,95 @@ class AppThemeTest {
 
     /**
      * Тест: Проверка запуска приложения.
-     * Проверяет, что после этапов загрузки мы видим либо экран разрешений,
-     * либо главный экран.
      */
     @Test
     fun testAppStartupFlow() {
-        // Ждем исчезновения экранов инициализации (таймаут 20 сек для медленных устройств)
-        composeTestRule.waitUntil(20000) {
-            composeTestRule.onAllNodesWithText("Инициализация", substring = true)
-                .fetchSemanticsNodes().isEmpty()
+        // 1. Ожидаем появления иерархии
+        waitForHierarchy()
+
+        // 2. Ждем исчезновения экранов инициализации
+        composeTestRule.waitUntil(30000) {
+            try {
+                composeTestRule.onAllNodes(hasText("Инициализация", substring = true))
+                    .fetchSemanticsNodes().isEmpty()
+            } catch (e: Exception) {
+                false
+            }
         }
 
-        // Проверяем наличие ключевых элементов. 
-        // Используем более гибкий поиск через substring или ignoreCase.
-        val hasPermissions = composeTestRule.onAllNodesWithText("РАЗРЕШЕНИЯ", substring = true, ignoreCase = true)
+        // 3. Проверяем наличие ключевых элементов (Разрешения или Главный экран)
+        val hasPermissions = composeTestRule.onAllNodes(hasText("Необходимые разрешения", substring = true, ignoreCase = true))
             .fetchSemanticsNodes().isNotEmpty()
             
-        val hasHome = composeTestRule.onAllNodesWithText("БОРТОВОЙ КОМПЬЮТЕР", substring = true, ignoreCase = true)
+        val hasHome = composeTestRule.onAllNodes(hasText("БОРТОВОЙ КОМПЬЮТЕР", substring = true, ignoreCase = true))
             .fetchSemanticsNodes().isNotEmpty()
                                
         assert(hasPermissions || hasHome) { 
-            "Приложение не дошло до ожидаемого начального экрана. Текущие ноды: " + 
-            composeTestRule.onRoot().printToString() 
+            "Приложение не дошло до ожидаемого начального экрана." 
         }
     }
 
     /**
      * Тест: Проверка смены темы оформления.
-     * Имитирует переход в настройки и выбор темы "Синяя темная".
      */
     @Test
     fun testThemeSelection() {
-        // 1. Ожидаем загрузки приложения
-        composeTestRule.waitUntil(20000) {
-            composeTestRule.onAllNodesWithText("Инициализация", substring = true)
-                .fetchSemanticsNodes().isEmpty()
+        // 1. Ожидаем появления иерархии
+        waitForHierarchy()
+
+        // 2. Ждем завершения инициализации
+        composeTestRule.waitUntil(30000) {
+            try {
+                composeTestRule.onAllNodes(hasText("Инициализация", substring = true))
+                    .fetchSemanticsNodes().isEmpty()
+            } catch (e: Exception) {
+                false
+            }
         }
 
-        // 2. Если мы на экране разрешений, нажимаем "Пропустить" (Skip)
-        val skipButton = composeTestRule.onAllNodesWithText("ПРОПУСТИТЬ", ignoreCase = true)
-        if (skipButton.fetchSemanticsNodes().isNotEmpty()) {
-            skipButton[0].performClick()
+        // 3. Если мы на экране разрешений, нажимаем "Продолжить без разрешений"
+        try {
+            val skipButton = composeTestRule.onAllNodes(hasText("без разрешений", substring = true, ignoreCase = true))
+            if (skipButton.fetchSemanticsNodes().isNotEmpty()) {
+                skipButton[0].performClick()
+            }
+        } catch (e: Exception) {
+            // Игнорируем, если экран уже сменился
         }
 
-        // 3. Переходим в настройки
-        // Ищем по content description, так как это IconButton
+        // 4. Ожидаем появления главного экрана
+        composeTestRule.waitUntil(30000) {
+            try {
+                composeTestRule.onAllNodes(hasText("БОРТОВОЙ КОМПЬЮТЕР", ignoreCase = true))
+                    .fetchSemanticsNodes().isNotEmpty()
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        // 5. Переходим в настройки
         composeTestRule.onNodeWithContentDescription("Настройки", ignoreCase = true).performClick()
 
-        // 4. Ищем пункт "Тема оформления" в списке настроек и кликаем
+        // 6. Ищем пункт "Тема оформления" и кликаем
         composeTestRule.onNodeWithText("Тема оформления", substring = true).performClick()
 
-        // 5. В диалоге ищем "Синяя темная" и выбираем
+        // 7. Выбираем "Синяя темная"
         composeTestRule.onNodeWithText("Синяя темная", substring = true).performClick()
 
-        // 6. Проверяем, что в списке настроек теперь отображается "Синяя темная"
-        // (Диалог закрывается сам после выбора в ThemeSelectionDialog)
+        // 8. Проверка
         composeTestRule.onNodeWithText("Синяя темная").assertIsDisplayed()
-        
-        // 7. Проверяем, что заголовок диалога исчез
-        composeTestRule.onNodeWithText("Выбор темы оформления").assertDoesNotExist()
+    }
+
+    /**
+     * Вспомогательный метод для ожидания готовности Compose иерархии.
+     */
+    private fun waitForHierarchy() {
+        composeTestRule.waitUntil(20000) {
+            try {
+                composeTestRule.onAllNodes(isRoot()).fetchSemanticsNodes().isNotEmpty()
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 }

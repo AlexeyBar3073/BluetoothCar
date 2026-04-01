@@ -68,7 +68,8 @@ internal fun DashboardType4CombinedGauge(
     carData: CarData,
     appSettings: AppSettings?,
     geometry: DashboardType4Geometry,
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    onResetFuel: (String) -> Unit = {}
 ) {
     // Получение емкости бака из настроек
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
@@ -183,7 +184,18 @@ internal fun DashboardType4CombinedGauge(
         .pointerInput(geometry.center) {
             // Обработка касаний для переключения режимов отображения
             detectTapGestures(
-                onLongPress = { onLongPress() },
+                onLongPress = { 
+                    val dx = it.x - geometry.center.x
+                    val dy = it.y - geometry.center.y
+                    val dist = sqrt(dx * dx + dy * dy)
+                    
+                    // Если долгий тап в центре и выбран режим FUEL - сбрасываем расход
+                    if (dist < geometry.blackRadius && selectedSource == GaugeSource.FUEL) {
+                        onResetFuel("{\"command\":\"reset_fuel\"}")
+                    } else {
+                        onLongPress() 
+                    }
+                },
                 onTap = { offset ->
                     val dx = offset.x - geometry.center.x
                     val dy = offset.y - geometry.center.y

@@ -19,7 +19,7 @@ import kotlinx.serialization.json.*
  * ФАЙЛ: core/AppController.kt
  * МЕСТОНАХОЖДЕНИЕ: core/
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * ЦЕНТРАЛЬНЫЙ УЗЕЛ БИЗНЕС-ЛОГИКИ. Единственный «мозг» приложения, принимающий решения.
  *
  * ОТВЕТСТВЕННОСТЬ:
@@ -208,38 +208,50 @@ class AppController(
     /**
      * Реализует последовательность команд начальной инициализации при подключении.
      * Устанавливает статус REQUESTING_DATA и запрашивает конфигурацию/поток данных.
+     * 
+     * ОБНОВЛЕНИЕ ПРОТОКОЛА: Используются унифицированные команды в нижнем регистре.
      */
     private suspend fun executeInitialSequence() {
         // 1. Устанавливаем логический статус "Запрос данных" для информирования пользователя
         _internalConnectionState.value = ConnectionState.REQUESTING_DATA
 
-        // 2. Отправляем команду на получение текущих настроек, хранящихся в бортовом компьютере
-        sendJsonCommand("""{"command":"GET_SETTINGS"}""")
+        // 2. Запрашиваем текущие настройки БК
+        sendJsonCommand("""{"command":"get_settings"}""")
         
-        // 3. Отправляем команду на активацию циклической передачи данных автомобиля (стриминг)
-        sendJsonCommand("""{"command":"GET_DATA"}""")
+        // 3. Запускаем стриминг телеметрии
+        sendJsonCommand("""{"command":"start_telemetry"}""")
     }
 
     /**
      * Центральный метод разбора входящих JSON-сообщений.
-     * Классифицирует пакеты по ключам (data, settings, error) и распределяет их по подсистемам.
+     * Классифицирует пакеты по ключам (telemetry, settings, error, ack_id) и распределяет их по подсистемам.
+     * 
+     * ОБНОВЛЕНИЕ ПРОТОКОЛА: 
+     * - Ключ данных изменен с "data" на "telemetry".
+     * - Добавлена обработка ack_id для подтверждения получения команд.
      * 
      * @param jsonObject Объект, полученный из транспортного слоя.
      */
     private fun handleIncomingMessage(jsonObject: JsonObject) {
         try {
+            // ЛОГИРОВАНИЕ ПОДТВЕРЖДЕНИЯ (ACK)
+            jsonObject["ack_id"]?.jsonPrimitive?.intOrNull?.let { ackId ->
+                AppLogger.logInfo("БК подтвердил получение сообщения: $ackId", TAG)
+            }
+
             // КЕЙС 1: Пакет содержит оперативные данные автомобиля (телеметрия)
-            if (jsonObject.containsKey("data")) {
+            // ОБНОВЛЕНИЕ: Ключ теперь "telemetry"
+            if (jsonObject.containsKey("telemetry")) {
                 // Если это первый пакет данных - переключаем статус в "Прослушивание" (визуальная индикация)
                 if (_internalConnectionState.value != ConnectionState.LISTENING_DATA) {
                     _internalConnectionState.value = ConnectionState.LISTENING_DATA
                 }
 
                 // Извлекаем вложенный объект данных
-                val dataElement = jsonObject["data"]
-                if (dataElement != null) {
+                val telemetryElement = jsonObject["telemetry"]
+                if (telemetryElement != null) {
                     // Десериализуем JSON в доменную модель CarData
-                    val carData = json.decodeFromJsonElement<CarData>(dataElement)
+                    val carData = json.decodeFromJsonElement<CarData>(telemetryElement)
                     // Эмитим обновленные данные в поток для UI
                     appScope.launch { _rawCarDataFlow.emit(carData) }
                 }
@@ -256,7 +268,7 @@ class AppController(
             
             // КЕЙС 3: Пакет содержит описание ошибки, возникшей на стороне БК
             jsonObject["error"]?.jsonPrimitive?.content?.let { errorMsg ->
-                AppLogger.logError("БК вернул ошибку: $errorMsg", TAG)
+                AppLogger.logError("БК вернул ошибку выполнения: $errorMsg", TAG)
             }
             
         } catch (e: Exception) {
@@ -327,8 +339,14 @@ class AppController(
                 
                 // 3. Если изменение инициировано пользователем и контроллер готов
                 if (_isInitialized.value && !fromRemote) {
-                    // Передаем команду в менеджер подключений для анализа смены устройства
+                    // 3.1. Уведомляем менеджер о смене устройства (если оно изменилось)
                     bluetoothConnectionManager.updateSelectedDevice(newSettings.selectedDevice)
+                    
+                    // 3.2. Отправляем технические параметры на БК для синхронизации
+                    // ИСПРАВЛЕНО СОГЛАСНО ТАБЛИЦЕ ПРОТОКОЛА: Команда "set_settings", ключ "data"
+                    val settingsPayload = newSettings.toDeviceSettingsJson()
+                    sendJsonCommand("""{"command":"set_settings","data":$settingsPayload}""")
+                    AppLogger.logInfo("Настройки отправлены на БК (set_settings): $settingsPayload", TAG)
                 }
             } catch (e: Exception) {
                 AppLogger.logError("Ошибка сохранения настроек: ${e.message}", TAG)
@@ -338,8 +356,12 @@ class AppController(
 
     /**
      * Разрывает текущее соединение путем сброса выбранного устройства.
+     * ПЕРЕД разрывом отправляет команду остановки телеметрии.
      */
     fun disconnectFromDevice() {
+        // Остановка стриминга перед разрывом связи
+        stopTelemetry()
+        // Сброс устройства в настройках инициирует процедуру отключения в BCM
         updateSettings(_appSettings.value.copy(selectedDevice = BluetoothDeviceData.empty()))
     }
 
@@ -377,12 +399,25 @@ class AppController(
 
     /**
      * Прокси-метод для отправки произвольных JSON-команд на устройство.
+     * ПРИМЕЧАНИЕ: Транспортный слой (DataStreamHandler) сам добавит msg_id к этим командам.
+     *
      * @param jsonCommand Строка в формате JSON.
      */
     fun sendJsonCommand(jsonCommand: String) {
         if (_isInitialized.value) {
             AppLogger.logInfo("Отправка команды: $jsonCommand", TAG)
             bluetoothConnectionManager.sendJsonCommand(jsonCommand)
+        }
+    }
+
+    /**
+     * Отправляет зарезервированную команду на остановку стриминга телеметрии.
+     * Полезно при отключении от устройства или закрытии приложения.
+     */
+    fun stopTelemetry() {
+        if (_isInitialized.value) {
+            log("Запрос остановки телеметрии (stop_telemetry)")
+            sendJsonCommand("""{"command":"stop_telemetry"}""")
         }
     }
 
@@ -399,11 +434,13 @@ class AppController(
      * Выполняет полную очистку ресурсов контроллера перед уничтожением.
      */
     fun cleanup() {
-        // Останавливаем все процессы в менеджере подключений
+        // 1. Пытаемся остановить стриминг данных перед закрытием канала
+        stopTelemetry()
+        // 2. Останавливаем все процессы в менеджере подключений
         _bluetoothConnectionManager?.cleanup()
-        // Отменяем все активные корутины в области видимости приложения
+        // 3. Отменяем все активные корутины в области видимости приложения
         appScope.cancel()
-        // Сбрасываем флаг готовности
+        // 4. Сбрасываем флаг готовности
         _isInitialized.value = false
     }
 

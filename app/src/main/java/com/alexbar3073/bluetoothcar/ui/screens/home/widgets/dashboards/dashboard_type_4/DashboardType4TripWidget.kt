@@ -194,8 +194,8 @@ internal fun TripWidget(
                                 showTripB = !showTripB 
                             },
                             onLongClick = {
-                                /** Сброс текущей поездки */
-                                val command = if (showTripB) "{\"command\":\"RESET_TRIP_B\"}" else "{\"command\":\"RESET_TRIP_A\"}"
+                                /** Сброс текущей поездки (согласно новому протоколу) */
+                                val command = if (showTripB) "{\"command\":\"reset_trip_b\"}" else "{\"command\":\"reset_trip_a\"}"
                                 onTripReset(command)
                             }
                         )
@@ -222,8 +222,8 @@ internal fun TripWidget(
                                     maxValue = 999999f,
                                     unit = "км",
                                     onSave = { newValue ->
-                                        /** Отправка команды корректировки в БК */
-                                        val command = "{\"command\":\"CORRECT_ODO\", \"ODO\": ${newValue.toInt()}}"
+                                        /** Отправка команды корректировки (согласно новому протоколу: {"command":"correct_odo","data":odo}) */
+                                        val command = "{\"command\":\"correct_odo\", \"data\": ${newValue.toInt()}}"
                                         onTripReset(command)
                                     }
                                 )
