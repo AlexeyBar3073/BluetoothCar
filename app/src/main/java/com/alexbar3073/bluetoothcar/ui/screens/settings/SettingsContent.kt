@@ -37,6 +37,8 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  * 1. Использует: SettingsSection.kt, WidgetsSection.kt, InfoSection.kt
  * 2. Вызывается из: SettingsScreen.kt
  * 3. Использует: EditDialogData.kt для передачи данных в диалоги
+ * 
+ * ИЗМЕНЕНИЕ: Удален параметр onThemeDialogShow, так как выбор темы больше не поддерживается.
  */
 
 @Composable
@@ -45,7 +47,6 @@ fun SettingsContent(
     selectedDevice: BluetoothDeviceData?,
     navController: NavController,
     onEditDialogShow: (EditDialogData) -> Unit,
-    onThemeDialogShow: () -> Unit,
     onDeviceClear: () -> Unit,
     onUpdateSetting: (AppSettings) -> Unit
 ) {
@@ -69,10 +70,9 @@ fun SettingsContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 2. Секция настроек оформления (тема и цвета)
+        // 2. Секция настроек оформления (цвета)
         WidgetsSection(
             appSettings = appSettings,
-            onThemeDialogShow = onThemeDialogShow,
             onUpdateSetting = onUpdateSetting
         )
 
@@ -88,6 +88,7 @@ fun SettingsContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
+            // Текст футера с названием приложения
             Text(
                 text = "BLUETOOTH CAR CONTROL",
                 style = MaterialTheme.typography.labelSmall,

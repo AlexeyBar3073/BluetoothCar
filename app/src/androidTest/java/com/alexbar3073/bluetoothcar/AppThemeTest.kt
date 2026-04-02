@@ -9,7 +9,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * ТЕГ: Тесты тем и запуска / AppThemeTest
+ * ТЕГ: Тесты запуска / AppStartupTest
+ * 
+ * ИЗМЕНЕНИЕ: Тест смены темы удален, так как приложение теперь поддерживает только темную тему.
  */
 @RunWith(AndroidJUnit4::class)
 class AppThemeTest {
@@ -20,6 +22,8 @@ class AppThemeTest {
 
     /**
      * Тест: Проверка запуска приложения.
+     * Проверяет, что приложение успешно проходит этап инициализации и доходит 
+     * до экрана разрешений или главного экрана.
      */
     @Test
     fun testAppStartupFlow() {
@@ -46,57 +50,6 @@ class AppThemeTest {
         assert(hasPermissions || hasHome) { 
             "Приложение не дошло до ожидаемого начального экрана." 
         }
-    }
-
-    /**
-     * Тест: Проверка смены темы оформления.
-     */
-    @Test
-    fun testThemeSelection() {
-        // 1. Ожидаем появления иерархии
-        waitForHierarchy()
-
-        // 2. Ждем завершения инициализации
-        composeTestRule.waitUntil(30000) {
-            try {
-                composeTestRule.onAllNodes(hasText("Инициализация", substring = true))
-                    .fetchSemanticsNodes().isEmpty()
-            } catch (e: Exception) {
-                false
-            }
-        }
-
-        // 3. Если мы на экране разрешений, нажимаем "Продолжить без разрешений"
-        try {
-            val skipButton = composeTestRule.onAllNodes(hasText("без разрешений", substring = true, ignoreCase = true))
-            if (skipButton.fetchSemanticsNodes().isNotEmpty()) {
-                skipButton[0].performClick()
-            }
-        } catch (e: Exception) {
-            // Игнорируем, если экран уже сменился
-        }
-
-        // 4. Ожидаем появления главного экрана
-        composeTestRule.waitUntil(30000) {
-            try {
-                composeTestRule.onAllNodes(hasText("БОРТОВОЙ КОМПЬЮТЕР", ignoreCase = true))
-                    .fetchSemanticsNodes().isNotEmpty()
-            } catch (e: Exception) {
-                false
-            }
-        }
-
-        // 5. Переходим в настройки
-        composeTestRule.onNodeWithContentDescription("Настройки", ignoreCase = true).performClick()
-
-        // 6. Ищем пункт "Тема оформления" и кликаем
-        composeTestRule.onNodeWithText("Тема оформления", substring = true).performClick()
-
-        // 7. Выбираем "Синяя темная"
-        composeTestRule.onNodeWithText("Синяя темная", substring = true).performClick()
-
-        // 8. Проверка
-        composeTestRule.onNodeWithText("Синяя темная").assertIsDisplayed()
     }
 
     /**

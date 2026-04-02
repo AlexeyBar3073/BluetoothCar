@@ -4,11 +4,8 @@ package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -28,7 +25,9 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Секция настроек визуального оформления приборов и виджетов. 
- * Позволяет пользователю выбирать цветовую схему и тему приложения.
+ * Позволяет пользователю выбирать цветовую схему приложения.
+ * 
+ * ИЗМЕНЕНИЕ: Выбор темы оформления удален, так как приложение теперь использует только темную тему.
  *
  * ОТВЕТСТВЕННОСТЬ: Отображение карточек настроек визуализации.
  *
@@ -37,14 +36,13 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  * КЛЮЧЕВОЙ ПРИНЦИП: Группировка связанных настроек интерфейса в единый блок.
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * - Использует: ColorSettingItem.kt, SimpleSettingItem.kt.
+ * - Использует: ColorSettingItem.kt.
  * - Вызывает: ColorPickerDialog.kt (диалог выбора).
  * - Вызывается из: SettingsContent.kt.
  */
 @Composable
 fun WidgetsSection(
     appSettings: AppSettings,
-    onThemeDialogShow: () -> Unit,
     onUpdateSetting: (AppSettings) -> Unit
 ) {
     /** Управление видимостью диалога выбора цвета */
@@ -63,28 +61,6 @@ fun WidgetsSection(
         Column(
             modifier = Modifier.padding(vertical = 8.dp)
         ) {
-            // Настройка темы оформления
-            SimpleSettingItem(
-                title = "Тема оформления",
-                value = when (appSettings.selectedTheme) {
-                    "system" -> "Системная"
-                    "dark" -> "Темная"
-                    "light" -> "Светлая"
-                    "blue_dark" -> "Синяя темная"
-                    else -> "Системная"
-                },
-                icon = Icons.Default.Palette,
-                iconColor = AppColors.TextSecondary,
-                hasClearButton = false,
-                onClick = onThemeDialogShow
-            )
-
-            HorizontalDivider(
-                color = AppColors.SurfaceMedium,
-                thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
             /** 
              * Настройка цвета оформления.
              * Иконка в элементе окрашена в текущий выбранный цвет.

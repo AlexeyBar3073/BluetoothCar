@@ -14,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
@@ -23,8 +22,6 @@ import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
-import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.ThemeSelectionDialog
-import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
@@ -40,14 +37,16 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  * Предоставляет интерфейс для изменения параметров автомобиля и внешнего вида приложения.
  * 
  * ОТВЕТСТВЕННОСТЬ: Отображение разделов настроек, управление диалогами редактирования 
- * значений и выбора темы.
+ * значений.
+ * 
+ * ИЗМЕНЕНИЕ: Удалена логика выбора темы оформления (теперь только Dark).
  * 
  * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM (использует SharedViewModel).
  * 
  * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное управление конфигурацией пользователя.
  * 
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Вызывается из HomeScreen. Взаимодействует с SettingsContent, 
- * диалогами EditValueDialog и ThemeSelectionDialog. Использует CompactTopBar для заголовка.
+ * диалогом EditValueDialog. Использует CompactTopBar для заголовка.
  */
 
 /**
@@ -87,10 +86,9 @@ fun SettingsScreenContent(
     // Состояния для управления диалогами редактирования
     var showEditDialog by remember { mutableStateOf(false) }
     var editDialogData by remember { mutableStateOf(EditDialogData()) }
-    var showThemeDialog by remember { mutableStateOf(false) }
 
-    // Обертка темы приложения
-    BluetoothCarTheme(themeMode = appSettings.selectedTheme) {
+    // Обертка темы приложения (принудительно dark согласно задаче)
+    BluetoothCarTheme(themeMode = "dark") {
         Scaffold(
             topBar = {
                 // Использование унифицированного компактного Топбара (40 DP)
@@ -129,7 +127,6 @@ fun SettingsScreenContent(
                         })
                         showEditDialog = true
                     },
-                    onThemeDialogShow = { showThemeDialog = true },
                     onDeviceClear = onClearSelectedDevice,
                     onUpdateSetting = onUpdateSettings
                 )
@@ -147,26 +144,14 @@ fun SettingsScreenContent(
                 }
             )
         }
-
-        // Диалог выбора цветовой темы
-        if (showThemeDialog) {
-            ThemeSelectionDialog(
-                currentTheme = appSettings.selectedTheme,
-                onDismiss = { showThemeDialog = false },
-                onThemeSelected = { selectedTheme ->
-                    onUpdateSettings(appSettings.copy(selectedTheme = selectedTheme))
-                    showThemeDialog = false
-                }
-            )
-        }
     }
 }
 
 @Preview(showBackground = true, widthDp = 642, heightDp = 360)
 @Composable
-fun PreviewSettingsLight() {
+fun PreviewSettingsDark() {
     SettingsScreenContent(
-        appSettings = AppSettings(selectedTheme = "light"),
+        appSettings = AppSettings(selectedTheme = "dark"),
         selectedDevice = null,
         navController = rememberNavController(),
         onUpdateSettings = {},
