@@ -6,14 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.alexbar3073.bluetoothcar.core.AppController
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
+import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 
 /**
  * ТЕГ: Общая ViewModel
@@ -41,6 +40,7 @@ import kotlinx.coroutines.flow.stateIn
  * 2. Предоставляет данные для: HomeScreen.kt, SettingsScreen.kt, PermissionsScreen.kt
  * 3. Использует: ConnectionStatusInfo из data/bluetooth/
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 open class SharedViewModel(
     private val appController: AppController
 ) : ViewModel() {
@@ -105,6 +105,39 @@ open class SharedViewModel(
             scope = viewModelScope,
             started = SharingStarted.Lazily,
             initialValue = AppSettings()
+        )
+
+    // ========== НОВЫЕ ДАННЫЕ (ОШИБКИ ЭБУ) ==========
+
+    /**
+     * Поток расшифрованных ошибок ЭБУ.
+     * 
+     * ПРИНЦИП РАБОТЫ:
+     * Автоматически обновляется при изменении поля ecuErrors в carData.
+     * Разбивает строку кодов (например, "P0300;P0171") и запрашивает полные данные из БД.
+     * Использует flatMapLatest для отмены предыдущих запросов при поступлении новых кодов.
+     */
+    open val activeEcuErrors: StateFlow<List<EcuErrorEntity>> = carData
+        .map { it.ecuErrors }
+        .distinctUntilChanged()
+        .map { errorsString ->
+            // Разбиваем строку на список очищенных от пробелов кодов
+            errorsString.split(";")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+        .flatMapLatest { codes ->
+            if (codes.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                // Запрашиваем полные данные из справочника БД через AppController
+                appController.getEcuErrorsByCodes(codes)
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
         )
 
     // ========== ПРОИЗВОДНЫЕ ПОТОКИ ДЛЯ УДОБСТВА (МИНИМАЛЬНЫЕ) ==========

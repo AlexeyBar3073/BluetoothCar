@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
+import com.alexbar3073.bluetoothcar.data.database.AppDatabase
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -25,14 +26,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Устраняет жесткие зависимости между компонентами системы.
  * 2. Управляет жизненным циклом singleton-объектов и провайдеров.
- * 3. Обеспечивает потокобезопасный доступ к общим ресурсам (репозитории, сервисы).
+ * 3. Обеспечивает потокобезопасный доступ к общим ресурсам (репозитории, сервисы, БД).
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП: Service Locator / Dependency Injection
  *
  * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное управление жизненным циклом и доступом к зависимостям.
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * - Использует: AppController.kt, AppBluetoothService.kt, SettingsRepository.kt.
+ * - Использует: AppController.kt, AppBluetoothService.kt, SettingsRepository.kt, AppDatabase.kt.
  * - Вызывается из: CoreModule.kt (через initialize).
  * - Взаимодействует: со всеми компонентами системы, предоставляя им зависимости.
  */
@@ -65,15 +66,21 @@ object ServiceLocator {
             // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Double-checked locking для безопасности
             if (isInitialized.get()) return
 
+            val appContext = context.applicationContext
+
             // 1. Создаем репозиторий настроек и сохраняем его в контейнере
-            val settingsRepository = SettingsRepository(context.applicationContext)
+            val settingsRepository = SettingsRepository(appContext)
             register(SettingsRepository::class.java.name, settingsRepository)
 
-            // 2. Регистрируем класс Bluetooth-сервиса для возможности создания Intent-ов
+            // 2. Инициализируем базу данных Room
+            val database = AppDatabase.build(appContext)
+            register(AppDatabase::class.java.name, database)
+
+            // 3. Регистрируем класс Bluetooth-сервиса для возможности создания Intent-ов
             register(AppBluetoothService::class.java.name, AppBluetoothService::class.java)
 
-            // 3. Инициализируем провайдер Bluetooth, отвечающий за связь с Service
-            val bluetoothProvider = BluetoothServiceProvider(context.applicationContext)
+            // 4. Инициализируем провайдер Bluetooth, отвечающий за связь с Service
+            val bluetoothProvider = BluetoothServiceProvider(appContext)
             register(BluetoothServiceProvider::class.java.name, bluetoothProvider)
 
             // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Фиксируем успешное завершение инициализации
@@ -206,6 +213,13 @@ object ServiceLocator {
     fun getSettingsRepository(): SettingsRepository {
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Извлекаем репозиторий из контейнера по его имени
         return resolve(SettingsRepository::class.java.name)
+    }
+
+    /**
+     * Упрощенный доступ к базе данных приложения.
+     */
+    fun getDatabase(): AppDatabase {
+        return resolve(AppDatabase::class.java.name)
     }
 
     /**

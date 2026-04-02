@@ -5,6 +5,7 @@ import android.content.Context
 import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothConnectionManager
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
+import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
@@ -29,6 +30,7 @@ import kotlinx.serialization.json.*
  * 4. СИНХРОНИЗАЦИЯ настроек: прием изменений настроек от БК и обновление локального стейта.
  * 5. Хранение и дистрибуция настроек приложения.
  * 6. ФОРМИРОВАНИЕ финального статуса подключения для UI.
+ * 7. Инициализация и наполнение справочника ошибок ЭБУ из JSON.
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
  * - Разделение ответственности: Транспорт (DSH) и Оркестратор (BCM) не знают о бизнес-логике.
@@ -45,6 +47,8 @@ class AppController(
 
     companion object {
         private const val TAG = "AppController"
+        /** Путь к файлу со справочником ошибок в assets */
+        private const val ECU_ERRORS_JSON_PATH = "ecu_errors.json"
     }
 
     /** Область видимости корутин для работы приложения */
@@ -144,19 +148,22 @@ class AppController(
                 // 2. Настраиваем глобальный логгер согласно требованиям отладки
                 AppLogger.configure(verbose = true, timestamps = true, packetNumbers = true)
 
-                // 3. Выполняем привязку к Android-сервису Bluetooth через ServiceLocator
+                // 3. Инициализируем базу данных ошибок ЭБУ
+                initEcuErrorDatabase()
+
+                // 4. Выполняем привязку к Android-сервису Bluetooth через ServiceLocator
                 ServiceLocator.bindBluetoothService(context) { service ->
-                    // 4. Создаем экземпляр оркестратора подключений (BCM)
+                    // 5. Создаем экземпляр оркестратора подключений (BCM)
                     _bluetoothConnectionManager = BluetoothConnectionManager(context, service)
                     
-                    // 5. Передаем в BCM данные целевого устройства из загруженных настроек
+                    // 6. Передаем в BCM данные целевого устройства из загруженных настроек
                     _bluetoothConnectionManager?.updateSelectedDevice(settings.selectedDevice)
                     
-                    // 6. Активируем фоновых слушателей для обработки данных и состояний
+                    // 7. Активируем фоновых слушателей для обработки данных и состояний
                     startMessageListener()
                     startConnectionStateSychronizer()
                     
-                    // 7. Сигнализируем системе о завершении инициализации
+                    // 8. Сигнализируем системе о завершении инициализации
                     _isInitialized.value = true
                     AppLogger.logInfo("AppController полностью инициализирован", TAG)
                 }
@@ -165,6 +172,39 @@ class AppController(
                 // В случае критического сбоя логируем ошибку и блокируем работу контроллера
                 AppLogger.logError("Ошибка инициализации: ${e.message}", TAG)
                 _isInitialized.value = false
+            }
+        }
+    }
+
+    /**
+     * Выполняет проверку и наполнение базы данных ошибок ЭБУ из JSON файла.
+     * Выполняется только если база данных пуста.
+     */
+    private suspend fun initEcuErrorDatabase() {
+        withContext(Dispatchers.IO) {
+            try {
+                val dao = ServiceLocator.getDatabase().ecuErrorDao()
+                
+                // Проверяем количество записей
+                val count = dao.getCount()
+                AppLogger.logInfo("Текущее количество ошибок в БД: $count", TAG)
+
+                if (count == 0) {
+                    AppLogger.logInfo("База данных ошибок пуста. Начинаю импорт из $ECU_ERRORS_JSON_PATH", TAG)
+                    
+                    // Читаем JSON из assets
+                    val jsonString = context.assets.open(ECU_ERRORS_JSON_PATH).bufferedReader().use { it.readText() }
+                    
+                    // Десериализуем список сущностей
+                    val errors = json.decodeFromString<List<EcuErrorEntity>>(jsonString)
+                    
+                    // Массовая вставка в БД
+                    dao.insertAll(errors)
+                    
+                    AppLogger.logInfo("Импорт завершен успешно. Добавлено ${errors.size} записей.", TAG)
+                }
+            } catch (e: Exception) {
+                AppLogger.logError("Ошибка при инициализации БД ошибок: ${e.message}", TAG)
             }
         }
     }
@@ -297,6 +337,15 @@ class AppController(
     }
 
     // ========== ПУБЛИЧНЫЙ API ДЛЯ UI И ДРУГИХ СЛОЕВ ==========
+
+    /**
+     * Предоставляет поток данных об ошибках ЭБУ на основе списка кодов.
+     * @param codes Список строк с кодами ошибок
+     * @return Flow со списком сущностей из БД
+     */
+    fun getEcuErrorsByCodes(codes: List<String>): Flow<List<EcuErrorEntity>> {
+        return ServiceLocator.getDatabase().ecuErrorDao().getErrorsByCodes(codes)
+    }
 
     /**
      * Предоставляет список сопряженных устройств через проксирование к менеджеру.

@@ -69,7 +69,8 @@ internal fun DashboardType4CombinedGauge(
     appSettings: AppSettings?,
     geometry: DashboardType4Geometry,
     onLongPress: () -> Unit = {},
-    onResetFuel: (String) -> Unit = {}
+    onResetFuel: (String) -> Unit = {},
+    onShowEcuErrors: () -> Unit = {} // Новый коллбэк для вызова диалога ошибок
 ) {
     // Получение емкости бака из настроек
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
@@ -200,6 +201,11 @@ internal fun DashboardType4CombinedGauge(
                     val dx = offset.x - geometry.center.x
                     val dy = offset.y - geometry.center.y
                     val dist = sqrt(dx * dx + dy * dy)
+                    
+                    // Определение угла нажатия
+                    var angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                    if (angle < 0) angle += 360f
+
                     if (dist < geometry.blackRadius) {
                         // Клик в центр - циклическое переключение
                         selectedSource = when (selectedSource) {
@@ -208,14 +214,17 @@ internal fun DashboardType4CombinedGauge(
                             GaugeSource.FUEL -> GaugeSource.ENGINE_TEMP
                         }
                     } else if (dist < geometry.outerRingRadius) {
-                        // Клик на конкретную шкалу
-                        var angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
-                        if (angle < 0) angle += 360f
-                        selectedSource = when {
-                            angle in 130f..230f -> GaugeSource.FUEL
-                            angle in 231f..310f -> GaugeSource.TRANS_TEMP
-                            angle > 310f || angle < 50f -> GaugeSource.ENGINE_TEMP
-                            else -> selectedSource
+                        // ПРОВЕРКА КЛИКА ПО ИКОНКЕ ЧЕКА (Угол ~100 градусов)
+                        if (carData.ecuErrors.isNotEmpty() && angle in 90f..110f) {
+                            onShowEcuErrors()
+                        } else {
+                            // Клик на конкретную шкалу
+                            selectedSource = when {
+                                angle in 130f..230f -> GaugeSource.FUEL
+                                angle in 231f..310f -> GaugeSource.TRANS_TEMP
+                                angle > 310f || angle < 50f -> GaugeSource.ENGINE_TEMP
+                                else -> selectedSource
+                            }
                         }
                     }
                 }
