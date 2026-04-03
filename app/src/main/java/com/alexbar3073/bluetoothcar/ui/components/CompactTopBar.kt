@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +31,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.COMPACT_TOP_BAR_HEIGHT
  * 
  * ОТВЕТСТВЕННОСТЬ: Отображение заголовка, навигационных кнопок и статусных индикаторов.
  * 
- * ОБНОВЛЕНИЕ: В темной теме использует градиент и оверлей согласно DASHBOARD_4_SPEC.
+ * ОБНОВЛЕНИЕ: Добавлена поддержка Painter для titlePainterIcon (для PNG ресурсов).
  */
 
 @Composable
@@ -38,19 +39,19 @@ fun CompactTopBar(
     title: String,
     modifier: Modifier = Modifier,
     titleIcon: ImageVector? = null,
+    titlePainterIcon: Painter? = null, // Добавлен параметр для растровых иконок
     titleIconTint: Color = AppColors.PrimaryBlue,
     navigationIcon: ImageVector? = null,
     onNavigationClick: (() -> Unit)? = null,
     leftContent: @Composable (BoxScope.() -> Unit)? = null,
     rightContent: @Composable (BoxScope.() -> Unit)? = null,
 ) {
-    // Используем Box вместо Surface для поддержки градиентного фона из AppColors
+    // Используем Box для поддержки градиентного фона
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(COMPACT_TOP_BAR_HEIGHT)
             .background(Brush.verticalGradient(AppColors.SurfaceGradient))
-            // Дополнительный слой оверлея (0x0AFFFFFF для темной темы)
             .background(AppColors.SurfaceDark)
     ) {
         Box(
@@ -58,7 +59,7 @@ fun CompactTopBar(
                 .fillMaxSize()
                 .padding(horizontal = 4.dp)
         ) {
-            // ЛЕВАЯ СЕКЦИЯ: Кнопка навигации или пользовательский контент
+            // ЛЕВАЯ СЕКЦИЯ
             Box(
                 modifier = Modifier.align(Alignment.CenterStart),
                 contentAlignment = Alignment.Center
@@ -79,9 +80,18 @@ fun CompactTopBar(
                 modifier = Modifier.align(Alignment.Center),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Приоритет отдается titleIcon (Vector), если нет - используем Painter
                 if (titleIcon != null) {
                     Icon(
                         imageVector = titleIcon,
+                        contentDescription = null,
+                        tint = titleIconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                } else if (titlePainterIcon != null) {
+                    Icon(
+                        painter = titlePainterIcon,
                         contentDescription = null,
                         tint = titleIconTint,
                         modifier = Modifier.size(18.dp)
@@ -99,7 +109,7 @@ fun CompactTopBar(
                 )
             }
 
-            // ПРАВАЯ СЕКЦИЯ: Кнопки действий или настройки
+            // ПРАВАЯ СЕКЦИЯ
             if (rightContent != null) {
                 Box(
                     modifier = Modifier.align(Alignment.CenterEnd),
@@ -113,7 +123,7 @@ fun CompactTopBar(
 }
 
 /**
- * Базовый компонент кнопки для Топбара. Обеспечивает единый размер.
+ * Базовый компонент кнопки для Топбара.
  */
 @Composable
 fun TopBarButton(
@@ -128,7 +138,6 @@ fun TopBarButton(
             .clip(CircleShape)
             .clickable(onClick = onClick)
     ) {
-        // Фоновый круг (AppColors.SurfaceMedium = 0x15FFFFFF в темной теме)
         Box(
             modifier = Modifier
                 .size(28.dp)

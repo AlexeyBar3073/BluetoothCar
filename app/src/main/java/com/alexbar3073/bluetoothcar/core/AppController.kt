@@ -2,10 +2,12 @@
 package com.alexbar3073.bluetoothcar.core
 
 import android.content.Context
+import android.net.Uri
 import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothConnectionManager
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
+import com.alexbar3073.bluetoothcar.data.database.entities.EcuCombinationEntity
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
@@ -13,7 +15,10 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import java.io.OutputStream
 
 /**
  * ТЕГ: Главный координатор
@@ -30,7 +35,9 @@ import kotlinx.serialization.json.*
  * 4. СИНХРОНИЗАЦИЯ настроек: прием изменений настроек от БК и обновление локального стейта.
  * 5. Хранение и дистрибуция настроек приложения.
  * 6. ФОРМИРОВАНИЕ финального статуса подключения для UI.
- * 7. Инициализация и наполнение справочника ошибок ЭБУ из JSON.
+ * 7. Инициализация и наполнение справочника ошибок ЭБУ и их комбинаций из JSON.
+ * 8. ОБНОВЛЕНИЕ баз данных из внешних пользовательских файлов.
+ * 9. ЭКСПОРТ текущего состава баз данных в JSON файлы.
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
  * - Разделение ответственности: Транспорт (DSH) и Оркестратор (BCM) не знают о бизнес-логике.
@@ -49,13 +56,19 @@ class AppController(
         private const val TAG = "AppController"
         /** Путь к файлу со справочником ошибок в assets */
         private const val ECU_ERRORS_JSON_PATH = "ecu_errors.json"
+        /** Путь к файлу со справочником комбинаций в assets */
+        private const val ECU_COMBINATIONS_JSON_PATH = "ecu_combinations.json"
     }
 
     /** Область видимости корутин для работы приложения */
     private val appScope = CoroutineScope(Dispatchers.Main + Job())
 
     /** JSON парсер */
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        coerceInputValues = true
+        prettyPrint = true // Для удобства чтения экспортируемых файлов
+    }
 
     // ========== СОСТОЯНИЯ ==========
 
@@ -148,8 +161,9 @@ class AppController(
                 // 2. Настраиваем глобальный логгер согласно требованиям отладки
                 AppLogger.configure(verbose = true, timestamps = true, packetNumbers = true)
 
-                // 3. Инициализируем базу данных ошибок ЭБУ
+                // 3. Инициализируем базу данных ошибок ЭБУ и комбинаций
                 initEcuErrorDatabase()
+                initEcuCombinationDatabase()
 
                 // 4. Выполняем привязку к Android-сервису Bluetooth через ServiceLocator
                 ServiceLocator.bindBluetoothService(context) { service ->
@@ -206,6 +220,152 @@ class AppController(
             } catch (e: Exception) {
                 AppLogger.logError("Ошибка при инициализации БД ошибок: ${e.message}", TAG)
             }
+        }
+    }
+
+    /**
+     * Выполняет проверку и наполнение базы данных комбинаций ошибок из JSON файла.
+     */
+    private suspend fun initEcuCombinationDatabase() {
+        withContext(Dispatchers.IO) {
+            try {
+                val dao = ServiceLocator.getDatabase().ecuCombinationDao()
+                val count = dao.getCount()
+                
+                if (count == 0) {
+                    AppLogger.logInfo("База данных комбинаций пуста. Импорт из $ECU_COMBINATIONS_JSON_PATH", TAG)
+                    
+                    // Читаем JSON из assets
+                    val jsonString = context.assets.open(ECU_COMBINATIONS_JSON_PATH).bufferedReader().use { it.readText() }
+                    
+                    // Десериализуем список сущностей
+                    val combinations = json.decodeFromString<List<EcuCombinationEntity>>(jsonString)
+                    
+                    // Массовая вставка в БД
+                    dao.insertAll(combinations)
+                    
+                    AppLogger.logInfo("Импорт комбинаций завершен. Добавлено ${combinations.size} записей.", TAG)
+                }
+            } catch (e: Exception) {
+                AppLogger.logError("Ошибка при инициализации БД комбинаций: ${e.message}", TAG)
+            }
+        }
+    }
+
+    /**
+     * Импортирует базу данных ошибок ЭБУ из внешнего JSON файла по URI.
+     * Выполняет УМНОЕ ОБНОВЛЕНИЕ: заменяет существующие и добавляет новые записи.
+     * 
+     * @param uri URI выбранного пользователем файла
+     * @return Результат операции (количество записей или ошибка)
+     */
+    suspend fun importEcuErrorsFromUri(uri: Uri): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            // 1. Читаем содержимое файла
+            val jsonString = context.contentResolver.openInputStream(uri)?.use { 
+                it.bufferedReader().readText() 
+            } ?: throw Exception("Не удалось открыть файл")
+
+            // 2. Валидация структуры данных
+            val errors = try {
+                json.decodeFromString<List<EcuErrorEntity>>(jsonString)
+            } catch (e: SerializationException) {
+                throw Exception("Формат данных в файле не соответствует ожидаемой структуре базы ошибок")
+            }
+
+            if (errors.isEmpty()) throw Exception("Файл пуст")
+
+            // 3. Выполняем обновление базы данных (без предварительного удаления)
+            val dao = ServiceLocator.getDatabase().ecuErrorDao()
+            dao.insertAll(errors)
+            
+            AppLogger.logInfo("Обновление базы ошибок завершено: ${errors.size} записей обработано", TAG)
+            Result.success(errors.size)
+        } catch (e: Exception) {
+            AppLogger.logError("Ошибка импорта базы ошибок: ${e.message}", TAG)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Импортирует базу данных комбинаций из внешнего JSON файла по URI.
+     * Выполняет УМНОЕ ОБНОВЛЕНИЕ: заменяет существующие и добавляет новые записи.
+     */
+    suspend fun importEcuCombinationsFromUri(uri: Uri): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val jsonString = context.contentResolver.openInputStream(uri)?.use { 
+                it.bufferedReader().readText() 
+            } ?: throw Exception("Не удалось открыть файл")
+
+            val combinations = try {
+                json.decodeFromString<List<EcuCombinationEntity>>(jsonString)
+            } catch (e: SerializationException) {
+                throw Exception("Формат данных в файле не соответствует ожидаемой структуре базы комбинаций")
+            }
+
+            if (combinations.isEmpty()) throw Exception("Файл пуст")
+
+            val dao = ServiceLocator.getDatabase().ecuCombinationDao()
+            dao.insertAll(combinations)
+            
+            AppLogger.logInfo("Обновление базы комбинаций завершено: ${combinations.size} записей обработано", TAG)
+            Result.success(combinations.size)
+        } catch (e: Exception) {
+            AppLogger.logError("Ошибка импорта базы комбинаций: ${e.message}", TAG)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Экспортирует текущую базу данных ошибок ЭБУ в JSON файл по предоставленному URI.
+     * 
+     * @param uri URI для сохранения файла (SAF)
+     * @return Результат операции
+     */
+    suspend fun exportEcuErrorsToUri(uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            // 1. Получаем все данные из БД
+            val dao = ServiceLocator.getDatabase().ecuErrorDao()
+            val errors = dao.getAllErrorsList()
+
+            // 2. Сериализуем в JSON строку
+            val jsonString = json.encodeToString(errors)
+
+            // 3. Записываем в файл через ContentResolver
+            context.contentResolver.openOutputStream(uri)?.use { 
+                it.write(jsonString.toByteArray()) 
+            } ?: throw Exception("Не удалось открыть файл для записи")
+
+            AppLogger.logInfo("Экспорт базы ошибок завершен: ${errors.size} записей", TAG)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            AppLogger.logError("Ошибка экспорта базы ошибок: ${e.message}", TAG)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Экспортирует текущую базу данных комбинаций в JSON файл по предоставленному URI.
+     * 
+     * @param uri URI для сохранения файла (SAF)
+     * @return Результат операции
+     */
+    suspend fun exportEcuCombinationsToUri(uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val dao = ServiceLocator.getDatabase().ecuCombinationDao()
+            val combinations = dao.getAllCombinationsList()
+
+            val jsonString = json.encodeToString(combinations)
+
+            context.contentResolver.openOutputStream(uri)?.use { 
+                it.write(jsonString.toByteArray()) 
+            } ?: throw Exception("Не удалось открыть файл для записи")
+
+            AppLogger.logInfo("Экспорт базы комбинаций завершен: ${combinations.size} записей", TAG)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            AppLogger.logError("Ошибка экспорта базы комбинаций: ${e.message}", TAG)
+            Result.failure(e)
         }
     }
 
@@ -279,7 +439,7 @@ class AppController(
                 AppLogger.logInfo("БК подтвердил получение сообщения: $ackId", TAG)
             }
 
-            // КЕЙС 1: Пакет содержит оперативные данные автомобиля (телеметрия)
+            // КЕЙС 1: Пакет содержит оперативные данные автомобиля (telemetry)
             // ОБНОВЛЕНИЕ: Ключ теперь "telemetry"
             if (jsonObject.containsKey("telemetry")) {
                 // Если это первый пакет данных - переключаем статус в "Прослушивание" (визуальная индикация)
@@ -339,12 +499,30 @@ class AppController(
     // ========== ПУБЛИЧНЫЙ API ДЛЯ UI И ДРУГИХ СЛОЕВ ==========
 
     /**
+     * Предоставляет реактивный поток данных для конкретной ошибки по её коду.
+     * Используется для отображения деталей ошибки (включая связанные).
+     * 
+     * @param code Код ошибки (напр. P0300)
+     * @return Flow с объектом ошибки или null
+     */
+    fun getEcuErrorByCode(code: String): Flow<EcuErrorEntity?> {
+        return ServiceLocator.getDatabase().ecuErrorDao().getErrorByCode(code)
+    }
+
+    /**
      * Предоставляет поток данных об ошибках ЭБУ на основе списка кодов.
      * @param codes Список строк с кодами ошибок
      * @return Flow со списком сущностей из БД
      */
     fun getEcuErrorsByCodes(codes: List<String>): Flow<List<EcuErrorEntity>> {
         return ServiceLocator.getDatabase().ecuErrorDao().getErrorsByCodes(codes)
+    }
+
+    /**
+     * Предоставляет поток всех возможных комбинаций ошибок.
+     */
+    fun getAllCombinations(): Flow<List<EcuCombinationEntity>> {
+        return ServiceLocator.getDatabase().ecuCombinationDao().getAllCombinations()
     }
 
     /**

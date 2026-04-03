@@ -8,7 +8,9 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.alexbar3073.bluetoothcar.data.database.converters.EcuErrorTypeConverters
 import com.alexbar3073.bluetoothcar.data.database.dao.EcuErrorDao
+import com.alexbar3073.bluetoothcar.data.database.dao.EcuCombinationDao
 import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
+import com.alexbar3073.bluetoothcar.data.database.entities.EcuCombinationEntity
 
 /**
  * ТЕГ: Database/AppDatabase
@@ -27,9 +29,9 @@ import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
  *
  * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное хранение всех локальных данных.
  *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: (Использует: EcuErrorEntity.kt, EcuErrorDao.kt, EcuErrorTypeConverters.kt / Взаимодействует: ServiceLocator.kt)
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: (Использует: EcuErrorEntity.kt, EcuCombinationEntity.kt, EcuErrorDao.kt, EcuCombinationDao.kt, EcuErrorTypeConverters.kt / Взаимодействует: ServiceLocator.kt)
  */
-@Database(entities = [EcuErrorEntity::class], version = 1, exportSchema = false)
+@Database(entities = [EcuErrorEntity::class, EcuCombinationEntity::class], version = 2, exportSchema = false)
 @TypeConverters(EcuErrorTypeConverters::class)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -37,6 +39,11 @@ abstract class AppDatabase : RoomDatabase() {
      * Получить DAO для работы с ошибками ЭБУ.
      */
     abstract fun ecuErrorDao(): EcuErrorDao
+
+    /**
+     * Получить DAO для работы с комбинациями ошибок ЭБУ.
+     */
+    abstract fun ecuCombinationDao(): EcuCombinationDao
 
     companion object {
         /** Имя файла базы данных */

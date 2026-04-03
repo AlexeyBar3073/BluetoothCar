@@ -1,3 +1,4 @@
+// Файл: ui/screens/settings/components/SimpleSettingItem.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -27,13 +29,10 @@ import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
 /**
- * Компонент для отображения простой настройки с иконкой и значением
- *
- * Используется для числовых настроек и настроек с выбором:
- * - Объем топливного бака
- * - Производительность форсунки
- * - Тема оформления
- * - И другие настройки без переключателей
+ * ТЕГ: Settings/UI/Item
+ * 
+ * Компонент для отображения простой настройки с иконкой и значением.
+ * Обеспечивает единый визуальный стиль для всех элементов списков настроек и ошибок.
  *
  * @param title Название настройки
  * @param value Текущее значение (отображаемое)
@@ -62,7 +61,7 @@ fun SimpleSettingItem(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            // Иконка настройки
+            // Иконка настройки в круглой подложке
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -82,25 +81,25 @@ fun SimpleSettingItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Текст настройки
+            // Текстовый блок
             Column(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
                     color = AppColors.TextPrimary
                 )
+                // ОБНОВЛЕНИЕ: Используется семантический цвет ContentDetail для лучшей видимости
                 Text(
                     text = value,
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.TextTertiary
+                    color = AppColors.ContentDetail
                 )
             }
 
-            // Кнопка очистки (если нужно)
-            // Иконка стрелки удалена, так как кликабельна вся карточка
+            // Кнопка очистки (если предусмотрена логикой)
             if (hasClearButton) {
                 IconButton(
                     onClick = onClear,

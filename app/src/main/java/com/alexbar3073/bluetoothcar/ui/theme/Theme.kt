@@ -110,6 +110,12 @@ object AppColors {
             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
         else
             DarkBlueGrey40
+
+    /**
+     * Семантический цвет для подробностей и описаний в карточках.
+     * Базируется на TextSecondary, который обеспечивает хорошую читаемость.
+     */
+    val ContentDetail: Color @Composable @ReadOnlyComposable get() = TextSecondary
     
     /** Цвет успеха (зеленый) */
     val Success = Green80

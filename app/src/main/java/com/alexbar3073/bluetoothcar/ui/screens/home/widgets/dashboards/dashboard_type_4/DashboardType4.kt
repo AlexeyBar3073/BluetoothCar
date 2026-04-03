@@ -40,7 +40,8 @@ fun DashboardType4(
     carData: CarData,
     appSettings: AppSettings,
     onTripReset: (String) -> Unit = {},
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    onShowEcuErrors: () -> Unit = {} // Коллбэк для показа диалога ошибок ЭБУ
 ) {
     val density = LocalDensity.current
     
@@ -97,7 +98,9 @@ fun DashboardType4(
                         carData = carData,
                         appSettings = appSettings,
                         geometry = gaugeGeometry,
-                        onLongPress = onLongPress
+                        onLongPress = onLongPress,
+                        onResetFuel = onTripReset, // Передаем коллбэк для сброса топлива (reset_fuel)
+                        onShowEcuErrors = onShowEcuErrors // Передаем коллбэк дальше в прибор
                     )
                 }
             }

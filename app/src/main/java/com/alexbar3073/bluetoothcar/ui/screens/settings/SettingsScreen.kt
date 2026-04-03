@@ -1,22 +1,21 @@
 // Файл: ui/screens/settings/SettingsScreen.kt
 package com.alexbar3073.bluetoothcar.ui.screens.settings
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
@@ -34,45 +33,81 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/
  * 
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ: Главный экран настроек приложения. 
- * Предоставляет интерфейс для изменения параметров автомобиля и внешнего вида приложения.
- * 
- * ОТВЕТСТВЕННОСТЬ: Отображение разделов настроек, управление диалогами редактирования 
- * значений.
- * 
- * ИЗМЕНЕНИЕ: Удалена логика выбора темы оформления (теперь только Dark).
- * 
- * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM (использует SharedViewModel).
- * 
- * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное управление конфигурацией пользователя.
- * 
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: Вызывается из HomeScreen. Взаимодействует с SettingsContent, 
- * диалогом EditValueDialog. Использует CompactTopBar для заголовка.
+ * Предоставляет интерфейс для изменения параметров автомобиля, управления базами данных
+ * (импорт/экспорт) и просмотра информации о приложении.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * Использует: SharedViewModel.kt, SettingsContent.kt / Вызывается из: SetupNavigation.kt
  */
 
-/**
- * Входная точка экрана настроек. Связывает состояния ViewModel с контентом.
- */
 @Composable
 fun SettingsScreen(
     navController: NavController,
     viewModel: SharedViewModel
 ) {
-    // Подписка на настройки и выбранное устройство
+    val context = LocalContext.current
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
 
-    // Делегирование отрисовки контентной функции
+    // --- LAUNCHERS ДЛЯ ИМПОРТА (ЧТЕНИЕ ФАЙЛА) ---
+
+    val errorFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.importEcuErrors(it) { message ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val combinationFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.importEcuCombinations(it) { message ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    // --- LAUNCHERS ДЛЯ ЭКСПОРТА (СОХРАНЕНИЕ ФАЙЛА) ---
+
+    val exportErrorLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.exportEcuErrors(it) { message ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val exportCombinationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.exportEcuCombinations(it) { message ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     SettingsScreenContent(
         appSettings = appSettings,
         selectedDevice = selectedDevice,
         navController = navController,
         onUpdateSettings = { viewModel.updateSettings(it) },
-        onClearSelectedDevice = { viewModel.clearSelectedDevice() }
+        onClearSelectedDevice = { viewModel.clearSelectedDevice() },
+        onImportErrors = { errorFileLauncher.launch("*/*") },
+        onExportErrors = { exportErrorLauncher.launch("ecu_errors_backup.json") },
+        onImportCombinations = { combinationFileLauncher.launch("*/*") },
+        onExportCombinations = { exportCombinationLauncher.launch("ecu_combinations_backup.json") }
     )
 }
 
 /**
- * Основной UI-контент экрана настроек с поддержкой Scaffold и TopBar.
+ * Основной UI-контент экрана настроек.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,17 +116,18 @@ fun SettingsScreenContent(
     selectedDevice: BluetoothDeviceData?,
     navController: NavController,
     onUpdateSettings: (AppSettings) -> Unit,
-    onClearSelectedDevice: () -> Unit
+    onClearSelectedDevice: () -> Unit,
+    onImportErrors: () -> Unit = {},
+    onExportErrors: () -> Unit = {},
+    onImportCombinations: () -> Unit = {},
+    onExportCombinations: () -> Unit = {}
 ) {
-    // Состояния для управления диалогами редактирования
     var showEditDialog by remember { mutableStateOf(false) }
     var editDialogData by remember { mutableStateOf(EditDialogData()) }
 
-    // Обертка темы приложения (принудительно dark согласно задаче)
     BluetoothCarTheme(themeMode = "dark") {
         Scaffold(
             topBar = {
-                // Использование унифицированного компактного Топбара (40 DP)
                 CompactTopBar(
                     title = "НАСТРОЙКИ",
                     titleIcon = Icons.Default.Settings,
@@ -100,20 +136,17 @@ fun SettingsScreenContent(
                 )
             }
         ) { paddingValues ->
-            // Область контента с градиентным фоном
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
             ) {
-                // Вызов композиции со списком настроек
                 SettingsContent(
                     appSettings = appSettings,
                     selectedDevice = selectedDevice,
                     navController = navController,
                     onEditDialogShow = { data ->
-                        // Логика подготовки данных для диалога редактирования
                         editDialogData = data.copy(onSave = { newValue ->
                             val updatedSettings = when (data.title) {
                                 "Объем топливного бака" -> appSettings.copy(fuelTankCapacity = newValue)
@@ -128,12 +161,15 @@ fun SettingsScreenContent(
                         showEditDialog = true
                     },
                     onDeviceClear = onClearSelectedDevice,
-                    onUpdateSetting = onUpdateSettings
+                    onUpdateSetting = onUpdateSettings,
+                    onImportErrors = onImportErrors,
+                    onExportErrors = onExportErrors,
+                    onImportCombinations = onImportCombinations,
+                    onExportCombinations = onExportCombinations
                 )
             }
         }
 
-        // Диалог редактирования числовых значений
         if (showEditDialog) {
             EditValueDialog(
                 data = editDialogData,
@@ -145,16 +181,4 @@ fun SettingsScreenContent(
             )
         }
     }
-}
-
-@Preview(showBackground = true, widthDp = 642, heightDp = 360)
-@Composable
-fun PreviewSettingsDark() {
-    SettingsScreenContent(
-        appSettings = AppSettings(selectedTheme = "dark"),
-        selectedDevice = null,
-        navController = rememberNavController(),
-        onUpdateSettings = {},
-        onClearSelectedDevice = {}
-    )
 }

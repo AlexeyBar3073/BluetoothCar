@@ -26,6 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
+import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
@@ -50,7 +51,7 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  * Предоставляет интерфейс бортового компьютера с визуализацией данных в реальном времени.
  * 
  * ОТВЕТСТВЕННОСТЬ: Отображение панели приборов, индикация статуса подключения, 
- * переход к настройкам и управление сбросом параметров поездки.
+ * переход к настройкам, к списку ошибок ЭБУ и управление сбросом параметров поездки.
  * 
  * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM.
  * 
@@ -60,22 +61,26 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 @Composable
 fun HomeScreen(
     viewModel: SharedViewModel,
-    navigateToSettings: () -> Unit
+    navigateToSettings: () -> Unit,
+    navigateToEcuErrors: () -> Unit // Добавлен переход к экрану ошибок
 ) {
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val carData by viewModel.carData.collectAsStateWithLifecycle()
     val connectionStatusInfo by viewModel.connectionStatusInfo.collectAsStateWithLifecycle()
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
+    val activeEcuErrors by viewModel.activeEcuErrors.collectAsStateWithLifecycle()
 
     HomeScreenContent(
         selectedDevice = selectedDevice,
         carData = carData,
         connectionStatusInfo = connectionStatusInfo,
         appSettings = appSettings,
+        activeEcuErrors = activeEcuErrors,
         onRetryConnection = { viewModel.retryConnection() },
         onTripReset = { command -> viewModel.sendJsonCommand(command) },
         onSettingsUpdate = { viewModel.updateSettings(it) },
-        navigateToSettings = navigateToSettings
+        navigateToSettings = navigateToSettings,
+        navigateToEcuErrors = navigateToEcuErrors
     )
 }
 
@@ -86,10 +91,12 @@ fun HomeScreenContent(
     carData: CarData,
     connectionStatusInfo: ConnectionStatusInfo,
     appSettings: AppSettings,
+    activeEcuErrors: List<EcuErrorEntity>,
     onRetryConnection: () -> Unit,
     onTripReset: (String) -> Unit = {},
     onSettingsUpdate: (AppSettings) -> Unit = {},
-    navigateToSettings: () -> Unit
+    navigateToSettings: () -> Unit,
+    navigateToEcuErrors: () -> Unit // Коллбэк для навигации в SetupNavigation
 ) {
     var showColorPicker by remember { mutableStateOf(false) }
 
@@ -136,7 +143,8 @@ fun HomeScreenContent(
                         carData = carData,
                         appSettings = appSettings,
                         onTripReset = onTripReset,
-                        onLongPress = { showColorPicker = true }
+                        onLongPress = { showColorPicker = true },
+                        onShowEcuErrors = navigateToEcuErrors // Теперь вызываем переход на экран, а не диалог
                     )
                 }
             }
@@ -145,7 +153,8 @@ fun HomeScreenContent(
                 ColorPickerDialog(
                     appSettings = appSettings,
                     onDismiss = { showColorPicker = false },
-                    onColorSelected = { color ->
+                    onColorSelected = { color: Color ->
+                        // Явное приведение цвета к Long для сохранения в настройки
                         val updatedSettings = appSettings.copy(currentDashboardColor = color.toArgb().toLong())
                         onSettingsUpdate(updatedSettings)
                     }
@@ -159,7 +168,6 @@ fun HomeScreenContent(
 
 /**
  * Данные для превью в рабочем режиме. 
- * Используются для проверки корректности масштабирования элементов при разной плотности пикселей.
  */
 private val previewData = CarData(
     speed = 85f,
@@ -176,7 +184,6 @@ private val previewData = CarData(
 
 /**
  * Превью домашнего экрана для формата Full HD (1080P).
- * Параметры устройства (642dp x 360dp, 480dpi) соответствуют расчетным пропорциям для 1080P панелей.
  */
 @Preview(
     name = "Home - 1080P",
@@ -190,14 +197,16 @@ fun Preview1080() {
         carData = previewData,
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
         appSettings = AppSettings(selectedTheme = "dark", fuelTankCapacity = 60f),
+        activeEcuErrors = emptyList(),
         onRetryConnection = {},
-        navigateToSettings = {}
+        navigateToSettings = {},
+        navigateToEcuErrors = {}
     )
 }
 
 /**
  * Превью домашнего экрана для формата HD (720P).
- * Параметры устройства (624dp x 360dp, 320dpi) соответствуют расчетным пропорциям для 720P панелей.
+ * ВОССТАНОВЛЕНО согласно правилам сохранения существующего кода.
  */
 @Preview(
     name = "Home - 720P",
@@ -211,7 +220,9 @@ fun Preview720() {
         carData = previewData,
         connectionStatusInfo = ConnectionState.LISTENING_DATA.toStatusInfo(),
         appSettings = AppSettings(selectedTheme = "dark", fuelTankCapacity = 60f),
+        activeEcuErrors = emptyList(),
         onRetryConnection = {},
-        navigateToSettings = {}
+        navigateToSettings = {},
+        navigateToEcuErrors = {}
     )
 }

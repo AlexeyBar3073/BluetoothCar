@@ -14,53 +14,29 @@ import kotlinx.coroutines.flow.Flow
  * ФАЙЛ: data/database/dao/EcuErrorDao.kt
  *
  * МЕСТОНАХОЖДЕНИЕ: data/database/dao/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
- * Объект доступа к данным (DAO) для таблицы ecu_errors.
- * Содержит методы для выполнения SQL-запросов к базе данных Room.
- *
- * ОТВЕТСТВЕННОСТЬ: Выполнение операций чтения и записи для сущностей ошибок ЭБУ.
- *
- * АРХИТЕКТУРНЫЙ ПРИНЦИП: Room DAO
- *
- * КЛЮЧЕВОЙ ПРИНЦИП: Реактивность через Flow и безопасная вставка данных.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: (Использует: EcuErrorEntity.kt / Взаимодействует: AppDatabase.kt, AppController.kt)
  */
 @Dao
 interface EcuErrorDao {
 
     /**
      * Получить данные об ошибке по её уникальному коду.
-     * @param code Код ошибки (например, P0335)
-     * @return Объект ошибки или null, если не найдено
+     * Используется TRIM и UPPER для игнорирования пробелов и регистра при поиске.
      */
-    @Query("SELECT * FROM ecu_errors WHERE code = :code LIMIT 1")
-    suspend fun getErrorByCode(code: String): EcuErrorEntity?
+    @Query("SELECT * FROM ecu_errors WHERE UPPER(TRIM(code)) = UPPER(TRIM(:code)) LIMIT 1")
+    fun getErrorByCode(code: String): Flow<EcuErrorEntity?>
 
-    /**
-     * Получить список данных для нескольких кодов одновременно.
-     * Используется для отображения списка текущих активных ошибок.
-     * @param codes Список кодов ошибок
-     * @return Список найденных сущностей
-     */
     @Query("SELECT * FROM ecu_errors WHERE code IN (:codes)")
     fun getErrorsByCodes(codes: List<String>): Flow<List<EcuErrorEntity>>
 
-    /**
-     * Массовая вставка ошибок в базу данных.
-     * Используется при первичном импорте из JSON.
-     * Если запись с таким кодом уже существует — она будет заменена (REPLACE).
-     * @param errors Список сущностей для вставки
-     */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(errors: List<EcuErrorEntity>)
+    @Query("SELECT * FROM ecu_errors")
+    fun getAllErrorsList(): List<EcuErrorEntity>
 
-    /**
-     * Получить общее количество записей в таблице.
-     * Позволяет проверить, пуста ли база перед импортом.
-     * @return Количество строк
-     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAll(errors: List<EcuErrorEntity>)
+
+    @Query("DELETE FROM ecu_errors")
+    fun deleteAll()
+
     @Query("SELECT COUNT(*) FROM ecu_errors")
-    suspend fun getCount(): Int
+    fun getCount(): Int
 }

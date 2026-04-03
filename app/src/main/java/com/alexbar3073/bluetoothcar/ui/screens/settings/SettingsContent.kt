@@ -8,10 +8,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
+import com.alexbar3073.bluetoothcar.ui.screens.settings.components.DatabaseSection
 import com.alexbar3073.bluetoothcar.ui.screens.settings.components.InfoSection
 import com.alexbar3073.bluetoothcar.ui.screens.settings.components.SettingsSection
 import com.alexbar3073.bluetoothcar.ui.screens.settings.components.WidgetsSection
@@ -24,21 +26,18 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Основное содержимое экрана настроек. Объединяет все секции настроек:
- * 1. Основные настройки (SettingsSection)
- * 2. Настройки виджетов и оформления (WidgetsSection)
- * 3. Информация о приложении (InfoSection)
+ * 1. Основные параметры автомобиля (SettingsSection)
+ * 2. Управление базами данных (DatabaseSection)
+ * 3. Настройки приложения (WidgetsSection)
+ * 4. О приложении (InfoSection)
  *
  * КЛЮЧЕВОЙ ПРИНЦИП:
  * - Является композаблой-контейнером для всех секций настроек
  * - Управляет вертикальной прокруткой контента
- * - Не содержит бизнес-логики, только композицию UI
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: SettingsSection.kt, WidgetsSection.kt, InfoSection.kt
+ * 1. Использует: SettingsSection.kt, DatabaseSection.kt, WidgetsSection.kt, InfoSection.kt
  * 2. Вызывается из: SettingsScreen.kt
- * 3. Использует: EditDialogData.kt для передачи данных в диалоги
- * 
- * ИЗМЕНЕНИЕ: Удален параметр onThemeDialogShow, так как выбор темы больше не поддерживается.
  */
 
 @Composable
@@ -48,7 +47,11 @@ fun SettingsContent(
     navController: NavController,
     onEditDialogShow: (EditDialogData) -> Unit,
     onDeviceClear: () -> Unit,
-    onUpdateSetting: (AppSettings) -> Unit
+    onUpdateSetting: (AppSettings) -> Unit,
+    onImportErrors: () -> Unit,
+    onExportErrors: () -> Unit,
+    onImportCombinations: () -> Unit,
+    onExportCombinations: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -56,7 +59,8 @@ fun SettingsContent(
             .verticalScroll(rememberScrollState())
             .padding(vertical = 20.dp)
     ) {
-        // 1. Секция основных настроек (устройство, топливо, форсунки, скорость)
+        // 1. Секция основных параметров автомобиля
+        SectionHeader("ОСНОВНЫЕ ПАРАМЕТРЫ АВТОМОБИЛЯ")
         SettingsSection(
             appSettings = appSettings,
             selectedDevice = selectedDevice,
@@ -70,7 +74,18 @@ fun SettingsContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 2. Секция настроек оформления (цвета)
+        // 2. Секция управления базами данных (заголовок внутри DatabaseSection)
+        DatabaseSection(
+            onImportErrors = onImportErrors,
+            onExportErrors = onExportErrors,
+            onImportCombinations = onImportCombinations,
+            onExportCombinations = onExportCombinations
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 3. Секция настроек приложения
+        SectionHeader("НАСТРОЙКИ ПРИЛОЖЕНИЯ")
         WidgetsSection(
             appSettings = appSettings,
             onUpdateSetting = onUpdateSetting
@@ -78,7 +93,8 @@ fun SettingsContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 3. Секция информации о приложении
+        // 4. Секция информации о приложении
+        SectionHeader("О ПРИЛОЖЕНИИ")
         InfoSection()
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -88,7 +104,6 @@ fun SettingsContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
-            // Текст футера с названием приложения
             Text(
                 text = "BLUETOOTH CAR CONTROL",
                 style = MaterialTheme.typography.labelSmall,
@@ -98,4 +113,19 @@ fun SettingsContent(
 
         Spacer(modifier = Modifier.height(24.dp))
     }
+}
+
+/**
+ * Вспомогательный компонент для отрисовки заголовка секции настроек.
+ * Вынесен для соблюдения единообразия стиля во всем файле.
+ */
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = AppColors.PrimaryBlue,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+    )
 }

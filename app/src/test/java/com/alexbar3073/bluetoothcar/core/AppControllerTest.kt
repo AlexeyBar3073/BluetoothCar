@@ -9,6 +9,7 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -83,11 +84,14 @@ class AppControllerTest {
     }
 
     /**
-     * Сброс диспатчера после завершения тестов.
+     * Сброс диспатчера после завершения тестов и очистка ресурсов.
      */
     @After
     fun tearDown() {
+        // Обязательно очищаем ресурсы, чтобы остановить фоновые корутины AppController
+        appController.cleanup()
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     /**
@@ -146,5 +150,8 @@ class AppControllerTest {
 
         // 3. ПРОВЕРКА: Контроллер должен содержать те же настройки, что вернул репозиторий
         assertEquals(75f, controller.getCurrentSettings().fuelTankCapacity)
+        
+        // Очищаем локальный контроллер
+        controller.cleanup()
     }
 }
