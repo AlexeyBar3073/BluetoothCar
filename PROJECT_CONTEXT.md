@@ -60,7 +60,7 @@
 │  │  DeviceAvailabilityMonitor (DAM)                          │   │
 │  │  • поиск БК в Bluetooth-эфире                             │   │
 │  │  • до 3 попыток с интервалом 1 сек                        │   │
-│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘   │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │  ConnectionStateManager (CSM)                             │   │
@@ -98,9 +98,10 @@
 - **Что происходит в init-блоке AppController:**
     1. Загрузка настроек из `SettingsRepository` → `_appSettings.value = settings`.
     2. Конфигурация логгера (`AppLogger.configure(...)`).
-    3. Ленивое создание `BluetoothConnectionManager` (при первом обращении).
-    4. Вызов `bluetoothConnectionManager.updateSettings(settings)`.
-    5. Установка `_isInitialized.value = true`.
+    3. Инициализация БД ошибок ЭБУ и комбинаций из JSON (ecu_errors.json, ecu_combinations.json).
+    4. Ленивое создание `BluetoothConnectionManager` (при первом обращении).
+    5. Вызов `bluetoothConnectionManager.updateSettings(settings)`.
+    6. Установка `_isInitialized.value = true`.
 
 ### 2.4. Инициализация BluetoothConnectionManager (BCM)
 - **Действие:** При первом обращении к `bluetoothConnectionManager` создается его экземпляр.
@@ -178,7 +179,7 @@
 2. **Очередь команд**: Все исходящие пакеты (Настройки, GET_DATA, JSON) попадают в `commandQueue`.
 3. **MsgID & AckID**: Каждая команда упаковывается в JSON-конверт с уникальным `msg_id`. Воркер ждет подтверждения с `ack_id` от БК.
 4. **Реактивность**: Использование `withTimeoutOrNull` и `SharedFlow` для мгновенного пробуждения при получении подтверждения.
-5. **Прием данных**: При получении первого валидного пакета `{"data": {...}}` устанавливается статус `LISTENING_DATA`.
+5. **Прием данных**: При получении первого валидного пакета `{"telemetry": {...}}` устанавливается статус `LISTENING_DATA`.
 
 ---
 
@@ -193,6 +194,7 @@
 - **retryConnection()**: Принудительный перезапуск цикла подключения с Шага 1.
 - **disconnectFromDevice()**: Сброс `selectedDevice` в настройках, что триггерит остановку всех процессов.
 - **sendJsonCommand()**: Прямая отправка команды в `DataStreamHandler`.
+- **reset_fuel**: Команда сброса расхода топлива. На Dashboard 4 отправляется при долгом клике по центру комбинированного прибора в режиме FUEL.
 
 ---
 
@@ -226,15 +228,16 @@
 ## 📂 СТРУКТУРА ПРОЕКТА
 ```text
 bluetoothcar/
-├── core/                # AppController (Главный координатор)
+├── core/                # AppController (Главный координатор), ServiceLocator
 ├── data/
 │   ├── bluetooth/       # BCM и AppBluetoothService
 │   │   └── listeners/   # 4 помощника (CFC, DAM, CSM, DSH)
 │   ├── logging/         # AppLogger
 │   ├── models/          # AppSettings, CarData, BluetoothDeviceData
 │   └── repository/      # SettingsRepository (DataStore)
+│   └── database/        # Room Database (Ошибки ЭБУ, Комбинации)
 ├── ui/
-│   ├── screens/         # Home (Дашборды), Settings, Devices
+│   ├── screens/         # Home (Дашборды), Settings, Devices, EcuErrors
 │   ├── viewmodels/      # SharedViewModel
 │   └── theme/           # UI Theme
 └── navigation/          # Compose Navigation
@@ -253,8 +256,10 @@ bluetoothcar/
 ## 🚀 СТАТУС РАЗРАБОТКИ
 - ✅ Базовая архитектура и навигация.
 - ✅ DataStore и сохранение настроек.
+- ✅ Room DB для хранения справочника ошибок ЭБУ и их комбинаций.
 - ✅ Автономный цикл переподключения (BCM + Listeners).
 - ✅ Унифицированный протокол обмена данными (MsgID / AckID).
-- ✅ 100% покрытие Unit-тестами (36 тестов пройдены успешно).
+- ✅ 100% покрытие Unit-тестами (38 тестов пройдены успешно).
 - ✅ Визуализация Dashboard Type 1, 2, 4.
+- ✅ Команда `reset_fuel` на Dashboard 4 (Long click по центру прибора).
 - 🔄 В процессе: Калибровка виджетов и расширение типов дашбордов.
