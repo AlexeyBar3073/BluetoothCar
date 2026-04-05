@@ -56,9 +56,15 @@ internal fun TripWidget(
 
     // Расчеты данных
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
-    val consumption = if (carData.fuelConsumption > 0f) carData.fuelConsumption else 8.5f
+    
+    // ОБНОВЛЕНИЕ ПРОТОКОЛА: Используем averageConsumption вместо устаревшего fuelConsumption
+    val consumption = if (carData.averageConsumption > 0f) carData.averageConsumption else 8.5f
+    
     val maxPossibleRange = (fuelTankCapacity / consumption) * 100f
-    val remainingRange = if (carData.remainingRange > 0f) carData.remainingRange else (carData.fuel / consumption) * 100f
+    
+    // ОБНОВЛЕНИЕ ПРОТОКОЛА: remainingRange больше не передается, рассчитываем локально
+    val remainingRange = (carData.fuel / consumption) * 100f
+    
     val rangeProgress = (remainingRange / maxPossibleRange).coerceIn(0f, 1f)
 
     val density = geometry.density.density
@@ -151,14 +157,16 @@ internal fun TripWidget(
                     Text(text = if (showTripB) "TRIP B, км" else "TRIP A, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
                     Text(
-                        text = "%.1f".format(if (showTripB) carData.tripB else carData.tripA),
+                        // ОБНОВЛЕНИЕ ПРОТОКОЛА: tripA/B теперь Int
+                        text = "%d".format(if (showTripB) carData.tripB else carData.tripA),
                         style = tripTotalValueStyle,
                         modifier = Modifier.combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = { showTripB = !showTripB },
                             onLongClick = {
-                                val command = if (showTripB) "{\"command\":\"RESET_TRIP_B\"}" else "{\"command\":\"RESET_TRIP_A\"}"
+                                // ОБНОВЛЕНИЕ ПРОТОКОЛА: команды в нижнем регистре
+                                val command = if (showTripB) "{\"command\":\"reset_trip_b\"}" else "{\"command\":\"reset_trip_a\"}"
                                 onTripReset(command)
                             }
                         )
@@ -169,7 +177,7 @@ internal fun TripWidget(
                 Column(modifier = Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
                     Text(text = "TOTAL, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
-                    Text(text = "${carData.odometer.toInt()}", style = tripTotalValueStyle)
+                    Text(text = "${carData.odometer}", style = tripTotalValueStyle)
                 }
 
                 // --- ЦЕНТРАЛЬНАЯ ЧАСТЬ (Индикатор и его метки) ---

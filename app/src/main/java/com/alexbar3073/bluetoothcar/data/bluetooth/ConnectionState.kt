@@ -242,7 +242,7 @@ enum class ConnectionState(
             ERROR -> Color(0xFFD32F2F) // Красный
             DISCONNECTED -> Color(0xFF757575) // Серый
             UNDEFINED -> Color(0xFF757575) // Серый
-            SEARCHING_DEVICE -> Color(0xFFF57C00) // Оранжевый (как CONNECTING)
+            SEARCHING_DEVICE -> Color(0xFFF57C00) // Оранжевый (как SEARCHING)
         }
     }
 
@@ -264,7 +264,7 @@ enum class ConnectionState(
             ERROR -> Color(0xFFB71C1C) // Темно-красный
             DISCONNECTED -> Color(0xFF424242) // Темно-серый
             UNDEFINED -> Color(0xFF424242) // Темно-серый
-            SEARCHING_DEVICE -> Color(0xFFE65100) // Темно-оранжевый (как CONNECTING)
+            SEARCHING_DEVICE -> Color(0xFFE65100) // Темно-оранжевый (как SEARCHING)
         }
     }
 
@@ -372,7 +372,7 @@ enum class ConnectionState(
     fun getCompactIcon(): ImageVector {
         return when (this) {
             LISTENING_DATA -> Icons.Outlined.Power
-            CONNECTED, SENDING_SETTINGS, REQUESTING_DATA -> Icons.Outlined.BluetoothConnected
+            CONNECTED, SENDING_SETTINGS, REQUESTING_DATA -> Icons.Outlined.Power
             DEVICE_AVAILABLE -> Icons.Outlined.Bluetooth
             DEVICE_SELECTED -> Icons.Outlined.Bluetooth
             DEVICE_UNAVAILABLE, BLUETOOTH_DISABLED, DISCONNECTED -> Icons.Outlined.BluetoothDisabled
@@ -390,7 +390,7 @@ enum class ConnectionState(
      */
     private fun getCompactDisplayType(): CompactDisplayType {
         return when (this) {
-            CONNECTING, SEARCHING_DEVICE, CONNECTED, SENDING_SETTINGS, REQUESTING_DATA -> CompactDisplayType.PROGRESS_INDICATOR
+            CONNECTING, SEARCHING_DEVICE -> CompactDisplayType.PROGRESS_INDICATOR
             else -> CompactDisplayType.ICON
         }
     }

@@ -95,7 +95,8 @@ fun SettingsContent(
 
         // 4. Секция информации о приложении
         SectionHeader("О ПРИЛОЖЕНИИ")
-        InfoSection()
+        // ОБНОВЛЕНИЕ ПРОТОКОЛА: Передаем версию прошивки БК из настроек
+        InfoSection(firmwareVersion = appSettings.firmwareVersion)
 
         Spacer(modifier = Modifier.height(40.dp))
 

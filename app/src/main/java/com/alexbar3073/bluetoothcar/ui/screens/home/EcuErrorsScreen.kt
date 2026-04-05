@@ -2,10 +2,8 @@
 package com.alexbar3073.bluetoothcar.ui.screens.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -40,9 +38,17 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Экран отображения списка текущих ошибок ЭБУ и экспертных комбинаций.
- * Позволяет пользователю увидеть все активные ошибки и выявленные сложные проблемы.
+ * Группирует ошибки и рекомендации в блоки с единым стилем, аналогично экрану настроек.
  *
- * ОТВЕТСТВЕННОСТЬ: Отображение списка активных ошибок и комбинаций.
+ * ОТВЕТСТВЕННОСТЬ: Отображение списка активных ошибок и комбинаций в сгруппированном виде.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: MVVM / Jetpack Compose Screen
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Группировка связанных данных в карточки для улучшения читаемости.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * Использует: SharedViewModel.kt, EcuErrorEntity.kt, EcuCombinationEntity.kt
+ * Вызывается из: SetupNavigation.kt
  */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,6 +81,7 @@ fun EcuErrorsScreen(
                     .padding(paddingValues)
             ) {
                 if (errors.isEmpty() && combinations.isEmpty()) {
+                    // Состояние пустого списка
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             text = "Активных ошибок не обнаружено",
@@ -85,27 +92,75 @@ fun EcuErrorsScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = PaddingValues(bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        // 1. ОТОБРАЖАЕМ КОМБИНАЦИИ (Экспертные заключения имеют высший приоритет)
-                        items(combinations) { combination ->
-                            EcuCombinationCard(
-                                combination = combination,
-                                onClick = {
-                                    navController.navigate("ecu_combination_detail/${combination.id}")
+                        // 1. СЕКЦИЯ ОДИНОЧНЫХ ОШИБОК
+                        if (errors.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                SectionHeader("ТЕКУЩИЕ ОШИБКИ")
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight),
+                                    shape = MaterialTheme.shapes.medium
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                        errors.forEachIndexed { index, error ->
+                                            EcuErrorItem(
+                                                error = error,
+                                                onClick = {
+                                                    navController.navigate("ecu_error_detail/${error.code}")
+                                                }
+                                            )
+                                            // Разделитель между ошибками внутри одной карточки
+                                            if (index < errors.size - 1) {
+                                                HorizontalDivider(
+                                                    color = AppColors.SurfaceMedium,
+                                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
 
-                        // 2. ОТОБРАЖАЕМ ОДИНОЧНЫЕ ОШИБКИ
-                        items(errors) { error ->
-                            EcuErrorCard(
-                                error = error,
-                                onClick = {
-                                    navController.navigate("ecu_error_detail/${error.code}")
+                        // 2. СЕКЦИЯ ЭКСПЕРТНЫХ КОМБИНАЦИЙ
+                        if (combinations.isNotEmpty()) {
+                            item {
+                                SectionHeader("РЕКОМЕНДАЦИИ ЭКСПЕРТА")
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp),
+                                    shape = MaterialTheme.shapes.medium,
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = AppColors.SurfaceLight
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.PrimaryBlue.copy(alpha = 0.5f))
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                        combinations.forEachIndexed { index, combination ->
+                                            EcuCombinationItem(
+                                                combination = combination,
+                                                onClick = {
+                                                    navController.navigate("ecu_combination_detail/${combination.id}")
+                                                }
+                                            )
+                                            // Разделитель между комбинациями внутри одной карточки
+                                            if (index < combinations.size - 1) {
+                                                HorizontalDivider(
+                                                    color = AppColors.SurfaceMedium,
+                                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -115,23 +170,33 @@ fun EcuErrorsScreen(
 }
 
 /**
- * Карточка комбинации ошибок.
- * Выделена синим контуром и иконкой звезды для привлечения внимания.
+ * Вспомогательный компонент для отрисовки заголовка секции.
+ * Обеспечивает единообразие стиля с экраном настроек.
  */
 @Composable
-private fun EcuCombinationCard(
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = AppColors.PrimaryBlue,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+    )
+}
+
+/**
+ * Элемент списка для отображения комбинации ошибок.
+ * Использует Surface для обработки клика с эффектом ripple.
+ */
+@Composable
+private fun EcuCombinationItem(
     combination: EcuCombinationEntity,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = AppColors.SurfaceLight
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.PrimaryBlue.copy(alpha = 0.5f))
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -177,27 +242,24 @@ private fun EcuCombinationCard(
 }
 
 /**
- * Карточка одиночной ошибки.
+ * Элемент списка для отображения одиночной ошибки ЭБУ.
  */
 @Composable
-private fun EcuErrorCard(
+private fun EcuErrorItem(
     error: EcuErrorEntity,
     onClick: () -> Unit
 ) {
+    // Определение цвета иконки в зависимости от приоритета ошибки
     val iconColor = when {
         error.priority <= 1 -> AppColors.Error
         error.priority <= 2 -> AppColors.Warning
         else -> AppColors.TextPrimary
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = AppColors.SurfaceLight
-        )
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

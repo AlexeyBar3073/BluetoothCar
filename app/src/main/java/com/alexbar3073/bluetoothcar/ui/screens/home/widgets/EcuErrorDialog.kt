@@ -8,13 +8,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -28,9 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.alexbar3073.bluetoothcar.data.database.entities.EcuCombinationEntity
 import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
+import com.alexbar3073.bluetoothcar.ui.theme.AppColors
+import com.alexbar3073.bluetoothcar.ui.viewmodels.EcuDiagnosticItem
 
 /**
  * ТЕГ: UI/Widgets/EcuErrorDialog
@@ -40,22 +43,25 @@ import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
  * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/widgets/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
- * Диалоговое окно для отображения детальной информации об ошибках ЭБУ.
- * Реализует двухуровневую навигацию: 
- * 1. Список всех обнаруженных ошибок (кратко).
- * 2. Детальная карточка выбранной ошибки со всеми техническими подробностями.
+ * Диалоговое окно для отображения информации об ошибках ЭБУ и их экспертных комбинациях.
+ * Поддерживает отображение смешанного списка диагностических данных.
  *
- * ОТВЕТСТВЕННОСТЬ: Визуализация данных справочника ошибок для пользователя.
+ * ОТВЕТСТВЕННОСТЬ: Визуализация данных справочника ошибок и комбинаций для пользователя.
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП: Jetpack Compose Widget (Master-Detail inside Dialog)
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Приоритизация отображения согласно бизнес-требованиям (Одиночные -> Комбинации).
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: (Использует: SharedViewModel.kt / Вызывается из: Dashboards)
  */
+
 @Composable
 fun EcuErrorDialog(
-    errors: List<EcuErrorEntity>,
+    diagnosticItems: List<EcuDiagnosticItem>,
     onDismiss: () -> Unit
 ) {
-    // Состояние для хранения выбранной ошибки. Если null — показываем список.
-    var selectedError by remember { mutableStateOf<EcuErrorEntity?>(null) }
+    // Состояние для хранения выбранного элемента для детального просмотра
+    var selectedItem by remember { mutableStateOf<EcuDiagnosticItem?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -63,7 +69,7 @@ fun EcuErrorDialog(
                 .fillMaxWidth()
                 .fillMaxHeight(0.9f),
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = AppColors.SurfaceMedium,
             tonalElevation = 8.dp
         ) {
             Column(
@@ -71,71 +77,94 @@ fun EcuErrorDialog(
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // ДИНАМИЧЕСКИЙ ЗАГОЛОВОК И КНОПКА НАЗАД
+                // 1. ДИНАМИЧЕСКИЙ ЗАГОЛОВОК И КНОПКА НАЗАД
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 16.dp)
                 ) {
-                    if (selectedError != null) {
-                        IconButton(onClick = { selectedError = null }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    if (selectedItem != null) {
+                        IconButton(onClick = { selectedItem = null }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Назад",
+                                tint = Color.White
+                            )
                         }
                     } else {
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
-                            tint = Color.Yellow,
+                            tint = AppColors.Error,
                             modifier = Modifier.size(24.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (selectedError == null) "Ошибки ЭБУ (${errors.size})" else "Детали ошибки",
+                        text = if (selectedItem == null) "ДИАГНОСТИКА" else "ПОДРОБНОСТИ",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
                 }
 
-                // КОНТЕНТ С АНИМАЦИЕЙ ПЕРЕХОДА
+                // 2. КОНТЕНТ С АНИМАЦИЕЙ ПЕРЕХОДА
                 Box(modifier = Modifier.weight(1f)) {
                     AnimatedContent(
-                        targetState = selectedError,
-                        label = "error_navigation"
-                    ) { error ->
-                        if (error == null) {
-                            // ЭКРАН 1: СПИСОК ОШИБОК
-                            if (errors.isEmpty()) {
+                        targetState = selectedItem,
+                        label = "diagnostic_navigation"
+                    ) { item ->
+                        if (item == null) {
+                            // ЭКРАН 1: СПИСОК (Уже отсортирован во ViewModel: Ошибки -> Комбинации)
+                            if (diagnosticItems.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("Нет данных по кодам", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "Активных проблем не обнаружено",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = AppColors.TextSecondary
+                                    )
                                 }
                             } else {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(errors) { item ->
-                                        EcuErrorListItem(
-                                            error = item,
-                                            onClick = { selectedError = item }
-                                        )
+                                    items(diagnosticItems) { diagnosticItem ->
+                                        when (diagnosticItem) {
+                                            is EcuDiagnosticItem.SingleError -> {
+                                                EcuErrorListItem(
+                                                    error = diagnosticItem.error,
+                                                    onClick = { selectedItem = diagnosticItem }
+                                                )
+                                            }
+                                            is EcuDiagnosticItem.Combination -> {
+                                                EcuCombinationListItem(
+                                                    combination = diagnosticItem.combination,
+                                                    onClick = { selectedItem = diagnosticItem }
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         } else {
-                            // ЭКРАН 2: ПОЛНАЯ ИНФОРМАЦИЯ
-                            EcuErrorFullDetail(error)
+                            // ЭКРАН 2: ДЕТАЛЬНЫЙ ПРОСМОТР
+                            when (item) {
+                                is EcuDiagnosticItem.SingleError -> EcuErrorFullDetail(item.error)
+                                is EcuDiagnosticItem.Combination -> EcuCombinationFullDetail(item.combination)
+                            }
                         }
                     }
                 }
 
-                // КНОПКА ЗАКРЫТИЯ
+                // 3. КНОПКА ЗАКРЫТИЯ
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 16.dp)
+                        .padding(top = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.SurfaceLight)
                 ) {
-                    Text("ЗАКРЫТЬ")
+                    Text("ЗАКРЫТЬ", color = Color.White)
                 }
             }
         }
@@ -143,47 +172,100 @@ fun EcuErrorDialog(
 }
 
 /**
- * Компактный элемент списка для главного экрана диалога.
- * Отображает только код и краткое название.
+ * Элемент списка для одиночной ошибки.
  */
 @Composable
 private fun EcuErrorListItem(
     error: EcuErrorEntity,
     onClick: () -> Unit
 ) {
+    val iconColor = when {
+        error.priority <= 1 -> AppColors.Error
+        error.priority <= 2 -> AppColors.Warning
+        else -> AppColors.TextPrimary
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        )
+        colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight)
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = error.code,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(80.dp)
+            Icon(
+                imageVector = Icons.Default.Build,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(20.dp)
             )
-            Text(
-                text = error.shortDescription,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1
-            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = error.code,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = error.shortDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.ContentDetail,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
 
 /**
- * Полноэкранный (в рамках диалога) контент с максимальной детализацией ошибки.
- * Включает скроллинг и все доступные поля из базы данных.
+ * Элемент списка для комбинации ошибок.
+ */
+@Composable
+private fun EcuCombinationListItem(
+    combination: EcuCombinationEntity,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.PrimaryBlue.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = AppColors.PrimaryBlue,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = combination.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = combination.shortDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.ContentDetail,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Детальная информация об одиночной ошибке.
  */
 @Composable
 private fun EcuErrorFullDetail(error: EcuErrorEntity) {
@@ -192,61 +274,47 @@ private fun EcuErrorFullDetail(error: EcuErrorEntity) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(end = 4.dp)
     ) {
-        // Блок основного заголовка
         Text(
             text = error.code,
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.primary
+            color = AppColors.PrimaryBlue
         )
         Text(
             text = error.shortDescription,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = Color.White
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Критичность и возможность движения
         Row(modifier = Modifier.fillMaxWidth()) {
             InfoChip(
                 label = "Приоритет: ${error.priority}",
-                color = if (error.priority <= 1) Color.Red else Color.Gray,
+                color = if (error.priority <= 1) AppColors.Error else AppColors.TextSecondary,
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            val canDriveColor = when {
-                error.canDrive.contains("НЕТ", true) -> Color.Red
-                error.canDrive.contains("ОГРАНИЧ", true) -> Color.Yellow
-                else -> Color.Green
-            }
             InfoChip(
                 label = "Движение: ${error.canDrive}",
-                color = canDriveColor,
+                color = if (error.canDrive.contains("НЕТ", true)) AppColors.Error else AppColors.BluetoothDeviceConnected,
                 modifier = Modifier.weight(1.5f)
             )
         }
 
         DetailSection("Техническое описание", error.detailedDescription)
 
-        // СИМПТОМЫ
         if (error.symptoms.isNotEmpty()) {
-            DetailSection(
-                title = "Наблюдаемые симптомы",
-                items = error.symptoms,
-                icon = Icons.Default.Info
-            )
+            DetailSection("Наблюдаемые симптомы", error.symptoms, Icons.Default.Info)
         }
 
-        // ВОЗМОЖНЫЕ ПРИЧИНЫ (с вероятностью)
         if (error.causes.isNotEmpty()) {
             SectionHeader("Возможные причины и решения")
             error.causes.forEach { cause ->
                 Card(
                     modifier = Modifier.padding(bottom = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -254,60 +322,128 @@ private fun EcuErrorFullDetail(error: EcuErrorEntity) {
                                 text = "${cause.probability}%",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.secondary
+                                color = AppColors.PrimaryBlue
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = cause.cause, style = MaterialTheme.typography.bodyMedium)
+                            Text(text = cause.cause, style = MaterialTheme.typography.bodyMedium, color = Color.White)
                         }
                         Text(
                             text = "Решение: ${cause.action}",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AppColors.ContentDetail
                         )
                     }
                 }
             }
         }
 
-        // НЕОБХОДИМЫЕ ИНСТРУМЕНТЫ
         if (error.toolsNeeded.isNotEmpty()) {
-            DetailSection(
-                title = "Что понадобится для ремонта",
-                items = error.toolsNeeded,
-                icon = Icons.Default.Build
-            )
+            DetailSection("Необходимый инструмент", error.toolsNeeded, Icons.Default.Build)
         }
 
-        // СВЯЗАННЫЕ КОДЫ
-        if (error.relatedCodes.isNotEmpty()) {
-            DetailSection(
-                title = "Связанные ошибки",
-                content = error.relatedCodes.joinToString(", ")
-            )
-        }
-
-        // ЗАМЕТКА ЭКСПЕРТА (выделенная)
         if (error.clubExpertNote.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Yellow.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                    .padding(12.dp)
-            ) {
-                Column {
-                    Text("СОВЕТ КЛУБНОГО ЭКСПЕРТА", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Yellow)
-                    Text(
-                        text = error.clubExpertNote,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                    )
-                }
-            }
+            ExpertNote(error.clubExpertNote)
         }
         
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Детальная информация о комбинации ошибок.
+ */
+@Composable
+private fun EcuCombinationFullDetail(combination: EcuCombinationEntity) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+    ) {
+        Text(
+            text = combination.title,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black,
+            color = AppColors.PrimaryBlue
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        InfoChip(
+            label = "КОМБИНАЦИЯ КОДОВ: ${combination.codes.joinToString(", ")}",
+            color = AppColors.PrimaryBlue,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        DetailSection("Анализ совокупности факторов", combination.detailedDescription)
+
+        if (combination.symptoms.isNotEmpty()) {
+            DetailSection("Общие симптомы", combination.symptoms, Icons.Default.Info)
+        }
+
+        if (combination.causes.isNotEmpty()) {
+            SectionHeader("Комплексные причины и решения")
+            combination.causes.forEach { cause ->
+                Card(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${cause.probability}%",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = AppColors.PrimaryBlue
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = cause.cause, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                        }
+                        Text(
+                            text = "Решение: ${cause.action}",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                            color = AppColors.ContentDetail
+                        )
+                    }
+                }
+            }
+        }
+
+        if (combination.clubExpertNote.isNotEmpty()) {
+            ExpertNote(combination.clubExpertNote)
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Блок заметки эксперта.
+ */
+@Composable
+private fun ExpertNote(note: String) {
+    Spacer(modifier = Modifier.height(12.dp))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(AppColors.PrimaryBlue.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+            .padding(12.dp)
+    ) {
+        Column {
+            Text(
+                "СОВЕТ КЛУБНОГО ЭКСПЕРТА", 
+                style = MaterialTheme.typography.labelSmall, 
+                fontWeight = FontWeight.Bold, 
+                color = AppColors.PrimaryBlue
+            )
+            Text(
+                text = note,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+            )
+        }
     }
 }
 
@@ -318,7 +454,7 @@ private fun SectionHeader(title: String) {
         text = title.uppercase(),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
+        color = AppColors.PrimaryBlue,
         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
     )
 }
@@ -327,7 +463,7 @@ private fun SectionHeader(title: String) {
 @Composable
 private fun DetailSection(title: String, content: String) {
     SectionHeader(title)
-    Text(text = content, style = MaterialTheme.typography.bodyMedium)
+    Text(text = content, style = MaterialTheme.typography.bodyMedium, color = Color.White)
 }
 
 /** Секция со списком элементов и иконкой */
@@ -339,9 +475,14 @@ private fun DetailSection(title: String, items: List<String>, icon: ImageVector)
             modifier = Modifier.padding(bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+            Icon(
+                imageVector = icon, 
+                contentDescription = null, 
+                modifier = Modifier.size(14.dp), 
+                tint = AppColors.ContentDetail
+            )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(text = item, style = MaterialTheme.typography.bodySmall)
+            Text(text = item, style = MaterialTheme.typography.bodySmall, color = Color.White)
         }
     }
 }
@@ -351,9 +492,9 @@ private fun DetailSection(title: String, items: List<String>, icon: ImageVector)
 private fun InfoChip(label: String, color: Color, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        color = color.copy(alpha = 0.2f),
+        color = color.copy(alpha = 0.1f),
         shape = RoundedCornerShape(4.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f))
     ) {
         Text(
             text = label,

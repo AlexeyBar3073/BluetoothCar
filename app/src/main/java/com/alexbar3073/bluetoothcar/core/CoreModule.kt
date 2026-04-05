@@ -1,14 +1,15 @@
-// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/core/CoreModule.kt
+// Файл: core/CoreModule.kt
 package com.alexbar3073.bluetoothcar.core
 
 import android.content.Context
+import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 
 /**
  * ТЕГ: Core+Init+CoreModule
  *
- * ФАЙЛ: CoreModule.kt
+ * ФАЙЛ: core/CoreModule.kt
  *
- * МЕСТОНАХОЖДЕНИЕ: app/src/main/java/com/alexbar3073/bluetoothcar/core/
+ * МЕСТОНАХОЖДЕНИЕ: core/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА:
  * Модуль инициализации ядра приложения. Содержит точку входа для инициализации
@@ -30,6 +31,8 @@ import android.content.Context
  */
 object CoreModule {
 
+    private const val TAG = "CoreModule"
+
     // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Сохраняем AppController между вызовами. 
     // Volatile гарантирует видимость изменений для всех потоков.
     @Volatile
@@ -44,35 +47,34 @@ object CoreModule {
      */
     @Synchronized
     fun initialize(context: Context): AppController {
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
-        println("$timestamp [CoreModule] Начало инициализации ядра приложения")
+        AppLogger.logInfo("Начало инициализации ядра приложения", TAG)
 
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Если AppController уже создан - возвращаем его
         if (appControllerInstance != null) {
-            println("$timestamp [CoreModule] AppController уже создан, возвращаем существующий экземпляр")
+            AppLogger.logInfo("AppController уже создан, возвращаем существующий экземпляр", TAG)
             return appControllerInstance!!
         }
 
         // 1. Инициализируем ServiceLocator
-        println("$timestamp [CoreModule] Шаг 1: Инициализация ServiceLocator")
+        AppLogger.logInfo("Шаг 1: Инициализация ServiceLocator", TAG)
         ServiceLocator.initialize(context)
 
         // 2. Получаем SettingsRepository из ServiceLocator
-        println("$timestamp [CoreModule] Шаг 2: Получение SettingsRepository")
+        AppLogger.logInfo("Шаг 2: Получение SettingsRepository", TAG)
         val settingsRepository = ServiceLocator.getSettingsRepository()
 
         // 3. Создаем AppController (главный координатор системы)
-        println("$timestamp [CoreModule] Шаг 3: Создание AppController")
+        AppLogger.logInfo("Шаг 3: Создание AppController", TAG)
         val appController = AppController(context.applicationContext, settingsRepository)
 
         // 4. Регистрируем AppController в ServiceLocator
-        println("$timestamp [CoreModule] Шаг 4: Регистрация AppController в ServiceLocator")
+        AppLogger.logInfo("Шаг 4: Регистрация AppController в ServiceLocator", TAG)
         ServiceLocator.registerAppController(appController)
 
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Сохраняем ссылку на AppController
         appControllerInstance = appController
 
-        println("$timestamp [CoreModule] Инициализация ядра приложения завершена успешно")
+        AppLogger.logInfo("Инициализация ядра приложения завершена успешно", TAG)
         return appController
     }
 
@@ -103,8 +105,7 @@ object CoreModule {
      */
     @Synchronized
     fun cleanup() {
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
-        println("$timestamp [CoreModule] Очистка ядра приложения")
+        AppLogger.logInfo("Очистка ядра приложения", TAG)
 
         try {
             // 1. Получаем и очищаем AppController
@@ -117,9 +118,9 @@ object CoreModule {
             // 3. Очищаем ServiceLocator
             ServiceLocator.clear()
 
-            println("$timestamp [CoreModule] Ядро приложения очищено")
+            AppLogger.logInfo("Ядро приложения очищено", TAG)
         } catch (e: IllegalStateException) {
-            println("$timestamp [CoreModule] Ядро приложения уже очищено или не инициализировано")
+            AppLogger.logWarning("Ядро приложения уже очищено или не инициализировано", TAG)
         }
     }
 }

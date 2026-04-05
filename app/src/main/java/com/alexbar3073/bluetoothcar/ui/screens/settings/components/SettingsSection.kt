@@ -181,10 +181,10 @@ fun SettingsSection(
                         EditDialogData(
                             title = "Сигналы датчика скорости",
                             currentValue = appSettings.speedSensorSignalsPerMeter.toFloat(),
-                            minValue = 100f,
+                            minValue = 1f,
                             maxValue = 10000f,
                             unit = "сигналов/метр",
-                            step = 100f
+                            step = 1f
                         )
                     )
                 }

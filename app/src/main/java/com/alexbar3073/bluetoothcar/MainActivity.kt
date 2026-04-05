@@ -34,6 +34,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.alexbar3073.bluetoothcar.core.CoreModule
+import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.navigation.SetupNavigation
 import com.alexbar3073.bluetoothcar.ui.screens.PermissionsScreen
@@ -82,8 +83,7 @@ class MainActivity : ComponentActivity() {
          * @param message Текст сообщения.
          */
         private fun log(message: String) {
-            val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
-            println("$timestamp [$TAG] $message")
+            AppLogger.logInfo(message, TAG)
         }
 
         /**
@@ -91,8 +91,7 @@ class MainActivity : ComponentActivity() {
          * @param message Текст ошибки.
          */
         private fun logError(message: String) {
-            val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
-            System.err.println("$timestamp [$TAG] ERROR: $message")
+            AppLogger.logError(message, TAG)
         }
     }
 

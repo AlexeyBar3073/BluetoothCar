@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.database.AppDatabase
+import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -40,6 +41,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object ServiceLocator {
 
+    private const val TAG = "ServiceLocator"
+
     /** Хранилище экземпляров сервисов, где ключ — имя класса, значение — объект */
     private val services = mutableMapOf<String, Any>()
     
@@ -58,7 +61,7 @@ object ServiceLocator {
     fun initialize(context: Context) {
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Быстрая проверка флага инициализации
         if (isInitialized.get()) {
-            logInfo("ServiceLocator уже инициализирован, пропускаем повторную инициализацию")
+            AppLogger.logInfo("ServiceLocator уже инициализирован, пропускаем повторную инициализацию", TAG)
             return
         }
 
@@ -86,7 +89,7 @@ object ServiceLocator {
             // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Фиксируем успешное завершение инициализации
             isInitialized.set(true)
 
-            logInfo("ServiceLocator инициализирован с контекстом приложения")
+            AppLogger.logInfo("ServiceLocator инициализирован с контекстом приложения", TAG)
         }
     }
 
@@ -113,7 +116,7 @@ object ServiceLocator {
         synchronized(getLock(key)) {
             // Добавляем объект в карту сервисов
             services[key] = service
-            logInfo("Зарегистрирован сервис: $key")
+            AppLogger.logInfo("Зарегистрирован сервис: $key", TAG)
         }
     }
 
@@ -149,7 +152,7 @@ object ServiceLocator {
             return (services[key] as? T) ?: run {
                 val service = factory()
                 services[key] = service
-                logInfo("Создан и зарегистрирован сервис: $key")
+                AppLogger.logInfo("Создан и зарегистрирован сервис: $key", TAG)
                 service
             }
         }
@@ -177,7 +180,7 @@ object ServiceLocator {
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Синхронизируем удаление по ключу
         synchronized(getLock(key)) {
             services.remove(key)
-            logInfo("Удален сервис: $key")
+            AppLogger.logInfo("Удален сервис: $key", TAG)
         }
     }
 
@@ -187,7 +190,7 @@ object ServiceLocator {
     fun clear() {
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Блокируем весь объект на время глобальной очистки
         synchronized(this) {
-            logInfo("Начало очистки ServiceLocator")
+            AppLogger.logInfo("Начало очистки ServiceLocator", TAG)
             
             // 1. Проверяем наличие Bluetooth-провайдера и вызываем его очистку (unbind)
             if (contains(BluetoothServiceProvider::class.java.name)) {
@@ -201,7 +204,7 @@ object ServiceLocator {
             
             // 3. Сбрасываем флаг инициализации для возможности повторного запуска
             isInitialized.set(false)
-            logInfo("Все сервисы удалены из ServiceLocator")
+            AppLogger.logInfo("Все сервисы удалены из ServiceLocator", TAG)
         }
     }
 
@@ -255,22 +258,6 @@ object ServiceLocator {
         // СОГЛАСНО ЖИЗНЕННОМУ ЦИКЛУ: Атомарно получаем существующий или создаем новый объект lock
         return locks.getOrPut(key) { Any() }
     }
-
-    /** Логирование информационной заметки */
-    private fun logInfo(message: String) {
-        // Формируем метку времени для лога
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
-        // Вывод сообщения в консоль с меткой времени
-        println("$timestamp [ServiceLocator] $message")
-    }
-
-    /** Логирование сообщения об ошибке */
-    private fun logError(message: String) {
-        // Формируем метку времени для лога ошибки
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())
-        // Вывод ошибки в поток System.err
-        System.err.println("$timestamp [ServiceLocator] ERROR: $message")
-    }
 }
 
 /**
@@ -278,6 +265,8 @@ object ServiceLocator {
  * Отвечает за безопасное подключение (bind) и отключение (unbind) от Android Service.
  */
 class BluetoothServiceProvider(private val context: Context) {
+
+    private val providerTag = "BluetoothServiceProvider"
 
     /** Ссылка на активный экземпляр сервиса (доступна только при наличии соединения) */
     @Volatile
@@ -308,14 +297,14 @@ class BluetoothServiceProvider(private val context: Context) {
                 // Сохраняем ссылку для последующего использования
                 boundService = bluetoothService
                 
-                println("[BluetoothServiceProvider] AppBluetoothService успешно забиндин")
+                AppLogger.logInfo("AppBluetoothService успешно забиндин", providerTag)
                 onReady(bluetoothService)
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
                 // Обнуляем ссылку при непредвиденном разрыве соединения
                 boundService = null
-                println("[BluetoothServiceProvider] AppBluetoothService отсоединился")
+                AppLogger.logWarning("AppBluetoothService отсоединился", providerTag)
             }
         }
 
@@ -336,10 +325,10 @@ class BluetoothServiceProvider(private val context: Context) {
             try {
                 // Выполняем системную процедуру отвязки от сервиса
                 context.unbindService(it)
-                println("[BluetoothServiceProvider] unbindService успешно выполнен")
+                AppLogger.logInfo("unbindService успешно выполнен", providerTag)
             } catch (e: Exception) {
                 // Логируем исключение, если сервис уже был удален или не был привязан
-                println("[BluetoothServiceProvider] Ошибка при попытке unbind: ${e.message}")
+                AppLogger.logError("Ошибка при попытке unbind: ${e.message}", providerTag)
             }
         }
         // Обнуляем все ресурсы

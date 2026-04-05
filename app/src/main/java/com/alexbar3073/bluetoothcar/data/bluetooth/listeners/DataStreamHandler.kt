@@ -202,6 +202,8 @@ class DataStreamHandler(
                     stateChangeCallback(ConnectionState.ERROR, "Ошибка приема: ${e.message}")
                 }
                 .collect { data ->
+                    // ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ ПРИЕМА ДАННЫХ
+                    AppLogger.logReceive("Входящий пакет", data)
                     handleIncomingData(data)
                 }
         }

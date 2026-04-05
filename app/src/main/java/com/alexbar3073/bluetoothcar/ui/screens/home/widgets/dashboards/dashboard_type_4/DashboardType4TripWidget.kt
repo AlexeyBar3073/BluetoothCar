@@ -81,13 +81,15 @@ internal fun TripWidget(
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
     
     /** Расход топлива (минимум 8.5 для визуализации при 0) */
-    val consumption = if (carData.fuelConsumption > 0f) carData.fuelConsumption else 8.5f
+    // ОБНОВЛЕНИЕ ПРОТОКОЛА: Используем averageConsumption вместо устаревшего fuelConsumption
+    val consumption = if (carData.averageConsumption > 0f) carData.averageConsumption else 8.5f
     
     /** Максимально возможный запас хода на полном баке */
     val maxPossibleRange = (fuelTankCapacity / consumption) * 100f
     
     /** Оставшийся запас хода на текущем топливе */
-    val remainingRange = if (carData.remainingRange > 0f) carData.remainingRange else (carData.fuel / consumption) * 100f
+    // ОБНОВЛЕНИЕ ПРОТОКОЛА: remainingRange больше не передается, рассчитываем локально
+    val remainingRange = (carData.fuel / consumption) * 100f
     
     /** Прогресс запаса хода (0.0 - 1.0) для индикатора */
     val rangeProgress = (remainingRange / maxPossibleRange).coerceIn(0f, 1f)
@@ -184,6 +186,7 @@ internal fun TripWidget(
                     Text(text = if (showTripB) "TRIP B, км" else "TRIP A, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
                     Text(
+                        // ОБНОВЛЕНИЕ ПРОТОКОЛА: tripA/B теперь Float (точность 0.1)
                         text = "%.1f".format(if (showTripB) carData.tripB else carData.tripA),
                         style = tripTotalValueStyle,
                         modifier = Modifier.combinedClickable(
@@ -194,7 +197,7 @@ internal fun TripWidget(
                                 showTripB = !showTripB 
                             },
                             onLongClick = {
-                                /** Сброс текущей поездки (согласно новому протоколу) */
+                                /** Сброс текущей поездки (согласно новому протоколу: команды в нижнем регистре) */
                                 val command = if (showTripB) "{\"command\":\"reset_trip_b\"}" else "{\"command\":\"reset_trip_a\"}"
                                 onTripReset(command)
                             }
@@ -207,7 +210,8 @@ internal fun TripWidget(
                     Text(text = "TOTAL, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
                     Text(
-                        text = "${carData.odometer.toInt()}",
+                        // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: ODO (Total) отображаем как целое число
+                        text = "${carData.odometer.toLong()}",
                         style = tripTotalValueStyle,
                         modifier = Modifier.combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -223,7 +227,7 @@ internal fun TripWidget(
                                     unit = "км",
                                     onSave = { newValue ->
                                         /** Отправка команды корректировки (согласно новому протоколу: {"command":"correct_odo","data":odo}) */
-                                        val command = "{\"command\":\"correct_odo\", \"data\": ${newValue.toInt()}}"
+                                        val command = "{\"command\":\"correct_odo\", \"data\": ${newValue.toLong()}}"
                                         onTripReset(command)
                                     }
                                 )
@@ -234,7 +238,8 @@ internal fun TripWidget(
                 }
 
                 // --- Метки топлива и расхода ---
-                Text(text = "FUEL, л", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
+                // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: В поле "FUEL, л" выводим расход топлива (fuel_a/b) для текущего TRIP
+                Text(text = if (showTripB) "TRIP B, л" else "TRIP A, л", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
                 Text(text = "AVG, л/100", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(0.75f, -1f)))
 
                 // СЕГМЕНТНЫЙ ИНДИКАТОР ЗАПАСА ХОДА
@@ -287,10 +292,16 @@ internal fun TripWidget(
                     }
                 }
 
-                // --- НИЖНИЙ РЯД (Fuel, 0, Rem, Max, Avg) ---
+                // --- НИЖНИЙ РЯД (Trip Fuel, 0, Rem, Max, Avg) ---
                 val bottomRowOffset = tickLargeDp + gapHeightDp
                 Box(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(top = bottomRowOffset)) {
-                    Text(text = "${carData.fuel.toInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
+                    // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: Выводим расход топлива выбранного Trip (fuelA или fuelB)
+                    Text(
+                        text = "%.1f".format(if (showTripB) carData.fuelB else carData.fuelA), 
+                        style = tightValueStyle, 
+                        modifier = Modifier.align(BiasAlignment(-0.75f, -1f))
+                    )
+
                     Text(text = "0", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(-0.5f, -1f)))
                     
                     val isVisible = rangeProgress > 0.18f && rangeProgress < 0.82f

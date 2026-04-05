@@ -27,15 +27,21 @@ import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 
 /**
- * Секция с информацией о приложении
- *
- * Отображает:
- * - Название приложения
- * - Версию
- * - Дополнительную информацию
+ * ТЕГ: Секция информации
+ * 
+ * ФАЙЛ: ui/screens/settings/components/InfoSection.kt
+ * 
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/settings/components/
+ * 
+ * НАЗНАЧЕНИЕ ФАЙЛА:
+ * Секция с информацией о приложении и версии прошивки БК.
+ * 
+ * ОТВЕТСТВЕННОСТЬ: Отображение версии приложения и прошивки оборудования.
  */
 @Composable
-fun InfoSection() {
+fun InfoSection(
+    firmwareVersion: String = "v1.0"
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -83,6 +89,15 @@ fun InfoSection() {
                         "Версия 1.3.0",
                         style = MaterialTheme.typography.bodySmall,
                         color = AppColors.TextTertiary
+                    )
+                    
+                    // ОТОБРАЖЕНИЕ ВЕРСИИ ПРОШИВКИ БК
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Версия прошивки БК: $firmwareVersion",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = AppColors.PrimaryBlue
                     )
                 }
             }

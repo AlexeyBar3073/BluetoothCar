@@ -1,18 +1,32 @@
 // Файл: data/logging/AppLogger.kt
 package com.alexbar3073.bluetoothcar.data.logging
 
-import java.text.SimpleDateFormat
-import java.util.Date
+import android.util.Log
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
+ * ТЕГ: Logging/AppLogger
+ *
  * ФАЙЛ: data/logging/AppLogger.kt
+ *
  * МЕСТОНАХОЖДЕНИЕ: data/logging/
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Единый менеджер логирования для всего приложения.
- * Предоставляет форматированный вывод логов с таймстемпами, номерами пакетов и категориями.
+ * Предоставляет форматированный вывод логов с номерами пакетов и категориями.
+ * Использует стандартный Android Log (Logcat), который сам добавляет метки времени.
+ *
+ * ОТВЕТСТВЕННОСТЬ: 
+ * 1. Централизованный вывод диагностических сообщений.
+ * 2. Фильтрация логов по флагу отладки.
+ * 3. Форматирование сообщений согласно ТЗ.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Singleton / Proxy to Android Log
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: 
+ * Логирование выполняется только если активирован флаг isDebugMode.
+ * В релизных сборках логгер полностью отключается для экономии ресурсов.
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
  * 1. Используется: ВСЕМИ компонентами приложения для логирования
@@ -22,44 +36,46 @@ import java.util.concurrent.atomic.AtomicInteger
  * ИСТОРИЯ ИЗМЕНЕНИЙ:
  * - 2026.02.03 01:00 UTC: ПЕРЕИМЕНОВАНИЕ BluetoothLogger → AppLogger
  *   Файл перемещен из data/bluetooth/logging/ в data/logging/
- */
-
-/**
- * Объект-синглтон для управления логированием во всем приложении.
- * СОГЛАСНО ТЗ: Формат "[ВРЕМЯ] [КОМПОНЕНТ] Сообщение"
+ * - 2026.02.03: Добавлена поддержка вывода полных пакетов и фильтрация по флагу отладки.
  */
 object AppLogger {
 
-    // Конфигурация логирования
+    /** Глобальный тег для фильтрации всех логов приложения в Logcat */
+    private const val GLOBAL_TAG = "BluetoothCar"
+
+    /** Флаг разрешения логирования (ключ управления) */
+    private var isDebugMode = true
+
+    /** Флаг подробного вывода информации */
     private var verbose = true
-    private var showTimestamps = true
+
+    /** Флаг отображения порядкового номера сообщения */
     private var showPacketNumbers = true
 
-    // Счетчик пакетов для отслеживания порядка сообщений
+    /** Счетчик пакетов для отслеживания порядка сообщений */
     private val packetCounter = AtomicInteger(0)
-
-    // Формат времени для логов
-    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 
     /**
      * Настроить параметры логирования.
      * Вызывается AppController при инициализации.
      *
+     * @param isDebug Разрешить логирование (обычно передается BuildConfig.DEBUG)
      * @param verbose Включить подробное логирование
-     * @param timestamps Показывать временные метки
      * @param packetNumbers Показывать номера пакетов
      */
     fun configure(
+        isDebug: Boolean = true,
         verbose: Boolean = true,
-        timestamps: Boolean = true,
         packetNumbers: Boolean = true
     ) {
+        // Устанавливаем глобальные настройки
+        this.isDebugMode = isDebug
         this.verbose = verbose
-        this.showTimestamps = timestamps
         this.showPacketNumbers = packetNumbers
 
+        // Логируем факт изменения конфигурации
         logInfo(
-            "[AppLogger] Конфигурация логирования: verbose=$verbose, timestamps=$timestamps, packetNumbers=$packetNumbers",
+            "Конфигурация логирования: isDebug=$isDebugMode, verbose=$verbose, packetNumbers=$packetNumbers",
             "AppLogger"
         )
     }
@@ -71,22 +87,30 @@ object AppLogger {
      * @param component Компонент, из которого производится логирование
      */
     fun logInfo(message: String, component: String) {
-        if (verbose) {
-            val formattedMessage = formatLogMessage(message, component, "Информация")
-            println(formattedMessage)
+        // Проверяем, разрешено ли логирование и активен ли режим verbose
+        if (isDebugMode && verbose) {
+            // Форматируем сообщение согласно стандартам проекта
+            val formattedMessage = formatLogMessage(message, component, "INFO")
+            // Выводим в системный лог на уровне INFO
+            Log.i(GLOBAL_TAG, formattedMessage)
         }
     }
 
     /**
      * Логировать сообщение об ошибке.
+     * Ошибки логируются всегда при активном дебаге, независимо от флага verbose.
      *
      * @param message Сообщение для логирования
      * @param component Компонент, из которого производится логирование
      */
     fun logError(message: String, component: String) {
-        // Ошибки логируем всегда, даже если verbose = false
-        val formattedMessage = formatLogMessage(message, component, "Ошибка")
-        System.err.println(formattedMessage)
+        // Ошибки выводим только в режиме отладки
+        if (isDebugMode) {
+            // Форматируем сообщение
+            val formattedMessage = formatLogMessage(message, component, "ERROR")
+            // Выводим в системный лог на уровне ERROR
+            Log.e(GLOBAL_TAG, formattedMessage)
+        }
     }
 
     /**
@@ -96,146 +120,105 @@ object AppLogger {
      * @param component Компонент, из которого производится логирование
      */
     fun logWarning(message: String, component: String) {
-        if (verbose) {
-            val formattedMessage = formatLogMessage(message, component, "Предупреждение")
-            println(formattedMessage)
+        // Проверяем условия вывода
+        if (isDebugMode && verbose) {
+            // Форматируем сообщение
+            val formattedMessage = formatLogMessage(message, component, "WARN")
+            // Выводим в системный лог на уровне WARN
+            Log.w(GLOBAL_TAG, formattedMessage)
         }
     }
 
     /**
      * Логировать событие подключения.
-     * Используется для событий, связанных с установкой/разрывом соединений.
-     *
-     * @param message Сообщение для логирования
-     * @param component Компонент, из которого производится логирование
      */
+    @Suppress("unused")
     fun logConnection(message: String, component: String) {
-        if (verbose) {
-            val formattedMessage = formatLogMessage(message, component, "Событие соединения")
-            println(formattedMessage)
+        if (isDebugMode && verbose) {
+            val formattedMessage = formatLogMessage(message, component, "CONN")
+            Log.d(GLOBAL_TAG, formattedMessage)
         }
     }
 
     /**
      * Логировать изменение состояния протокола.
-     * Используется для отслеживания переходов между состояниями.
-     *
-     * @param message Сообщение для логирования
-     * @param component Компонент, из которого производится логирование
      */
+    @Suppress("unused")
     fun logStateChange(message: String, component: String) {
-        if (verbose) {
-            val formattedMessage =
-                formatLogMessage(message, component, "Изменение состояния протокола")
-            println(formattedMessage)
+        if (isDebugMode && verbose) {
+            val formattedMessage = formatLogMessage(message, component, "STATE")
+            Log.d(GLOBAL_TAG, formattedMessage)
         }
     }
 
     /**
      * Логировать отправку данных.
-     *
-     * @param message Сообщение для логирования
-     * @param data Отправляемые данные
      */
+    @Suppress("unused")
     fun logSend(message: String, data: String) {
-        if (verbose) {
-            val formattedMessage =
-                formatLogMessage("$message: $data", "DataStream", "Отправка данных")
-            println(formattedMessage)
+        if (isDebugMode && verbose) {
+            val formattedMessage = formatLogMessage("$message: $data", "DataStream", "SEND")
+            Log.v(GLOBAL_TAG, formattedMessage)
         }
     }
 
     /**
      * Логировать прием данных.
+     * Выводит полную строку данных без сокращений для детального анализа.
      *
-     * @param message Сообщение для логирования
-     * @param data Принимаемые данные
+     * @param message Описание действия
+     * @param data Полученная сырая строка
      */
     fun logReceive(message: String, data: String) {
-        if (verbose) {
+        // Проверяем глобальные флаги
+        if (isDebugMode && verbose) {
+            // Формируем полную строку без обрезания для анализа полей
             val formattedMessage = formatLogMessage(
-                "$message: ${data.take(100)}${if (data.length > 100) "..." else ""}",
+                "$message: $data",
                 "DataStream",
-                "Прием данных"
+                "RECV"
             )
-            println(formattedMessage)
+            // Используем уровень VERBOSE для сырых данных
+            Log.v(GLOBAL_TAG, formattedMessage)
         }
     }
 
     /**
-     * Отформатировать сообщение лога согласно ТЗ.
-     * Формат: "[ВРЕМЯ] [КОМПОНЕНТ] Сообщение" или "[НОМЕР_ПАКЕТА] [ВРЕМЯ] [КОМПОНЕНТ] Сообщение"
-     *
-     * @param message Исходное сообщение
-     * @param component Компонент-источник
-     * @param logType Тип лога (для категоризации)
-     * @return Отформатированная строка лога
+     * Форматирует сообщение для вывода.
+     * Собирает строку: "[НОМЕР] [ТИП] [КОМПОНЕНТ] Сообщение"
      */
     private fun formatLogMessage(message: String, component: String, logType: String): String {
-        val packetNumber = if (showPacketNumbers) {
-            val number = packetCounter.incrementAndGet()
-            String.format("%04d", number)
-        } else {
-            ""
-        }
+        // Формируем строку номера пакета, если это включено в настройках
+        val packetNumberStr = if (showPacketNumbers) {
+            // Используем Locale.US для стабильного формата чисел
+            String.format(Locale.US, "[%04d] ", packetCounter.incrementAndGet())
+        } else ""
 
-        val timestamp = if (showTimestamps) {
-            timeFormat.format(Date())
-        } else {
-            ""
-        }
-
-        return buildString {
-            if (packetNumber.isNotEmpty()) {
-                append("$packetNumber ")
-            }
-            if (timestamp.isNotEmpty()) {
-                append("$timestamp ")
-            }
-            if (logType.isNotEmpty()) {
-                append("$logType в $component: ")
-            }
-            append(message)
-        }
+        // Собираем итоговую строку. Временную метку не добавляем, так как её добавит Logcat.
+        return "$packetNumberStr[$logType] [$component] $message"
     }
 
     /**
-     * Получить текущий номер пакета.
-     * Полезно для отладки и отслеживания порядка сообщений.
-     *
-     * @return Текущий номер пакета
+     * Получить текущий порядковый номер сообщения.
      */
+    @Suppress("unused")
     fun getCurrentPacketNumber(): Int {
         return packetCounter.get()
     }
 
     /**
-     * Сбросить счетчик пакетов.
-     * Вызывается при перезапуске соединения или для отладки.
+     * Сбросить счетчик сообщений.
      */
+    @Suppress("unused")
     fun resetPacketCounter() {
+        // Сбрасываем атомарный счетчик в ноль
         packetCounter.set(0)
-        logInfo("[AppLogger] Счетчик пакетов сброшен", "AppLogger")
+        logInfo("Счетчик пакетов сброшен", "AppLogger")
     }
 
-    /**
-     * Проверить, включено ли подробное логирование.
-     *
-     * @return true если verbose = true, false в противном случае
-     */
+    /** Возвращает статус активности подробного логирования */
     fun isVerbose(): Boolean = verbose
 
-    /**
-     * Проверить, показываются ли временные метки.
-     *
-     * @return true если showTimestamps = true, false в противном случае
-     */
-    fun showsTimestamps(): Boolean = showTimestamps
-
-    /**
-     * Проверить, показываются ли номера пакетов.
-     *
-     * @return true если showPacketNumbers = true, false в противном случае
-     */
+    /** Возвращает статус отображения номеров пакетов */
     fun showsPacketNumbers(): Boolean = showPacketNumbers
 }

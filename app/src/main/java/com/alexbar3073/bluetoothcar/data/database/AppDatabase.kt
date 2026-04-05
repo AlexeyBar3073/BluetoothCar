@@ -31,7 +31,7 @@ import com.alexbar3073.bluetoothcar.data.database.entities.EcuCombinationEntity
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: (Использует: EcuErrorEntity.kt, EcuCombinationEntity.kt, EcuErrorDao.kt, EcuCombinationDao.kt, EcuErrorTypeConverters.kt / Взаимодействует: ServiceLocator.kt)
  */
-@Database(entities = [EcuErrorEntity::class, EcuCombinationEntity::class], version = 2, exportSchema = false)
+@Database(entities = [EcuErrorEntity::class, EcuCombinationEntity::class], version = 3, exportSchema = false)
 @TypeConverters(EcuErrorTypeConverters::class)
 abstract class AppDatabase : RoomDatabase() {
 
