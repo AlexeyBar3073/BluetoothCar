@@ -2416,8 +2416,7 @@
     ],
     "toolsNeeded": ["Очиститель MAF", "Дымогенератор", "OBD2 сканер"],
     "relatedCodes": ["P0101", "P0172", "P0130"],
-    "isCombination": true,
-    "combination": ["P0171", "P0100"]
+    "isCombination": true
   },
   {
     "code": "P0135+P0141",
@@ -2441,8 +2440,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Набор предохранителей", "Схема блока предохранителей"],
     "relatedCodes": ["P0136", "P0140", "P0031"],
-    "isCombination": true,
-    "combination": ["P0135", "P0141"]
+    "isCombination": true
   },
   {
     "code": "P0300+P0420",
@@ -2466,8 +2464,7 @@
     ],
     "toolsNeeded": ["Свечной ключ", "Компрессометр", "Запасные катушки"],
     "relatedCodes": ["P0301", "P0302", "P0303", "P0304", "P0171"],
-    "isCombination": true,
-    "combination": ["P0300", "P0420"]
+    "isCombination": true
   },
   {
     "code": "P1349+P0340",
@@ -2491,8 +2488,7 @@
     ],
     "toolsNeeded": ["Набор ключей", "Очиститель карбюратора", "Мультиметр", "Манометр масла"],
     "relatedCodes": ["P0010", "P0011", "P0335", "P0012"],
-    "isCombination": true,
-    "combination": ["P1349", "P0340"]
+    "isCombination": true
   },
   {
     "code": "P2101+P2135+P0120",
@@ -2516,8 +2512,7 @@
     ],
     "toolsNeeded": ["Сканер для адаптации", "Мультиметр", "Очиститель дросселя"],
     "relatedCodes": ["P2111", "P2112", "P0220", "P0222"],
-    "isCombination": true,
-    "combination": ["P2101", "P2135", "P0120"]
+    "isCombination": true
   },
   {
     "code": "C1201+P0300",
@@ -2540,8 +2535,7 @@
     ],
     "toolsNeeded": ["Сканер OBD2"],
     "relatedCodes": ["C1241", "P0171", "P0500", "P0700"],
-    "isCombination": true,
-    "combination": ["C1201", "P0300"]
+    "isCombination": true
   },
   {
     "code": "P0500+P0700",
@@ -2565,8 +2559,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Подъемник/яма", "Сканер АКПП"],
     "relatedCodes": ["P0501", "P0750", "C1201"],
-    "isCombination": true,
-    "combination": ["P0500", "P0700"]
+    "isCombination": true
   },
   {
     "code": "P0440+P0446+P0455",
@@ -2590,8 +2583,7 @@
     ],
     "toolsNeeded": ["Дымогенератор", "Компрессор", "Новая крышка бака"],
     "relatedCodes": ["P0441", "P0442", "P0456"],
-    "isCombination": true,
-    "combination": ["P0440", "P0446", "P0455"]
+    "isCombination": true
   },
   {
     "code": "P0115+P0128",
@@ -2615,8 +2607,7 @@
     ],
     "toolsNeeded": ["Набор ключей", "Термометр", "Новый термостат", "Антифриз"],
     "relatedCodes": ["P0116", "P0117", "P0118"],
-    "isCombination": true,
-    "combination": ["P0115", "P0128"]
+    "isCombination": true
   },
   {
     "code": "P0351+P0301",
@@ -2640,8 +2631,7 @@
     ],
     "toolsNeeded": ["Свечной ключ", "Запасная катушка", "Сканер"],
     "relatedCodes": ["P0352", "P0302", "P0353", "P0303"],
-    "isCombination": true,
-    "combination": ["P0351", "P0301"]
+    "isCombination": true
   },
   {
     "code": "P0335+P0340",
@@ -2665,8 +2655,7 @@
     ],
     "toolsNeeded": ["Набор ключей", "Мультиметр", "Осциллограф", "Фонарь"],
     "relatedCodes": ["P0336", "P0339", "P0341"],
-    "isCombination": true,
-    "combination": ["P0335", "P0340"]
+    "isCombination": true
   },
   {
     "code": "P0172+P0300",
@@ -2690,8 +2679,7 @@
     ],
     "toolsNeeded": ["Манометр топлива", "Стенд форсунок", "Свечной ключ"],
     "relatedCodes": ["P0171", "P0301", "P0420"],
-    "isCombination": true,
-    "combination": ["P0172", "P0300"]
+    "isCombination": true
   },
   {
     "code": "P0401+P0505",
@@ -2715,8 +2703,7 @@
     ],
     "toolsNeeded": ["Набор ключей", "Очиститель карбюратора", "Сканер"],
     "relatedCodes": ["P0402", "P0403", "P2101"],
-    "isCombination": true,
-    "combination": ["P0401", "P0505"]
+    "isCombination": true
   },
   {
     "code": "P0750+P0753+P0773",
@@ -2740,8 +2727,7 @@
     ],
     "toolsNeeded": ["Сканер АКПП", "Мультиметр", "Набор ключей", "Новое ATF"],
     "relatedCodes": ["P0700", "P0755", "P0758", "P0760"],
-    "isCombination": true,
-    "combination": ["P0750", "P0753", "P0773"]
+    "isCombination": true
   },
   {
     "code": "P0560+P1600",
@@ -2765,8 +2751,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Наждачная бумага", "Смазка для клемм"],
     "relatedCodes": ["P0562", "P0563", "P1603", "P1633"],
-    "isCombination": true,
-    "combination": ["P0560", "P1600"]
+    "isCombination": true
   },
   {
     "code": "P2120+P2138",
@@ -2790,8 +2775,7 @@
     ],
     "toolsNeeded": ["Сканер с live data", "Очиститель контактов", "Мультиметр"],
     "relatedCodes": ["P2121", "P2122", "P2123", "P2101"],
-    "isCombination": true,
-    "combination": ["P2120", "P2138"]
+    "isCombination": true
   },
   {
     "code": "P0130+P0133+P0135",
@@ -2815,8 +2799,7 @@
     ],
     "toolsNeeded": ["Сканер с мониторингом лямбды", "Дымогенератор", "Манометр топлива"],
     "relatedCodes": ["P0171", "P0172", "P0420", "P2238"],
-    "isCombination": true,
-    "combination": ["P0130", "P0133", "P0135"]
+    "isCombination": true
   },
   {
     "code": "P2238+P2239",
@@ -2840,8 +2823,7 @@
     ],
     "toolsNeeded": ["Сканер с мониторингом тока лямбды", "Мультиметр", "Ключ 22 мм"],
     "relatedCodes": ["P0130", "P0135", "P2195", "P2196"],
-    "isCombination": true,
-    "combination": ["P2238", "P2239"]
+    "isCombination": true
   },
   {
     "code": "C0200+C0205+C0210+C0215",
@@ -2865,8 +2847,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Сканер с поддержкой ABS", "Схема предохранителей"],
     "relatedCodes": ["C1201", "C1241", "P0500"],
-    "isCombination": true,
-    "combination": ["C0200", "C0205", "C0210", "C0215"]
+    "isCombination": true
   },
   {
     "code": "C1241+C1201",
@@ -2890,8 +2871,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Сканер с поддержкой 4WD", "Очиститель контактов"],
     "relatedCodes": ["C0200", "P0500", "P0560"],
-    "isCombination": true,
-    "combination": ["C1241", "C1201"]
+    "isCombination": true
   },
   {
     "code": "P0351+P0352+P0353+P0354",
@@ -2915,8 +2895,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Схема предохранителей", "Набор ключей"],
     "relatedCodes": ["P0300", "P0301", "P0302", "P0303", "P0304"],
-    "isCombination": true,
-    "combination": ["P0351", "P0352", "P0353", "P0354"]
+    "isCombination": true
   },
   {
     "code": "P1600+P1603+P1633",
@@ -2940,8 +2919,7 @@
     ],
     "toolsNeeded": ["Мультиметр", "Нагрузочная вилка", "Зарядное устройство"],
     "relatedCodes": ["P0560", "P0562", "P0563"],
-    "isCombination": true,
-    "combination": ["P1600", "P1603", "P1633"]
+    "isCombination": true
   },
   {
     "code": "P0010+P0011+P0012",
@@ -2965,8 +2943,7 @@
     ],
     "toolsNeeded": ["Манометр масла", "Очиститель карбюратора", "Мультиметр"],
     "relatedCodes": ["P0014", "P0340", "P1349"],
-    "isCombination": true,
-    "combination": ["P0010", "P0011", "P0012"]
+    "isCombination": true
   },
   {
     "code": "P0171+P0172",
@@ -2990,8 +2967,7 @@
     ],
     "toolsNeeded": ["Сканер с live data", "Дымогенератор", "Манометр топлива"],
     "relatedCodes": ["P0100", "P0101", "P0130", "P0133"],
-    "isCombination": true,
-    "combination": ["P0171", "P0172"]
+    "isCombination": true
   },
   {
     "code": "B1000+B1012+B1015",
@@ -3015,9 +2991,6 @@
     ],
     "toolsNeeded": ["Сканер с поддержкой SRS", "Мультиметр", "Очиститель контактов"],
     "relatedCodes": ["B1800", "B1900", "C1201"],
-    "isCombination": true,
-    "combination": ["B1000", "B1012", "B1015"]
+    "isCombination": true
   }
-
-
 ]
