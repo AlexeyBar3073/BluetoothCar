@@ -94,8 +94,8 @@ class DataStreamHandlerTest {
         handler.sendJsonCommand(testCommand)
         runCurrent()
         
-        // Проверка: в сервис ушел JSON с msg_id="1" и исходной командой
-        coVerify { bluetoothService.sendData(match { it.contains("\"msg_id\":\"1\"") && it.contains("\"command\":\"TEST\"") }) }
+        // Проверка: в сервис ушел JSON с msg_id=1 (число) и исходной командой
+        coVerify { bluetoothService.sendData(match { it.contains("\"msg_id\":1") && it.contains("\"command\":\"TEST\"") }) }
     }
 
     /**
@@ -120,8 +120,8 @@ class DataStreamHandlerTest {
         // Проверка: должна произойти вторая попытка отправки того же сообщения
         coVerify(exactly = 2) { bluetoothService.sendData(any()) }
 
-        // Имитируем получение подтверждения (ACK) от устройства
-        incomingRawDataFlow.emit("{\"ack_id\":\"1\"}")
+        // Имитируем получение подтверждения (ACK) от устройства (как число или строку)
+        incomingRawDataFlow.emit("{\"ack_id\":1}")
         runCurrent()
 
         // Перематываем время еще раз - переотправки должны прекратиться
@@ -150,9 +150,9 @@ class DataStreamHandlerTest {
             assertEquals(100, item1["data"]?.jsonObject?.get("val")?.jsonPrimitive?.int)
 
             // Пакеты с подтверждением (ack_id) также должны транслироваться
-            incomingRawDataFlow.emit(ackPacket)
+            incomingRawDataFlow.emit("{\"ack_id\":5}")
             val item2 = awaitItem()
-            assertEquals("5", item2["ack_id"]?.jsonPrimitive?.content)
+            assertEquals(5L, item2["ack_id"]?.jsonPrimitive?.long)
         }
     }
 

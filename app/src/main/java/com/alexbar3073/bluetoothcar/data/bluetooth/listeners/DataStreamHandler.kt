@@ -55,7 +55,7 @@ class DataStreamHandler(
      * @property payload Полезная нагрузка команды в формате JSON.
      */
     private data class QueuedCommand(
-        val id: String,
+        val id: Long,
         val payload: String
     ) {
         /**
@@ -64,6 +64,7 @@ class DataStreamHandler(
          */
         fun getEnvelope(json: Json): String {
             val element = json.parseToJsonElement(payload).jsonObject.toMutableMap()
+            // msg_id передается как число (Number)
             element["msg_id"] = JsonPrimitive(id)
             return json.encodeToString(JsonObject(element))
         }
@@ -79,7 +80,7 @@ class DataStreamHandler(
     private val commandQueue = Channel<QueuedCommand>(Channel.UNLIMITED)
 
     /** Поток входящих AckID для пробуждения воркера. Используем replay=1 для исключения гонок. */
-    private val acknowledgmentsFlow = MutableSharedFlow<String>(replay = 1)
+    private val acknowledgmentsFlow = MutableSharedFlow<Long>(replay = 1)
 
     // ========== СОСТОЯНИЕ И СИНХРОНИЗАЦИЯ ==========
 
@@ -90,7 +91,7 @@ class DataStreamHandler(
     private val msgIdGenerator = AtomicLong(1)
 
     /** Последний полученный ID подтверждения для проверки в цикле */
-    private val lastAckId = AtomicReference<String?>(null)
+    private val lastAckId = AtomicLong(-1L)
 
     /** Флаг активности обработчика */
     private val isHandlerActive = AtomicBoolean(false)
@@ -121,7 +122,7 @@ class DataStreamHandler(
         }
 
         isHandlerActive.set(true)
-        lastAckId.set(null)
+        lastAckId.set(-1L)
 
         // 1. Запускаем приемник (должен слушать Ack до начала отправки)
         startReceiver()
@@ -139,7 +140,7 @@ class DataStreamHandler(
      * @param jsonPayload JSON строка команды.
      */
     private suspend fun queueCommand(jsonPayload: String) {
-        val id = msgIdGenerator.getAndIncrement().toString()
+        val id = msgIdGenerator.getAndIncrement()
         log("Добавление в очередь: ID=$id, Payload=${jsonPayload.take(50)}...")
         commandQueue.send(QueuedCommand(id, jsonPayload))
     }
@@ -232,7 +233,9 @@ class DataStreamHandler(
             val jsonObject = json.parseToJsonElement(data).jsonObject
 
             // 1. Техническая часть транспорта: Проверка на подтверждение (Ack)
-            jsonObject["ack_id"]?.jsonPrimitive?.content?.let { ackId ->
+            jsonObject["ack_id"]?.jsonPrimitive?.let { primitive ->
+                primitive.longOrNull ?: primitive.content.toLongOrNull()
+            }?.let { ackId ->
                 log("Receiver: Получен AckID=$ackId")
                 lastAckId.set(ackId)
                 coroutineScope.launch { acknowledgmentsFlow.emit(ackId) }

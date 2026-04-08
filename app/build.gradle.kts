@@ -28,7 +28,15 @@ android {
             )
         }
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
     compileOptions {
+        // Включение поддержки современных Java API на старых Android (API 24)
+        isCoreLibraryDesugaringEnabled = true
+        
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -39,6 +47,9 @@ android {
 }
 
 dependencies {
+    // Поддержка Java 8+ API на старых устройствах
+    coreLibraryDesugaring(libs.android.desugarJdkLibs)
+
     // 1. BOM - должен быть первым
     implementation(platform(libs.androidx.compose.bom))
 
