@@ -31,6 +31,13 @@ interface EcuErrorDao {
     @Query("SELECT * FROM ecu_errors")
     fun getAllErrorsList(): List<EcuErrorEntity>
 
+    /**
+     * Получить все записи, помеченные как комбинации ошибок.
+     * Используется во ViewModel для сопоставления набора активных кодов с экспертной базой.
+     */
+    @Query("SELECT * FROM ecu_errors WHERE isCombination = 1")
+    fun getAllCombinations(): Flow<List<EcuErrorEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertAll(errors: List<EcuErrorEntity>)
 

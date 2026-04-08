@@ -151,7 +151,10 @@ class DataStreamHandler(
      * @param jsonCommand Строка JSON.
      */
     fun sendJsonCommand(jsonCommand: String) {
-        if (!isHandlerActive.get()) return
+        if (!isHandlerActive.get()) {
+            log("ПРЕДУПРЕЖДЕНИЕ: Попытка отправить команду в неактивный транспорт: $jsonCommand")
+            return
+        }
         coroutineScope.launch {
             queueCommand(jsonCommand)
         }
@@ -165,6 +168,7 @@ class DataStreamHandler(
         workerJob = coroutineScope.launch(ioDispatcher) {
             log("Worker: Ожидание готовности приемника...")
             while (!isReceiverReady.get()) delay(50)
+            log("Worker: Приемник готов, начинаем обработку очереди")
 
             // Обрабатываем команды из канала по одной
             for (command in commandQueue) {

@@ -127,7 +127,7 @@ fun EcuErrorDialog(
                                 ) {
                                     items(diagnosticItems) { diagnosticItem ->
                                         when (diagnosticItem) {
-                                            is EcuDiagnosticItem.SingleError -> {
+                                            is EcuDiagnosticItem.Error -> {
                                                 EcuErrorListItem(
                                                     error = diagnosticItem.error,
                                                     onClick = { selectedItem = diagnosticItem }
@@ -140,7 +140,7 @@ fun EcuErrorDialog(
                         } else {
                             // ЭКРАН 2: ДЕТАЛЬНЫЙ ПРОСМОТР
                             when (item) {
-                                is EcuDiagnosticItem.SingleError -> EcuErrorFullDetail(item.error)
+                                is EcuDiagnosticItem.Error -> EcuErrorFullDetail(item.error)
                             }
                         }
                     }

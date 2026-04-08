@@ -145,20 +145,15 @@ class BluetoothConnectionManager(
      * @param errorMessage Опциональное описание ошибки для уведомления пользователя.
      */
     private fun handleConnectionState(state: ConnectionState, errorMessage: String? = null) {
-        // 1. Синхронно обновляем поток состояния для подписчиков (UI)
-        _connectionStateFlow.value = state
-        log("Получено оповещение о новом состоянии подключения ${state.name}")
-
-        // 2. Реагируем на изменение состояния согласно бизнес-логике переходов
+        // 1. Реагируем на изменение состояния согласно бизнес-логике переходов
+        // ВАЖНО: Сначала готовим компоненты (транспорт), потом уведомляем об изменении состояния,
+        // чтобы избежать гонок (race conditions), когда подписчики (AppController) начинают слать 
+        // команды в еще не запущенный транспортный слой.
         when (state) {
-            ConnectionState.ERROR -> {
-                // Обработка критических ошибок от любого из компонентов
-                log("Ошибка от помощника: ${state.name}${errorMessage?.let { ": $it" } ?: ""}")
-                errorMessage?.let {
-                    managerScope.launch {
-                        Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-                    }
-                }
+            ConnectionState.CONNECTED -> {
+                // Шаг 4: Соединение установлено, активируем транспортный шлюз данных
+                isConnected = true
+                startDataStreamHandler()
             }
 
             ConnectionState.DEVICE_SELECTED -> {
@@ -171,23 +166,24 @@ class BluetoothConnectionManager(
                 connectionStateManager.start(currentBluetoothDeviceData)
             }
 
-            ConnectionState.CONNECTED -> {
-                // Шаг 4: Соединение установлено, активируем транспортный шлюз данных
-                isConnected = true
-                startDataStreamHandler()
-            }
-
             ConnectionState.DISCONNECTED -> {
                 // Обработка разрыва соединения: сброс флагов и инициация авто-переподключения
                 isConnected = false
                 managerScope.launch {
-                    // Удалена принудительная установка состояния UNDEFINED согласно задаче
                     startConnectionProcess()
                 }
             }
 
+            ConnectionState.ERROR -> {
+                log("Ошибка от помощника: ${state.name}${errorMessage?.let { ": $it" } ?: ""}")
+                errorMessage?.let {
+                    managerScope.launch {
+                        Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+
             else -> {
-                // Обработка информационных сообщений или уведомлений в прочих состояниях
                 errorMessage?.let {
                     managerScope.launch {
                         Toast.makeText(context, it, Toast.LENGTH_LONG).show()
@@ -195,6 +191,10 @@ class BluetoothConnectionManager(
                 }
             }
         }
+
+        // 2. Обновляем поток состояния для подписчиков (UI и AppController)
+        _connectionStateFlow.value = state
+        log("Получено оповещение о новом состоянии подключения ${state.name}")
     }
 
     // ========== ПУБЛИЧНЫЙ API ДЛЯ APPCONTROLLER ==========

@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
  * Обертка для элементов списка ошибок, позволяющая объединять одиночные ошибки и комбинации.
  */
 sealed class EcuDiagnosticItem {
-    data class SingleError(val error: EcuErrorEntity) : EcuDiagnosticItem()
+    /** Одиночная ошибка или найденная комбинация (теперь используют единую сущность) */
+    data class Error(val error: EcuErrorEntity) : EcuDiagnosticItem()
 }
 
 /**
@@ -96,20 +97,69 @@ open class SharedViewModel(
      */
     open val activeEcuErrors: StateFlow<List<EcuErrorEntity>> = activeEcuErrorCodes
         .flatMapLatest { codes ->
-            // Если кодов нет - возвращаем пустой список, иначе запрашиваем из контроллера
             if (codes.isEmpty()) flowOf(emptyList())
             else appController.getEcuErrorsByCodes(codes)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * Единый поток всех диагностических сообщений.
+     * Поток активных комбинаций ошибок на основе текущего набора кодов.
+     * Реализует экспертный алгоритм:
+     * 1. Получает из базы данных все экспертные правила (записи с isCombination = true).
+     * 2. Для каждой комбинации извлекает список входящих в неё кодов (разделитель "+").
+     * 3. Проверяет, что ВСЕ коды комбинации присутствуют в текущем наборе кодов телеметрии.
+     * 4. Возвращает список только тех комбинаций, которые полностью подтверждены текущими данными.
      */
-    open val allDiagnosticItems: StateFlow<List<EcuDiagnosticItem>> = activeEcuErrors
-        .map { errors ->
-            errors.map { EcuDiagnosticItem.SingleError(it) }
+    open val activeCombinations: StateFlow<List<EcuErrorEntity>> = combine(
+        activeEcuErrorCodes,
+        appController.getAllEcuCombinations()
+    ) { currentCodes, allCombinations ->
+        // Если кодов в телеметрии нет — комбинации не ищем
+        if (currentCodes.isEmpty()) return@combine emptyList()
+        
+        // Создаем Set для мгновенного поиска (O(1))
+        val codesSet = currentCodes.toSet()
+        
+        // Фильтруем экспертную базу
+        allCombinations.filter { combination ->
+            // Извлекаем составляющие коды (например "P0135+P0141" -> ["P0135", "P0141"])
+            val combinationCodes = combination.code.split("+")
+                .map { it.trim().uppercase() }
+                .filter { it.isNotEmpty() }
+            
+            // Проверяем полное вхождение набора кодов комбинации в текущий набор автомобиля
+            combinationCodes.isNotEmpty() && codesSet.containsAll(combinationCodes)
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Единый поток всех диагностических элементов.
+     * Объединяет одиночные расшифровки и экспертные заключения в одну ленту.
+     * 
+     * ПРИНЦИП РАБОТЫ:
+     * 1. Берет список одиночных ошибок (например, P0135 и P0141).
+     * 2. Берет список найденных комбинаций (например, P0135+P0141).
+     * 3. Объединяет их. За счет разных кодов (code) они сосуществуют в одном списке.
+     * 4. Выполняет сортировку: Сначала всегда идут комбинированные ошибки для привлечения внимания эксперта.
+     * 5. Внутри групп (комбинации/одиночные) сортирует по приоритету (критичности).
+     */
+    open val allDiagnosticItems: StateFlow<List<EcuDiagnosticItem>> = combine(
+        activeEcuErrors,
+        activeCombinations
+    ) { errors, combinations ->
+        // Сливаем два списка в один. Одиночные ошибки НЕ удаляются при наличии комбинации.
+        val all = (errors + combinations)
+            .distinctBy { it.code } // Защита от дублей по первичному ключу
+            .sortedWith(
+                // Первичная сортировка по флагу комбинации (сначала true)
+                compareByDescending<EcuErrorEntity> { it.isCombination }
+                    // Вторичная сортировка по важности (priority)
+                    .thenByDescending { it.priority }
+            )
+        
+        // Оборачиваем в UI-модель
+        all.map { EcuDiagnosticItem.Error(it) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ========== ПРОИЗВОДНЫЕ ПОТОКИ ДЛЯ УДОБСТВА ==========
 

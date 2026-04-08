@@ -31,6 +31,9 @@ data class EcuErrorEntity(
     @PrimaryKey
     val code: String,
 
+    /** Отображаемое имя ошибки (может совпадать с кодом) */
+    val name: String = "",
+
     /** Приоритет критичности ошибки */
     val priority: Int,
 
@@ -56,7 +59,13 @@ data class EcuErrorEntity(
     val toolsNeeded: List<String>,
 
     /** Список связанных кодов ошибок (хранится как JSON через TypeConverter) */
-    val relatedCodes: List<String>
+    val relatedCodes: List<String>,
+
+    /** 
+     * Флаг, указывающий на то, является ли это комбинацией ошибок.
+     * В текущей версии подсистемы используется для фильтрации при импорте.
+     */
+    val isCombination: Boolean = false
 )
 
 /**

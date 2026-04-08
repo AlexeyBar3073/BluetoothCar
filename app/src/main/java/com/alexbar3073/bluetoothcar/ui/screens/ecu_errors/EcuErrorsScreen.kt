@@ -25,6 +25,7 @@ import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
+import com.alexbar3073.bluetoothcar.ui.viewmodels.EcuDiagnosticItem
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 
 /**
@@ -55,9 +56,8 @@ fun EcuErrorsScreen(
     navController: NavController,
     viewModel: SharedViewModel
 ) {
-    // Получаем список активных ошибок из ViewModel. 
-    // Комбинации удалены согласно задаче.
-    val errors by viewModel.activeEcuErrors.collectAsStateWithLifecycle()
+    // Получаем список всех диагностических элементов (одиночные + комбинации) из ViewModel.
+    val diagnosticItems by viewModel.allDiagnosticItems.collectAsStateWithLifecycle()
 
     BluetoothCarTheme(themeMode = "dark") {
         Scaffold(
@@ -79,7 +79,7 @@ fun EcuErrorsScreen(
                     .background(verticalGradientBackground())
                     .padding(paddingValues)
             ) {
-                if (errors.isEmpty()) {
+                if (diagnosticItems.isEmpty()) {
                     // Состояние пустого списка: ошибок нет
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -89,7 +89,7 @@ fun EcuErrorsScreen(
                         )
                     }
                 } else {
-                    // Список ошибок, оформленный в виде карточек
+                    // Единый список диагностических элементов (одиночные и комбинации)
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 32.dp),
@@ -97,10 +97,10 @@ fun EcuErrorsScreen(
                     ) {
                         item {
                             Spacer(modifier = Modifier.height(16.dp))
-                            // Заголовок секции одиночных ошибок
-                            SectionHeader("ТЕКУЩИЕ ОШИБКИ")
+                            // Заголовок общей секции диагностики
+                            SectionHeader("РЕЗУЛЬТАТЫ ДИАГНОСТИКИ")
                             
-                            // Карточка со списком ошибок
+                            // Единая карточка со всеми найденными элементами
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -109,17 +109,22 @@ fun EcuErrorsScreen(
                                 shape = MaterialTheme.shapes.medium
                             ) {
                                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                    errors.forEachIndexed { index, error ->
-                                        // Элемент конкретной ошибки
-                                        EcuErrorItem(
-                                            error = error,
-                                            onClick = {
-                                                // Переход к детальному описанию ошибки
-                                                navController.navigate("ecu_error_detail/${error.code}")
+                                    diagnosticItems.forEachIndexed { index, item ->
+                                        when (item) {
+                                            is EcuDiagnosticItem.Error -> {
+                                                val error = item.error
+                                                EcuErrorItem(
+                                                    error = error,
+                                                    onClick = {
+                                                        // Переход к детальному описанию (единый экран для всех типов)
+                                                        navController.navigate("ecu_error_detail/${error.code}")
+                                                    }
+                                                )
                                             }
-                                        )
-                                        // Разделитель между ошибками внутри одной карточки
-                                        if (index < errors.size - 1) {
+                                        }
+                                        
+                                        // Разделитель между элементами внутри одной карточки
+                                        if (index < diagnosticItems.size - 1) {
                                             HorizontalDivider(
                                                 color = AppColors.SurfaceMedium,
                                                 modifier = Modifier.padding(horizontal = 16.dp)

@@ -195,9 +195,10 @@ class AppController(
                 val count = dao.getCount()
                 if (count == 0) {
                     val jsonString = context.assets.open(ECU_ERRORS_JSON_PATH).bufferedReader().use { it.readText() }
-                    val errors = json.decodeFromString<List<EcuErrorEntity>>(jsonString)
-                    dao.insertAll(errors)
-                    AppLogger.logInfo("Импорт ошибок завершен: ${errors.size} записей.", TAG)
+                    val allItems = json.decodeFromString<List<EcuErrorEntity>>(jsonString)
+                    // Теперь импортируем ВСЕ записи, включая комбинации
+                    dao.insertAll(allItems)
+                    AppLogger.logInfo("Импорт ошибок завершен: ${allItems.size} записей.", TAG)
                 }
             } catch (e: Exception) {
                 AppLogger.logError("Ошибка при инициализации БД ошибок: ${e.message}", TAG)
@@ -211,11 +212,12 @@ class AppController(
     suspend fun importEcuErrorsFromUri(uri: Uri): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val jsonString = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: throw Exception("Не удалось открыть файл")
-            val errors = json.decodeFromString<List<EcuErrorEntity>>(jsonString)
-            if (errors.isEmpty()) throw Exception("Файл пуст")
+            val allItems = json.decodeFromString<List<EcuErrorEntity>>(jsonString)
+            if (allItems.isEmpty()) throw Exception("Файл пуст")
+            
             val dao = ServiceLocator.getDatabase().ecuErrorDao()
-            dao.insertAll(errors)
-            Result.success(errors.size)
+            dao.insertAll(allItems)
+            Result.success(allItems.size)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -351,6 +353,14 @@ class AppController(
      */
     fun getEcuErrorsByCodes(codes: List<String>): Flow<List<EcuErrorEntity>> {
         return ServiceLocator.getDatabase().ecuErrorDao().getErrorsByCodes(codes)
+    }
+
+    /**
+     * Предоставляет поток всех существующих в базе комбинаций ошибок.
+     * Используется для экспертной диагностики.
+     */
+    fun getAllEcuCombinations(): Flow<List<EcuErrorEntity>> {
+        return ServiceLocator.getDatabase().ecuErrorDao().getAllCombinations()
     }
 
     /**
