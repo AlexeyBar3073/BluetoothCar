@@ -78,8 +78,8 @@ class DataStreamHandler(
     /** Очередь исходящих команд (Unlimited для предотвращения блокировки отправителей) */
     private val commandQueue = Channel<QueuedCommand>(Channel.UNLIMITED)
 
-    /** Поток входящих AckID для пробуждения воркера */
-    private val acknowledgmentsFlow = MutableSharedFlow<String>()
+    /** Поток входящих AckID для пробуждения воркера. Используем replay=1 для исключения гонок. */
+    private val acknowledgmentsFlow = MutableSharedFlow<String>(replay = 1)
 
     // ========== СОСТОЯНИЕ И СИНХРОНИЗАЦИЯ ==========
 
@@ -173,16 +173,25 @@ class DataStreamHandler(
                 log("Worker: Берем команду ID=${command.id}")
 
                 // Цикл гарантированной доставки: отправляем пока lastAckId не станет равен нашему id
-                while (lastAckId.get() != command.id && isHandlerActive.get()) {
+                while (isHandlerActive.get()) {
+                    // 1. Проверяем, может подтверждение уже получено до начала цикла
+                    if (lastAckId.get() == command.id) {
+                        log("Worker: Команда ID=${command.id} уже подтверждена")
+                        break
+                    }
+
                     log("Worker: Отправка пакета ID=${command.id}")
                     bluetoothService.sendData(envelope)
 
-                    // "Умное ожидание": ждем подтверждения в потоке, но не дольше интервала
+                    // 2. "Умное ожидание": ждем подтверждения в потоке, но не дольше интервала
                     withTimeoutOrNull(SEND_INTERVAL_MS) {
                         acknowledgmentsFlow.first { it == command.id }
                     }
+
+                    // 3. После таймаута или получения ack проверяем еще раз
+                    if (lastAckId.get() == command.id) break
                 }
-                log("Worker: Команда ID=${command.id} успешно подтверждена БК")
+                log("Worker: Команда ID=${command.id} успешно завершена")
             }
         }
     }
