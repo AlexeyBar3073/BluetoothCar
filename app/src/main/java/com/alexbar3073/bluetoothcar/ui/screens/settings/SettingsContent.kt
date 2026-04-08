@@ -49,9 +49,7 @@ fun SettingsContent(
     onDeviceClear: () -> Unit,
     onUpdateSetting: (AppSettings) -> Unit,
     onImportErrors: () -> Unit,
-    onExportErrors: () -> Unit,
-    onImportCombinations: () -> Unit,
-    onExportCombinations: () -> Unit
+    onExportErrors: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -77,9 +75,7 @@ fun SettingsContent(
         // 2. Секция управления базами данных (заголовок внутри DatabaseSection)
         DatabaseSection(
             onImportErrors = onImportErrors,
-            onExportErrors = onExportErrors,
-            onImportCombinations = onImportCombinations,
-            onExportCombinations = onExportCombinations
+            onExportErrors = onExportErrors
         )
 
         Spacer(modifier = Modifier.height(20.dp))

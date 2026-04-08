@@ -6,9 +6,7 @@ import android.content.Context
 import android.net.Uri
 import com.alexbar3073.bluetoothcar.MainDispatcherRule
 import com.alexbar3073.bluetoothcar.data.database.AppDatabase
-import com.alexbar3073.bluetoothcar.data.database.dao.EcuCombinationDao
 import com.alexbar3073.bluetoothcar.data.database.dao.EcuErrorDao
-import com.alexbar3073.bluetoothcar.data.database.entities.EcuCombinationEntity
 import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
 import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 import io.mockk.*
@@ -36,7 +34,7 @@ import java.io.ByteArrayOutputStream
  * Проверяет логику "умного обновления" (Upsert), валидацию JSON-формата и корректность выгрузки данных.
  *
  * ОТВЕТСТВЕННОСТЬ:
- * 1. Проверка успешного импорта корректных данных об ошибках и комбинациях.
+ * 1. Проверка успешного импорта корректных данных об ошибках.
  * 2. Верификация защиты от некорректного формата JSON.
  * 3. Тестирование процесса экспорта текущей базы в файл.
  *
@@ -54,7 +52,6 @@ class DatabaseUpdateTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var database: AppDatabase
     private lateinit var ecuErrorDao: EcuErrorDao
-    private lateinit var ecuCombinationDao: EcuCombinationDao
     private lateinit var appController: AppController
     
     private val testUri = mockk<Uri>()
@@ -66,14 +63,12 @@ class DatabaseUpdateTest {
         settingsRepository = mockk(relaxed = true)
         database = mockk(relaxed = true)
         ecuErrorDao = mockk(relaxed = true)
-        ecuCombinationDao = mockk(relaxed = true)
 
         // Подменяем статический доступ к БД в ServiceLocator через моки в AppController (если возможно)
         // Но так как AppController использует ServiceLocator.getDatabase(), нам нужно замокать сам ServiceLocator
         mockkObject(ServiceLocator)
         every { ServiceLocator.getDatabase() } returns database
         every { database.ecuErrorDao() } returns ecuErrorDao
-        every { database.ecuCombinationDao() } returns ecuCombinationDao
         every { context.contentResolver } returns contentResolver
 
         appController = AppController(context, settingsRepository)

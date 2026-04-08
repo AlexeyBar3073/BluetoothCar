@@ -61,16 +61,6 @@ fun SettingsScreen(
         }
     }
 
-    val combinationFileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            viewModel.importEcuCombinations(it) { message ->
-                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
     // --- LAUNCHERS ДЛЯ ЭКСПОРТА (СОХРАНЕНИЕ ФАЙЛА) ---
 
     val exportErrorLauncher = rememberLauncherForActivityResult(
@@ -83,16 +73,6 @@ fun SettingsScreen(
         }
     }
 
-    val exportCombinationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri: Uri? ->
-        uri?.let {
-            viewModel.exportEcuCombinations(it) { message ->
-                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
     SettingsScreenContent(
         appSettings = appSettings,
         selectedDevice = selectedDevice,
@@ -100,9 +80,7 @@ fun SettingsScreen(
         onUpdateSettings = { viewModel.updateSettings(it) },
         onClearSelectedDevice = { viewModel.clearSelectedDevice() },
         onImportErrors = { errorFileLauncher.launch("*/*") },
-        onExportErrors = { exportErrorLauncher.launch("ecu_errors_backup.json") },
-        onImportCombinations = { combinationFileLauncher.launch("*/*") },
-        onExportCombinations = { exportCombinationLauncher.launch("ecu_combinations_backup.json") }
+        onExportErrors = { exportErrorLauncher.launch("ecu_errors_backup.json") }
     )
 }
 
@@ -118,9 +96,7 @@ fun SettingsScreenContent(
     onUpdateSettings: (AppSettings) -> Unit,
     onClearSelectedDevice: () -> Unit,
     onImportErrors: () -> Unit = {},
-    onExportErrors: () -> Unit = {},
-    onImportCombinations: () -> Unit = {},
-    onExportCombinations: () -> Unit = {}
+    onExportErrors: () -> Unit = {}
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var editDialogData by remember { mutableStateOf(EditDialogData()) }
@@ -163,9 +139,7 @@ fun SettingsScreenContent(
                     onDeviceClear = onClearSelectedDevice,
                     onUpdateSetting = onUpdateSettings,
                     onImportErrors = onImportErrors,
-                    onExportErrors = onExportErrors,
-                    onImportCombinations = onImportCombinations,
-                    onExportCombinations = onExportCombinations
+                    onExportErrors = onExportErrors
                 )
             }
         }

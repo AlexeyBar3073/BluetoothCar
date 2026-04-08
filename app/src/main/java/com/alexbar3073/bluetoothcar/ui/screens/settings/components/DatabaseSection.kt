@@ -4,7 +4,6 @@ package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.*
@@ -26,7 +25,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Секция настроек для управления локальными базами данных.
- * Позволяет обновлять справочники ошибок и комбинаций из внешних файлов,
+ * Позволяет обновлять справочники ошибок из внешних файлов,
  * а также выгружать текущий состав баз для резервного копирования или редактирования.
  *
  * ОТВЕТСТВЕННОСТЬ: Отображение карточек управления БД с функциями импорта и экспорта.
@@ -37,9 +36,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 @Composable
 fun DatabaseSection(
     onImportErrors: () -> Unit,
-    onExportErrors: () -> Unit,
-    onImportCombinations: () -> Unit,
-    onExportCombinations: () -> Unit
+    onExportErrors: () -> Unit
 ) {
     Column {
         // Заголовок секции
@@ -67,22 +64,6 @@ fun DatabaseSection(
                     mainIcon = Icons.Default.Storage,
                     onMainClick = onImportErrors,
                     onActionClick = onExportErrors,
-                    actionIcon = Icons.Default.Save
-                )
-
-                // Разделитель
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = AppColors.SurfaceMedium
-                )
-
-                // Пункт 2: База комбинаций (Импорт и Экспорт)
-                DatabaseItem(
-                    title = "База комбинаций",
-                    subtitle = "Импорт/Экспорт экспертных заключений",
-                    mainIcon = Icons.Default.FileUpload,
-                    onMainClick = onImportCombinations,
-                    onActionClick = onExportCombinations,
                     actionIcon = Icons.Default.Save
                 )
             }

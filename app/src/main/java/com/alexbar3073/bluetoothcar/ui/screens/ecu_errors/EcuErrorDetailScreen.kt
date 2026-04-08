@@ -1,5 +1,5 @@
-// Файл: ui/screens/home/EcuErrorDetailScreen.kt
-package com.alexbar3073.bluetoothcar.ui.screens.home
+// Файл: ui/screens/ecu_errors/EcuErrorDetailScreen.kt
+package com.alexbar3073.bluetoothcar.ui.screens.ecu_errors
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -30,9 +30,9 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
 /**
  * ТЕГ: Экран/ОшибкиЭБУ/Детали
  *
- * ФАЙЛ: ui/screens/home/EcuErrorDetailScreen.kt
+ * ФАЙЛ: ui/screens/ecu_errors/EcuErrorDetailScreen.kt
  *
- * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/
+ * МЕСТОНАХОЖДЕНИЕ: ui/screens/ecu_errors/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Экран детального отображения конкретной ошибки ЭБУ.

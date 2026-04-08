@@ -9,9 +9,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.alexbar3073.bluetoothcar.ui.screens.devices.DevicesScreen
-import com.alexbar3073.bluetoothcar.ui.screens.home.EcuErrorDetailScreen
-import com.alexbar3073.bluetoothcar.ui.screens.home.EcuCombinationDetailScreen
-import com.alexbar3073.bluetoothcar.ui.screens.home.EcuErrorsScreen
+import com.alexbar3073.bluetoothcar.ui.screens.ecu_errors.EcuErrorDetailScreen
+import com.alexbar3073.bluetoothcar.ui.screens.ecu_errors.EcuErrorsScreen
 import com.alexbar3073.bluetoothcar.ui.screens.home.HomeScreen
 import com.alexbar3073.bluetoothcar.ui.screens.settings.SettingsScreen
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
@@ -35,7 +34,6 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
  *    - DevicesScreen.kt (экран выбора Bluetooth устройств)
  *    - EcuErrorsScreen.kt (список ошибок ЭБУ)
  *    - EcuErrorDetailScreen.kt (детализация конкретной ошибки)
- *    - EcuCombinationDetailScreen.kt (детализация комбинации ошибок)
  *
  * 2. Работает с: SharedViewModel (центральный ViewModel для всего приложения)
  */
@@ -96,19 +94,6 @@ fun SetupNavigation(
             val errorCode = backStackEntry.arguments?.getString("errorCode") ?: ""
             EcuErrorDetailScreen(
                 errorCode = errorCode,
-                navController = navController,
-                viewModel = sharedViewModel
-            )
-        }
-
-        // Экран деталей комбинации ошибок
-        composable(
-            route = "ecu_combination_detail/{combinationId}",
-            arguments = listOf(navArgument("combinationId") { type = NavType.IntType })
-        ) { backStackEntry ->
-            val combinationId = backStackEntry.arguments?.getInt("combinationId") ?: -1
-            EcuCombinationDetailScreen(
-                combinationId = combinationId,
                 navController = navController,
                 viewModel = sharedViewModel
             )

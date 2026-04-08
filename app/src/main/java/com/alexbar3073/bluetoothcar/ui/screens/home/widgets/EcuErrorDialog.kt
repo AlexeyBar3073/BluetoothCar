@@ -8,14 +8,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -30,7 +28,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.alexbar3073.bluetoothcar.data.database.entities.EcuCombinationEntity
 import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.viewmodels.EcuDiagnosticItem
@@ -43,14 +40,14 @@ import com.alexbar3073.bluetoothcar.ui.viewmodels.EcuDiagnosticItem
  * МЕСТОНАХОЖДЕНИЕ: ui/screens/home/widgets/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
- * Диалоговое окно для отображения информации об ошибках ЭБУ и их экспертных комбинациях.
- * Поддерживает отображение смешанного списка диагностических данных.
+ * Диалоговое окно для отображения информации об ошибках ЭБУ.
+ * Поддерживает отображение списка диагностических данных.
  *
- * ОТВЕТСТВЕННОСТЬ: Визуализация данных справочника ошибок и комбинаций для пользователя.
+ * ОТВЕТСТВЕННОСТЬ: Визуализация данных справочника ошибок для пользователя.
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП: Jetpack Compose Widget (Master-Detail inside Dialog)
  *
- * КЛЮЧЕВОЙ ПРИНЦИП: Приоритизация отображения согласно бизнес-требованиям (Одиночные -> Комбинации).
+ * КЛЮЧЕВОЙ ПРИНЦИП: Простота и наглядность вывода расшифровки кодов.
  *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: (Использует: SharedViewModel.kt / Вызывается из: Dashboards)
  */
@@ -114,7 +111,7 @@ fun EcuErrorDialog(
                         label = "diagnostic_navigation"
                     ) { item ->
                         if (item == null) {
-                            // ЭКРАН 1: СПИСОК (Уже отсортирован во ViewModel: Ошибки -> Комбинации)
+                            // ЭКРАН 1: СПИСОК
                             if (diagnosticItems.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text(
@@ -136,12 +133,6 @@ fun EcuErrorDialog(
                                                     onClick = { selectedItem = diagnosticItem }
                                                 )
                                             }
-                                            is EcuDiagnosticItem.Combination -> {
-                                                EcuCombinationListItem(
-                                                    combination = diagnosticItem.combination,
-                                                    onClick = { selectedItem = diagnosticItem }
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -150,7 +141,6 @@ fun EcuErrorDialog(
                             // ЭКРАН 2: ДЕТАЛЬНЫЙ ПРОСМОТР
                             when (item) {
                                 is EcuDiagnosticItem.SingleError -> EcuErrorFullDetail(item.error)
-                                is EcuDiagnosticItem.Combination -> EcuCombinationFullDetail(item.combination)
                             }
                         }
                     }
@@ -211,50 +201,6 @@ private fun EcuErrorListItem(
                 )
                 Text(
                     text = error.shortDescription,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.ContentDetail,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-/**
- * Элемент списка для комбинации ошибок.
- */
-@Composable
-private fun EcuCombinationListItem(
-    combination: EcuCombinationEntity,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight),
-        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.PrimaryBlue.copy(alpha = 0.5f))
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = AppColors.PrimaryBlue,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = combination.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = combination.shortDescription,
                     style = MaterialTheme.typography.bodySmall,
                     color = AppColors.ContentDetail,
                     maxLines = 1
@@ -344,74 +290,6 @@ private fun EcuErrorFullDetail(error: EcuErrorEntity) {
 
         if (error.clubExpertNote.isNotEmpty()) {
             ExpertNote(error.clubExpertNote)
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-/**
- * Детальная информация о комбинации ошибок.
- */
-@Composable
-private fun EcuCombinationFullDetail(combination: EcuCombinationEntity) {
-    val scrollState = rememberScrollState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-    ) {
-        Text(
-            text = combination.title,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Black,
-            color = AppColors.PrimaryBlue
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        InfoChip(
-            label = "КОМБИНАЦИЯ КОДОВ: ${combination.codes.joinToString(", ")}",
-            color = AppColors.PrimaryBlue,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        DetailSection("Анализ совокупности факторов", combination.detailedDescription)
-
-        if (combination.symptoms.isNotEmpty()) {
-            DetailSection("Общие симптомы", combination.symptoms, Icons.Default.Info)
-        }
-
-        if (combination.causes.isNotEmpty()) {
-            SectionHeader("Комплексные причины и решения")
-            combination.causes.forEach { cause ->
-                Card(
-                    modifier = Modifier.padding(bottom = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceLight)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "${cause.probability}%",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = AppColors.PrimaryBlue
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = cause.cause, style = MaterialTheme.typography.bodyMedium, color = Color.White)
-                        }
-                        Text(
-                            text = "Решение: ${cause.action}",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp),
-                            color = AppColors.ContentDetail
-                        )
-                    }
-                }
-            }
-        }
-
-        if (combination.clubExpertNote.isNotEmpty()) {
-            ExpertNote(combination.clubExpertNote)
         }
         
         Spacer(modifier = Modifier.height(24.dp))
