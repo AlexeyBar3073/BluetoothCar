@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.R
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 @Composable
@@ -110,7 +111,7 @@ internal fun DashboardType3EngineTemp(
                 ).also { backgroundBitmap = it }
             )
 
-            drawEngineValueText(geometry, animatedTemp.toInt(), hubRadius)
+            drawEngineValueText(geometry, animatedTemp.roundToInt(), hubRadius)
 
             rotate(needleAngle, pivot = geometry.center) {
                 drawImage(

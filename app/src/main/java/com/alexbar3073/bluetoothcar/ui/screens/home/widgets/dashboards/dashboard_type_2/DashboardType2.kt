@@ -57,7 +57,7 @@ fun DashboardType2(
 
             // 3. Температура двигателя (Верхний левый)
             SmallNeedle(
-                value = 90f,
+                value = carData.coolantTemp,
                 maxValue = 130f,
                 startAngle = 180f,
                 sweepAngle = 135f,
@@ -66,7 +66,7 @@ fun DashboardType2(
 
             // 4. Температура АКПП (Средний левый)
             SmallNeedle(
-                value = 85f,
+                value = carData.transmissionTemp,
                 maxValue = 130f,
                 startAngle = 180f,
                 sweepAngle = 135f,

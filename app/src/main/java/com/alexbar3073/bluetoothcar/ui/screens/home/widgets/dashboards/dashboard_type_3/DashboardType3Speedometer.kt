@@ -52,6 +52,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -488,7 +489,7 @@ private fun DrawScope.drawSpeedText(
     unitPaint.textSize = unitTextSize
 
     drawContext.canvas.nativeCanvas.apply {
-        val speedStr = speed.toInt().toString()
+        val speedStr = speed.roundToInt().toString()
         val fm = speedPaint.fontMetrics
         val baseline = geometry.center.y - (fm.ascent + fm.descent) / 2f
 

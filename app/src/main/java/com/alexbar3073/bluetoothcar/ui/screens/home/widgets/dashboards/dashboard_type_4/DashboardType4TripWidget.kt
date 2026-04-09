@@ -326,6 +326,7 @@ internal fun TripWidget(
                     if (isVisible) {
                         Text(
                             text = buildAnnotatedString {
+                                // Отображаем текущий запас хода как целое число (согласно Правилу 1)
                                 append("${remainingRange.toInt()}")
                                 withStyle(tightValueStyle.copy(fontSize = unitFontSize, color = AppColors.TextSecondary.copy(alpha = valueAlpha)).toSpanStyle()) { append(" км") }
                             },
@@ -334,6 +335,7 @@ internal fun TripWidget(
                         )
                     }
 
+                    // Отображаем максимальный запас хода как целое число (согласно Правилу 1)
                     Text(text = "${maxPossibleRange.toInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.5f, -1f)))
 
                     // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: Выводим значение расхода согласно выбранному режиму
@@ -350,14 +352,23 @@ internal fun TripWidget(
                             .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = { consumptionMode = (consumptionMode + 1) % 3 },
+                                onClick = { 
+                                    /** Циклическое переключение режима отображения (AVG -> T.AVG -> INST) */
+                                    consumptionMode = (consumptionMode + 1) % 3 
+                                },
                                 onLongClick = {
-                                    /** Сброс расхода в зависимости от режима */
+                                    /** 
+                                     * Обработка сброса расхода в зависимости от активного режима.
+                                     * 0 (AVG) -> сброс общего среднего расхода (reset_avg).
+                                     * 1 (T.AVG) -> сброс расхода за текущую поездку (reset_avg_cur).
+                                     * INST -> сброс не предусмотрен.
+                                     */
                                     val command = when(consumptionMode) {
                                         0 -> "{\"command\":\"reset_avg\"}"
                                         1 -> "{\"command\":\"reset_avg_cur\"}"
                                         else -> null
                                     }
+                                    // Если команда определена для текущего режима, отправляем ее через коллбэк
                                     command?.let { onTripReset(it) }
                                 }
                             )
