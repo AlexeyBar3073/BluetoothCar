@@ -99,7 +99,7 @@ fun DashboardType4(
                         appSettings = appSettings,
                         geometry = gaugeGeometry,
                         onLongPress = onLongPress,
-                        onResetFuel = onTripReset, // Передаем коллбэк для сброса топлива (reset_fuel)
+                        onResetFuel = onTripReset, // Передаем коллбэк для установки полного бака (full_tank)
                         onShowEcuErrors = onShowEcuErrors // Передаем коллбэк дальше в прибор
                     )
                 }

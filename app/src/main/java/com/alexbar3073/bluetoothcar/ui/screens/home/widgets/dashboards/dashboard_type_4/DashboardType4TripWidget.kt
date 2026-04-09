@@ -70,6 +70,9 @@ internal fun TripWidget(
 ) {
     /** Состояние отображения Trip B (false = Trip A) */
     var showTripB by remember { mutableStateOf(false) }
+
+    /** Режим отображения расхода: 0 - AVG (общий), 1 - T.AVG (за поездку), 2 - INST (мгновенный) */
+    var consumptionMode by remember { mutableStateOf(0) }
     
     /** Состояние отображения диалога корректировки одометра */
     var showOdoDialog by remember { mutableStateOf(false) }
@@ -80,16 +83,15 @@ internal fun TripWidget(
     /** Расчет емкости бака из настроек (по умолчанию 60) */
     val fuelTankCapacity = appSettings?.fuelTankCapacity ?: 60f
     
-    /** Расход топлива (минимум 8.5 для визуализации при 0) */
-    // ОБНОВЛЕНИЕ ПРОТОКОЛА: Используем averageConsumption вместо устаревшего fuelConsumption
-    val consumption = if (carData.averageConsumption > 0f) carData.averageConsumption else 8.5f
+    /** Расход топлива для расчета запаса хода (используем общий средний, минимум 8.5 для визуализации при 0) */
+    val rangeConsumption = if (carData.averageConsumption > 0f) carData.averageConsumption else 8.5f
     
     /** Максимально возможный запас хода на полном баке */
-    val maxPossibleRange = (fuelTankCapacity / consumption) * 100f
+    val maxPossibleRange = (fuelTankCapacity / rangeConsumption) * 100f
     
     /** Оставшийся запас хода на текущем топливе */
     // ОБНОВЛЕНИЕ ПРОТОКОЛА: remainingRange больше не передается, рассчитываем локально
-    val remainingRange = (carData.fuel / consumption) * 100f
+    val remainingRange = (carData.fuel / rangeConsumption) * 100f
     
     /** Прогресс запаса хода (0.0 - 1.0) для индикатора */
     val rangeProgress = (remainingRange / maxPossibleRange).coerceIn(0f, 1f)
@@ -240,7 +242,23 @@ internal fun TripWidget(
                 // --- Метки топлива и расхода ---
                 // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: В поле "FUEL, л" выводим расход топлива (fuel_a/b) для текущего TRIP
                 Text(text = if (showTripB) "TRIP B, л" else "TRIP A, л", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
-                Text(text = "AVG, л/100", style = tightLabelStyle, modifier = Modifier.align(BiasAlignment(0.75f, -1f)))
+                
+                // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: Переключаемый заголовок расхода (AVG -> T.AVG -> INST)
+                Text(
+                    text = when(consumptionMode) {
+                        0 -> "AVG, л/100"
+                        1 -> "T.AVG, л/100"
+                        else -> "INST, л/100"
+                    },
+                    style = tightLabelStyle,
+                    modifier = Modifier
+                        .align(BiasAlignment(0.75f, -1f))
+                        .combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { consumptionMode = (consumptionMode + 1) % 3 }
+                        )
+                )
 
                 // СЕГМЕНТНЫЙ ИНДИКАТОР ЗАПАСА ХОДА
                 Box(modifier = Modifier.fillMaxWidth(0.5f).height(tickLargeDp).align(Alignment.TopCenter)) {
@@ -317,7 +335,33 @@ internal fun TripWidget(
                     }
 
                     Text(text = "${maxPossibleRange.toInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.5f, -1f)))
-                    Text(text = "%.1f".format(consumption), style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.75f, -1f)))
+
+                    // ОБНОВЛЕНИЕ ТРЕБОВАНИЯ: Выводим значение расхода согласно выбранному режиму
+                    val displayConsumption = when(consumptionMode) {
+                        0 -> carData.averageConsumption
+                        1 -> carData.averageConsumptionCurrent
+                        else -> carData.instantConsumption
+                    }
+                    Text(
+                        text = "%.1f".format(displayConsumption),
+                        style = tightValueStyle,
+                        modifier = Modifier
+                            .align(BiasAlignment(0.75f, -1f))
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { consumptionMode = (consumptionMode + 1) % 3 },
+                                onLongClick = {
+                                    /** Сброс расхода в зависимости от режима */
+                                    val command = when(consumptionMode) {
+                                        0 -> "{\"command\":\"reset_avg\"}"
+                                        1 -> "{\"command\":\"reset_avg_cur\"}"
+                                        else -> null
+                                    }
+                                    command?.let { onTripReset(it) }
+                                }
+                            )
+                    )
                 }
             }
         }

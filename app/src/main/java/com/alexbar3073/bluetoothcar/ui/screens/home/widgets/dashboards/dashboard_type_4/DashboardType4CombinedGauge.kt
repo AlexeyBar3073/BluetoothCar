@@ -190,9 +190,9 @@ internal fun DashboardType4CombinedGauge(
                     val dy = it.y - geometry.center.y
                     val dist = sqrt(dx * dx + dy * dy)
                     
-                    // Если долгий тап в центре и выбран режим FUEL - сбрасываем расход
+                    // Если долгий тап в центре и выбран режим FUEL - сбрасываем уровень топлива (полный бак)
                     if (dist < geometry.blackRadius && selectedSource == GaugeSource.FUEL) {
-                        onResetFuel("{\"command\":\"reset_fuel\"}")
+                        onResetFuel("{\"command\":\"full_tank\"}")
                     } else {
                         onLongPress() 
                     }
