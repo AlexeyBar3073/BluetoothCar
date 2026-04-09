@@ -48,6 +48,7 @@ import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -192,7 +193,7 @@ internal fun DashboardType4CombinedGauge(
                     
                     // Если долгий тап в центре и выбран режим FUEL - сбрасываем расход
                     if (dist < geometry.blackRadius && selectedSource == GaugeSource.FUEL) {
-                        onResetFuel("{\"command\":\"reset_fuel\"}")
+                        onResetFuel("{\"command\":\"full_tank\"}")
                     } else {
                         onLongPress() 
                     }
@@ -248,7 +249,7 @@ internal fun DashboardType4CombinedGauge(
             drawBottomIcons(geometry, carData, fuelIcon, checkEngineIcon, tirePressureIcon, washingIcon, blinkAlpha)
             
             // Центральный текст и указатель активной шкалы
-            drawCenterValue(displayValue, displayUnit, geometry, valuePaint, unitPaint)
+            drawCenterValue(displayValue.roundToInt(), displayUnit, geometry, valuePaint, unitPaint)
             drawActiveSourceArrow(geometry, activeAngle, geometry.ringColor)
 
             // Отрисовка трех стрелок
@@ -262,13 +263,13 @@ internal fun DashboardType4CombinedGauge(
 /**
  * Отрисовка значения и единицы измерения в центре прибора.
  */
-private fun DrawScope.drawCenterValue(value: Float, unit: String, geometry: DashboardType4Geometry, valuePaint: android.graphics.Paint, unitPaint: android.graphics.Paint) {
+private fun DrawScope.drawCenterValue(value: Int, unit: String, geometry: DashboardType4Geometry, valuePaint: android.graphics.Paint, unitPaint: android.graphics.Paint) {
     val valueTextSize = 42f * geometry.unit
     val unitTextSize = 16f * geometry.unit
     valuePaint.textSize = valueTextSize
     unitPaint.textSize = unitTextSize
     drawContext.canvas.nativeCanvas.apply {
-        val valStr = value.toInt().toString()
+        val valStr = value.toString()
         val fm = valuePaint.fontMetrics
         val baseline = geometry.center.y - (fm.ascent + fm.descent) / 2f
         drawText(valStr, geometry.center.x, baseline, valuePaint)

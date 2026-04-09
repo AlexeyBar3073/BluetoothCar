@@ -23,6 +23,7 @@ import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsSection(
@@ -68,7 +69,7 @@ fun SettingsSection(
 
             SimpleSettingItem(
                 title = "Объем топливного бака",
-                value = "${appSettings.fuelTankCapacity.toInt()} л",
+                value = "${appSettings.fuelTankCapacity.roundToInt()} л",
                 icon = Icons.Default.LocalGasStation,
                 iconColor = AppColors.TextSecondary,
                 hasClearButton = false,
@@ -94,7 +95,7 @@ fun SettingsSection(
 
             SimpleSettingItem(
                 title = "Мин. остаток топлива",
-                value = "${appSettings.minFuelLevel.toInt()} л",
+                value = "${appSettings.minFuelLevel.roundToInt()} л",
                 icon = Icons.Default.PriorityHigh,
                 iconColor = AppColors.Error,
                 hasClearButton = false,
@@ -120,7 +121,7 @@ fun SettingsSection(
 
             SimpleSettingItem(
                 title = "Производительность форсунки",
-                value = "${appSettings.injectorPerformance.toInt()} мл/мин",
+                value = "${appSettings.injectorPerformance.roundToInt()} мл/мин",
                 icon = Icons.Default.PrecisionManufacturing,
                 iconColor = AppColors.TextSecondary,
                 hasClearButton = false,

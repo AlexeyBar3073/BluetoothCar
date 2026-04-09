@@ -24,6 +24,7 @@ import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
+import kotlin.math.roundToInt
 
 /**
  * ТЕГ: Настройки/Конфигурация/Screen
@@ -128,8 +129,8 @@ fun SettingsScreenContent(
                                 "Объем топливного бака" -> appSettings.copy(fuelTankCapacity = newValue)
                                 "Мин. остаток топлива" -> appSettings.copy(minFuelLevel = newValue)
                                 "Производительность форсунки" -> appSettings.copy(injectorPerformance = newValue)
-                                "Количество форсунок" -> appSettings.copy(injectorCount = newValue.toInt())
-                                "Сигналы датчика скорости" -> appSettings.copy(speedSensorSignalsPerMeter = newValue.toInt())
+                                "Количество форсунок" -> appSettings.copy(injectorCount = newValue.roundToInt())
+                                "Сигналы датчика скорости" -> appSettings.copy(speedSensorSignalsPerMeter = newValue.roundToInt())
                                 else -> appSettings
                             }
                             onUpdateSettings(updatedSettings)

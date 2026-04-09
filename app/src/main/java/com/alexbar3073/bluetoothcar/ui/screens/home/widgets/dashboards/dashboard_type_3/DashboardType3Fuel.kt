@@ -40,6 +40,7 @@ import com.alexbar3073.bluetoothcar.R
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 @Composable
@@ -113,7 +114,7 @@ internal fun DashboardType3Fuel(
                 ).also { backgroundBitmap = it }
             )
 
-            drawFuelValueText(geometry, currentFuel.toInt(), hubRadius)
+            drawFuelValueText(geometry, currentFuel.roundToInt(), hubRadius)
 
             rotate(needleAngle, pivot = geometry.center) {
                 drawImage(

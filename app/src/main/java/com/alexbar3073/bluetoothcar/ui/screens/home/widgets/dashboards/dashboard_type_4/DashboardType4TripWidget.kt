@@ -34,6 +34,7 @@ import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -308,7 +309,7 @@ internal fun TripWidget(
                     if (isVisible) {
                         Text(
                             text = buildAnnotatedString {
-                                append("${remainingRange.toInt()}")
+                                append("${remainingRange.roundToInt()}")
                                 withStyle(tightValueStyle.copy(fontSize = unitFontSize, color = AppColors.TextSecondary.copy(alpha = valueAlpha)).toSpanStyle()) { append(" км") }
                             },
                             style = smallValueStyle,
@@ -316,7 +317,7 @@ internal fun TripWidget(
                         )
                     }
 
-                    Text(text = "${maxPossibleRange.toInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.5f, -1f)))
+                    Text(text = "${maxPossibleRange.roundToInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.5f, -1f)))
                     Text(text = "%.1f".format(consumption), style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.75f, -1f)))
                 }
             }

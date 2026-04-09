@@ -94,10 +94,10 @@ class AppController(
 
     /** 
      * Поток данных автомобиля.
-     * Формируется путем обработки входящих JSON объектов от BCM.
-     * Использует SharedFlow с replay=1 для возможности получения последнего состояния при обновлении.
+     * Использует StateFlow для обеспечения наличия начального значения (CarData()),
+     * что предотвращает блокировку оператора combine при инициализации.
      */
-    private val _rawCarDataFlow = MutableSharedFlow<CarData>(replay = 1)
+    private val _rawCarDataFlow = MutableStateFlow(CarData())
     
     val carData: StateFlow<CarData> = _isInitialized
         .filter { it }
@@ -108,6 +108,8 @@ class AppController(
                 connectionStatusInfo
             ) { carDataValue, settings, connectionStatus ->
                 if (!connectionStatus.isActive) {
+                    // Если соединение не активно, возвращаем пустой объект, 
+                    // но сохраняем одометр или другие важные данные если нужно (сейчас сброс)
                     CarData() 
                 } else {
                     val minFuel = settings.minFuelLevel
@@ -296,17 +298,16 @@ class AppController(
                     AppLogger.logReceive("Получены данные телеметрии (tel)", telemetryElement.toString())
 
                     // 1. Десериализуем входящий JSON в промежуточный ТРАНСПОРТНЫЙ пакет (CarPacket)
-                    // Это позволяет корректно обработать отсутствие полей и 0/1 для Boolean.
                     val packet = json.decodeFromJsonElement<CarPacket>(telemetryElement)
                     
-                    // 2. Получаем текущее состояние данных из кэша потока (или новый объект, если пусто)
-                    val currentData = _rawCarDataFlow.replayCache.firstOrNull() ?: CarData()
+                    // 2. Получаем текущее состояние данных
+                    val currentData = _rawCarDataFlow.value
                     
-                    // 3. Выполняем СЛИЯНИЕ (Partial Update): накладываем новые данные на текущее состояние.
+                    // 3. Выполняем СЛИЯНИЕ (Partial Update)
                     val updatedData = currentData.updateWith(packet)
                     
-                    // 4. Эмитим полностью обновленный объект в поток для UI
-                    appScope.launch { _rawCarDataFlow.emit(updatedData) }
+                    // 4. Обновляем поток данных (StateFlow автоматически уведомит подписчиков)
+                    _rawCarDataFlow.value = updatedData
                 }
             }
             

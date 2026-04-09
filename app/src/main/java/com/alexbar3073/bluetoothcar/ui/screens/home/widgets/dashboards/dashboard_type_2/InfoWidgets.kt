@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 @Composable
@@ -143,7 +144,7 @@ fun SmallGaugeWidget(
         
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                text = "%.0f".format(value),
+                text = "%.0f".format(value.roundToInt()),
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -231,7 +232,7 @@ fun RangeSliderWidget(remainingRange: Float, maxRange: Float) {
             
             val rangePos = (remainingRange / maxRange).coerceIn(0.1f, 0.9f)
             Text(
-                text = "%.0f км".format(remainingRange),
+                text = "%.0f км".format(remainingRange.roundToInt()),
                 color = Color(0xFFE88A1A),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -242,7 +243,7 @@ fun RangeSliderWidget(remainingRange: Float, maxRange: Float) {
             )
 
             Text(
-                text = "%.0f км".format(maxRange),
+                text = "%.0f км".format(maxRange.roundToInt()),
                 color = Color.White.copy(alpha = 0.6f),
                 fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.BottomEnd)

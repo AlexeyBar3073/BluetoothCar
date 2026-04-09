@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.alexbar3073.bluetoothcar.R
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 @Composable
@@ -58,7 +59,7 @@ internal fun DashboardType4TransmissionTemp(
             val startNorm = startAngle / 360f; val endNorm = (startAngle + sweepAngle) / 360f; val needleNorm = needleAngle / 360f
             drawArc(brush = Brush.sweepGradient(colorStops = arrayOf(0f to Color.Transparent, (startNorm - 0.001f) to Color.Transparent, startNorm to Color.White.copy(alpha = 0.1f), needleNorm to Color.White, endNorm to Color.White.copy(alpha = 0.1f), (endNorm + 0.001f) to Color.Transparent, 1f to Color.Transparent), center = geometry.center), startAngle = startAngle, sweepAngle = sweepAngle, useCenter = false, topLeft = Offset(geometry.center.x - geometry.outerRingRadius, geometry.center.y - geometry.outerRingRadius), size = Size(geometry.outerRingRadius * 2, geometry.outerRingRadius * 2), style = Stroke(width = geometry.outerStrokeWidth))
             drawImage(image = backgroundBitmap ?: buildBackgroundBitmap(geometry, minTemp, maxTemp, startAngle, sweepAngle, hubRadius, iconPainter).also { backgroundBitmap = it })
-            drawTempValueText(geometry, animatedTemp.toInt(), hubRadius)
+            drawTempValueText(geometry, animatedTemp.roundToInt(), hubRadius)
             rotate(needleAngle, pivot = geometry.center) { drawImage(image = needleBitmap ?: buildNeedleBitmap(geometry, hubRadius).also { needleBitmap = it }) }
         }
     }

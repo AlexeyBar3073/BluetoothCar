@@ -340,7 +340,7 @@ private fun drawSubScale(
                     }
                 }
             } else {
-                val tempValue = (40 + (percent / 100f) * 100).toInt()
+                val tempValue = (40 + (percent / 100f) * 100).roundToInt()
                 drawScope.drawContext.canvas.nativeCanvas.apply {
                     save()
                     translate(itemX, itemY)

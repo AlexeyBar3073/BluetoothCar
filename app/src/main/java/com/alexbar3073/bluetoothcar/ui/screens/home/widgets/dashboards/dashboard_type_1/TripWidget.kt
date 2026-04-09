@@ -33,6 +33,7 @@ import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import kotlin.math.atan2
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -177,7 +178,7 @@ internal fun TripWidget(
                 Column(modifier = Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
                     Text(text = "TOTAL, км", style = tightLabelStyle)
                     Spacer(modifier = Modifier.height(marginDp))
-                    Text(text = "${carData.odometer}", style = tripTotalValueStyle)
+                    Text(text = "${carData.odometer.roundToInt()}", style = tripTotalValueStyle)
                 }
 
                 // --- ЦЕНТРАЛЬНАЯ ЧАСТЬ (Индикатор и его метки) ---
@@ -242,14 +243,14 @@ internal fun TripWidget(
                 // --- НИЖНИЙ РЯД (Fuel, 0, Rem, Max, Avg) ---
                 val bottomRowOffset = tickLargeDp + gapHeightDp
                 Box(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(top = bottomRowOffset)) {
-                    Text(text = "${carData.fuel.toInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
+                    Text(text = "${carData.fuel.roundToInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(-0.75f, -1f)))
                     Text(text = "0", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(-0.5f, -1f)))
                     
                     val isVisible = rangeProgress > 0.18f && rangeProgress < 0.82f
                     if (isVisible) {
                         Text(
                             text = buildAnnotatedString {
-                                append("${remainingRange.toInt()}")
+                                append("${remainingRange.roundToInt()}")
                                 withStyle(tightValueStyle.copy(fontSize = unitFontSize, color = AppColors.TextSecondary.copy(alpha = valueAlpha)).toSpanStyle()) { append(" км") }
                             },
                             style = smallValueStyle,
@@ -257,7 +258,7 @@ internal fun TripWidget(
                         )
                     }
 
-                    Text(text = "${maxPossibleRange.toInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.5f, -1f)))
+                    Text(text = "${maxPossibleRange.roundToInt()}", style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.5f, -1f)))
                     Text(text = "%.1f".format(consumption), style = tightValueStyle, modifier = Modifier.align(BiasAlignment(0.75f, -1f)))
                 }
             }
