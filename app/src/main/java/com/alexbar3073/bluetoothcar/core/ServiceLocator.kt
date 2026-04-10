@@ -1,4 +1,4 @@
-// Файл: core/ServiceLocator.kt
+// core/ServiceLocator.kt
 package com.alexbar3073.bluetoothcar.core
 
 import android.content.ComponentName
@@ -13,32 +13,19 @@ import com.alexbar3073.bluetoothcar.data.repository.SettingsRepository
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * ТЕГ: Core/DI/ServiceLocator
- *
- * ФАЙЛ: core/ServiceLocator.kt
- *
- * МЕСТОНАХОЖДЕНИЕ: core/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
- * Service Locator (контейнер зависимостей) для централизованного управления
- * зависимостями в приложении. Работает по принципу реестра объектов, где каждый
- * компонент может запросить необходимую ему зависимость по ключу (имени класса).
- *
- * ОТВЕТСТВЕННОСТЬ:
- * 1. Устраняет жесткие зависимости между компонентами системы.
- * 2. Управляет жизненным циклом singleton-объектов и провайдеров.
- * 3. Обеспечивает потокобезопасный доступ к общим ресурсам (репозитории, сервисы, БД).
- *
- * АРХИТЕКТУРНЫЙ ПРИНЦИП: Service Locator / Dependency Injection
- *
- * КЛЮЧЕВОЙ ПРИНЦИП: Централизованное управление жизненным циклом и доступом к зависимостям.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * - Использует: AppController.kt, AppBluetoothService.kt, SettingsRepository.kt, AppDatabase.kt.
- * - Вызывается из: CoreModule.kt (через initialize).
- * - Взаимодействует: со всеми компонентами системы, предоставляя им зависимости.
+ * ТЕГ: CORE_SERVICE_LOCATOR
+ * НАЗНАЧЕНИЕ: Централизованный реестр зависимостей (Dependency Injection контейнер).
+ * ОТВЕТСТВЕННОСТЬ: 
+ * - Управление жизненным циклом Singleton-объектов (репозитории, БД, контроллеры).
+ * - Потокобезопасная регистрация и разрешение зависимостей.
+ * - Управление асинхронным подключением к [AppBluetoothService] через [BluetoothServiceProvider].
+ * 
+ * АРХИТЕКТУРА: Core Layer / DI.
+ * СВЯЗИ: 
+ * - Инициализируется в [CoreModule].
+ * - Предоставляет зависимости для всех компонентов системы.
+ * - Инкапсулирует логику [ServiceConnection] для Bluetooth сервиса.
  */
-
 object ServiceLocator {
 
     private const val TAG = "ServiceLocator"

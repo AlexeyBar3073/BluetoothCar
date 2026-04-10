@@ -1,4 +1,4 @@
-// Файл: app/src/main/java/com/alexbar3073/bluetoothcar/ui/viewmodels/SharedViewModel.kt
+// Файл: ui/viewmodels/SharedViewModel.kt
 package com.alexbar3073.bluetoothcar.ui.viewmodels
 
 import android.net.Uri
@@ -29,17 +29,33 @@ sealed class EcuDiagnosticItem {
 /**
  * ТЕГ: Общая ViewModel
  *
+ * ФАЙЛ: ui/viewmodels/SharedViewModel.kt
+ *
  * МЕСТОНАХОЖДЕНИЕ: ui/viewmodels/
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * ViewModel для UI согласно MVVM. Является ТОЛЬКО посредником между UI и AppController.
- * НЕ содержит бизнес-логики, только передачу данных для отображения.
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * ViewModel для UI согласно архитектуре MVVM. Является посредником между UI-слоем (Compose) 
+ * и бизнес-логикой (AppController). Обеспечивает реактивное обновление интерфейса.
  *
  * ОТВЕТСТВЕННОСТЬ:
- * 1. Получает ВСЕ данные исключительно из AppController
- * 2. Передает ВСЕ команды исключительно в AppController
- * 3. Преобразует данные для удобства UI (минимальные преобразования)
- * 4. Предоставляет потоки данных для Compose UI
+ * 1. Получает данные из AppController и транслирует их в UI через StateFlow.
+ * 2. Передает команды пользователя из UI в AppController.
+ * 3. Управляет состоянием UI-элементов (диалоги, ошибки, статусы).
+ * 4. Преобразует сложные модели данных в удобный для отображения вид.
+ * 5. Управляет жизненным циклом процесса сопряжения (pairingJob).
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП:
+ * - MVVM: View (Compose) подписывается на StateFlow во ViewModel.
+ * - Reactive: Потоки данных из AppController автоматически пробрасываются в UI.
+ * - Stateless View: UI не хранит состояние, оно полностью определяется ViewModel.
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП:
+ * ViewModel — это "тонкий" слой. Вся бизнес-логика находится в AppController.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: AppController.kt (источник истины).
+ * - Вызывается из: MainActivity.kt (через viewModelFactory), Compose Screens.
+ * - Взаимодействует: BluetoothDeviceData, CarData, AppSettings.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 open class SharedViewModel(
@@ -231,8 +247,8 @@ open class SharedViewModel(
      * Начать поиск Bluetooth устройств в эфире.
      */
     fun startDiscovery() {
-        // Очистка списка перед началом нового поиска (через фиктивный эмит в поток, если нужно, 
-        // но здесь мы просто вызываем метод контроллера)
+        log("Запрос запуска поиска устройств")
+        // Делегируем запуск поиска контроллеру, который управляет системным сервисом
         appController.startDiscovery()
     }
 
@@ -240,32 +256,40 @@ open class SharedViewModel(
      * Остановить текущий процесс поиска устройств.
      */
     fun stopDiscovery() {
+        log("Запрос остановки поиска устройств")
+        // Делегируем остановку контроллеру
         appController.stopDiscovery()
     }
 
     /**
      * Начать процесс сопряжения с выбранным устройством.
+     * Реализует реактивное отслеживание статуса BOND_BONDED через Flow.
      * 
      * @param device Данные устройства для сопряжения.
      */
     fun pairDevice(device: BluetoothDeviceData) {
-        // Отменяем предыдущий процесс сопряжения, если он еще активен
+        log("Запрос сопряжения с: ${device.name}")
+        
+        // 1. Сбрасываем предыдущий процесс сопряжения, если он был активен
         pairingJob?.cancel()
         
         _pairingDeviceName.value = device.name
         _pairingState.value = PairingState.Pairing
         
+        // 2. Инициируем системный процесс сопряжения через контроллер
         val success = appController.pairDevice(device.address)
         if (!success) {
+            log("Система отклонила запрос на сопряжение для ${device.address}")
             _pairingState.value = PairingState.Failed("Не удалось запустить процесс сопряжения")
             return
         }
 
-        // Подписываемся на изменения состояния в рамках отдельного Job
+        // 3. Подписываемся на изменения состояния сопряжения в рамках отдельного Job
         pairingJob = viewModelScope.launch {
             appController.bondStateFlow
+                // Фильтруем события только для целевого устройства
                 .filter { it.address == device.address }
-                // Работаем с потоком до тех пор, пока не достигнем финального состояния
+                // Работаем с потоком до тех пор, пока не достигнем финального состояния (BONDED или NONE)
                 .takeWhile { 
                     it.bondState != BluetoothDeviceData.BOND_BONDED && 
                     it.bondState != BluetoothDeviceData.BOND_NONE 
@@ -277,14 +301,16 @@ open class SharedViewModel(
                     }
                 }
             
-            // После завершения takeWhile (когда пришло BONDED или BOND_NONE)
-            // Нужно получить финальное состояние устройства
+            // 4. После завершения takeWhile (когда пришло конечное состояние BONDED или BOND_NONE)
+            // Нам нужно получить финальное состояние устройства для подтверждения успеха
             val finalDevice = appController.getPairedDevices()?.find { it.address == device.address }
                 ?: appController.bondStateFlow.first { it.address == device.address }
 
+            // 5. Обновляем состояние UI в зависимости от результата
             if (finalDevice.bondState == BluetoothDeviceData.BOND_BONDED) {
                 log("Устройство ${device.name} УСПЕШНО сопряжено")
                 _pairingState.value = PairingState.Connected
+                // После успешного сопряжения останавливаем поиск, чтобы не тратить ресурсы
                 stopDiscovery()
             } else {
                 log("Состояние сопряжения для ${device.name} — ОТКАЗ или ОШИБКА (BOND_NONE)")

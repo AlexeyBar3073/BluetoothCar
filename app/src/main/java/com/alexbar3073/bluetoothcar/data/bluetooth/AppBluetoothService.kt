@@ -1,4 +1,4 @@
-// ФАЙЛ: data/bluetooth/AppBluetoothService.kt
+// Файл: data/bluetooth/AppBluetoothService.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth
 
 import android.Manifest
@@ -33,39 +33,41 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 
 /**
- * ТЕГ: Низкоуровневый Bluetooth сервис (Android Foreground Service)
- * ФАЙЛ: C:/Project/BluetoothCar/app/src/main/java/com/alexbar3073/bluetoothcar/data/bluetooth/AppBluetoothService.kt
+ * ТЕГ: BLUETOOTH_LOW_LEVEL_SERVICE
+ *
+ * ФАЙЛ: data/bluetooth/AppBluetoothService.kt
+ *
  * МЕСТОНАХОЖДЕНИЕ: data/bluetooth/
  *
- * НАЗНАЧЕНИЕ ФАЙЛА:
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * Низкоуровневая обертка над системным Android Bluetooth API, реализованная как Android Service.
  * Предоставляет унифицированный интерфейс для работы с адаптером, поиска устройств, 
- * управления сокетами и потоками данных.
- * 
- * КЛЮЧЕВАЯ ФУНКЦИЯ: Обеспечивает работу Bluetooth-соединения в фоновом режиме через 
- * механизмы Foreground Service. Осуществляет конвертирование объектов системного уровня 
- * Android (BluetoothDevice) в доменные объекты приложения (BluetoothDeviceData).
+ * управления сокетами и потоками данных в фоновом режиме через механизмы Foreground Service.
  *
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Инициализация и проверка состояния Bluetooth адаптера.
  * 2. Управление системным поиском устройств (Discovery).
  * 3. Установление и разрыв RFCOMM соединений.
  * 4. Мониторинг системных событий (состояние адаптера, подключение/отключение ACL).
- * 5. Чтение и запись данных в Bluetooth сокет.
+ * 5. Чтение и запись данных в Bluetooth сокет (UTF-8, разделитель \n).
  * 6. Преобразование системных моделей в доменные модели приложения.
  * 7. Управление уведомлением для работы в переднем плане (Foreground).
  *
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
  * - Скрытие сложности Android API за простым интерфейсом.
  * - Реактивность через Kotlin Flow для потоков данных.
- * - Использование атомарных флагов для предотвращения состояний гонки.
  * - Единственный источник истины для состояния подключения (проверка сокета).
  * - Жизненный цикл управляется системой Android (Service).
  *
+ * КЛЮЧЕВОЙ ПРИНЦИП:
+ * Обеспечение непрерывности Bluetooth-соединения и реактивной трансляции состояния 
+ * во внешние слои приложения без блокировки вызывающего потока.
+ *
  * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: BluetoothConnectionManager.kt и его помощниками (CFC, DAM, CSM, DSH).
- * 2. Использует: AppLogger.kt для диагностического вывода.
- * 3. Использует: BluetoothDeviceData как модель данных устройства.
+ * - Использует: BluetoothConnectionManager.kt (Оркестратор управления)
+ * - Использует: AppLogger.kt (Логирование)
+ * - Использует: BluetoothDeviceData (Модель данных)
+ * - Взаимодействует: CFC, DAM, CSM, DSH (Помощники в data/bluetooth/listeners/)
  */
 class AppBluetoothService : Service() {
 

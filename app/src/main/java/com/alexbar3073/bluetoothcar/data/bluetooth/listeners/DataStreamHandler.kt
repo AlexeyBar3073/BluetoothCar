@@ -1,4 +1,4 @@
-// Файл: data/bluetooth/listeners/DataStreamHandler.kt
+// data/bluetooth/listeners/DataStreamHandler.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
@@ -14,28 +14,21 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * ТЕГ: DataStreamHandler
+ * ТЕГ: BLUETOOTH_TRANSPORT_LAYER
  * ФАЙЛ: data/bluetooth/listeners/DataStreamHandler.kt
- * МЕСТОНАХОЖДЕНИЕ: data/bluetooth/listeners/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * ТРАНСПОРТНЫЙ ШЛЮЗ ПОТОКА ДАННЫХ. Реализует низкоуровневый механизм обмена данными
- * по принципу: очередь команд -> упаковка в JSON с msg_id -> ожидание подтверждения ack_id.
- *
- * ОТВЕТСТВЕННОСТЬ:
- * 1. Гарантированная доставка исходящих JSON-пакетов (циклическая переотправка до получения ack_id).
- * 2. Присвоение уникальных msg_id всем исходящим сообщениям.
- * 3. Трансляция входящего потока данных в виде JsonObject для вышестоящих компонентов.
- * 4. Управление низкоуровневыми потоками чтения/записи Bluetooth-сервиса.
- *
- * АРХИТЕКТУРНЫЙ ПРИНЦИП:
- * - Чистый транспорт: не содержит бизнес-логики, не знает о структуре CarData или настройках.
- * - Работает исключительно с JSON-пакетами.
- * - Ответственность за контент сообщений лежит на вызывающем компоненте (оркестраторе).
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
- * 1. Использует: AppBluetoothService.kt для низкоуровневая отправки/приема данных.
- * 2. Уведомляет: BluetoothConnectionManager.kt через входящий поток сообщений.
+ * МЕСТОНАХОЖДЕНИЕ: Data Layer / Bluetooth Helpers
+ * НАЗНАЧЕНИЕ: Реализация транспортного протокола обмена данными через RFCOMM.
+ * ОТВЕТСТВЕННОСТЬ: 
+ * - Гарантированная доставка исходящих JSON-пакетов (механизм msg_id / ack_id).
+ * - Очередизация команд и циклическая переотправка до подтверждения.
+ * - Десериализация входящего байтового потока в [JsonObject].
+ * - Проброс распарсенных данных в [BluetoothConnectionManager].
+ * 
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Инкапсуляция логики подтверждения доставки на транспортном уровне.
+ * КЛЮЧЕВОЙ ПРИНЦИП: Гарантированная доставка сообщений (Reliable Messaging).
+ * СВЯЗИ: 
+ * - Активируется в [BluetoothConnectionManager] на финальном шаге (CONNECTED).
+ * - Использует [AppBluetoothService] для операций чтения/записи в сокет.
  */
 class DataStreamHandler(
     private val bluetoothService: AppBluetoothService,
@@ -83,8 +76,10 @@ class DataStreamHandler(
 
     // ========== ПОТОКИ И ОЧЕРЕДИ ==========
 
-    /** Поток входящих сообщений (распарсенный JsonObject) для трансляции наверх */
+    /** Внутренний поток входящих сообщений */
     private val _incomingMessagesFlow = MutableSharedFlow<JsonObject>()
+    
+    /** Публичный поток входящих сообщений (распарсенный JsonObject) для трансляции наверх */
     val incomingMessagesFlow: SharedFlow<JsonObject> = _incomingMessagesFlow.asSharedFlow()
 
     /** Очередь исходящих команд (Unlimited для предотвращения блокировки отправителей) */

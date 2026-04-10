@@ -263,10 +263,10 @@ bluetoothcar/
 - ✅ Унифицированный протокол обмена данными (MsgID / AckID).
 - ✅ 100% покрытие Unit-тестами (38 тестов пройдены успешно).
 - ✅ Визуализация Dashboard Type 1, 2, 4.
-<<<<<<< HEAD
-- ✅ Команда `full_tank` на Dashboard 4 (Long click по центру прибора в режиме FUEL).
-- ✅ Команды `reset_avg` и `reset_avg_cur` в TripWidget (Long click по значениям расхода).
-=======
-- ✅ Команда `full_tank` на Dashboard 4 (Long click по центру прибора).
->>>>>>> origin/master
-- 🔄 В процессе: Калибровка виджетов и расширение типов дашбордов.
+- ✅ Автономный цикл переподключения (BCM + Listeners) на базе Kotlin Flow.
+- ✅ Унифицированный протокол обмена данными (MsgID / AckID) с гарантированной доставкой.
+- ✅ Реактивный Foreground Service (AppBluetoothService) для стабильной работы в фоне.
+- ✅ 100% покрытие Unit-тестами (41 тест пройден успешно).
+- ✅ Визуализация Dashboard Type 1, 2, 4.
+- ✅ Команды управления: full_tank, reset_avg, reset_avg_cur (Long click события).
+- ✅ Полное соответствие стандартам оформления AGENTS.md (5.1, 5.2).

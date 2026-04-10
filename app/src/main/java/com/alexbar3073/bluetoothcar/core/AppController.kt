@@ -22,11 +22,14 @@ import kotlinx.serialization.json.*
 
 /**
  * ТЕГ: Главный координатор
+ *
  * ФАЙЛ: core/AppController.kt
+ *
  * МЕСТОНАХОЖДЕНИЕ: core/
  *
  * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
  * ЦЕНТРАЛЬНЫЙ УЗЕЛ БИЗНЕС-ЛОГИКИ. Единственный «мозг» приложения, принимающий решения.
+ * Управляет всеми ключевыми потоками данных и жизненным циклом компонентов связи.
  *
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Управление жизненным циклом BluetoothConnectionManager.
@@ -45,6 +48,11 @@ import kotlinx.serialization.json.*
  * - Оптимизация: Использует CarPacket для частичного обновления CarData, исключая "моргание".
  *
  * КЛЮЧЕВОЙ ПРИНЦИП: Реактивность через StateFlow и обработка входящего потока сообщений.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ:
+ * - Использует: AppBluetoothService, BluetoothConnectionManager, SettingsRepository, EcuErrorDao.
+ * - Вызывается из: SharedViewModel, MainActivity.
+ * - Взаимодействует: ServiceLocator (для получения зависимостей).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppController(
@@ -513,22 +521,40 @@ class AppController(
     }
 
     /**
-     * Очистка ресурсов.
+     * Сбрасывает текущие активные процессы без отмены основной области видимости.
+     * Используется для перезагрузки контроллера.
      */
-    fun cleanup() {
+    private fun reset() {
+        AppLogger.logInfo("Сброс активных процессов контроллера", TAG)
+        // 1. Останавливаем стриминг телеметрии, чтобы не нагружать канал
         stopTelemetry()
+        // 2. Очищаем ресурсы менеджера соединений (отписка от Bluetooth-событий)
         _bluetoothConnectionManager?.cleanup()
-        appScope.cancel()
+        // 3. Сбрасываем флаг инициализации для блокировки доступа к неактивным компонентам
         _isInitialized.value = false
     }
 
     /**
+     * Очистка всех ресурсов и завершение работы контроллера.
+     */
+    fun cleanup() {
+        AppLogger.logInfo("Полная очистка ресурсов AppController (Shutdown)", TAG)
+        // 1. Сбрасываем активные компоненты
+        reset()
+        // 2. Отменяем основную область корутин (дальнейшие запуски через appScope будут невозможны)
+        appScope.cancel()
+    }
+
+    /**
      * "Горячая" перезагрузка контроллера.
+     * Очищает текущее состояние и запускает инициализацию заново.
      */
     fun reload() {
-        cleanup()
+        AppLogger.logInfo("Выполнение горячей перезагрузки контроллера", TAG)
+        // 1. Сбрасываем старое состояние
+        reset()
+        // 2. Запускаем инициализацию немедленно, так как appScope не был отменен
         appScope.launch {
-            delay(1000)
             startInitialization()
         }
     }

@@ -1,4 +1,4 @@
-// Файл: data/models/BluetoothDeviceData.kt
+// data/models/BluetoothDeviceData.kt
 package com.alexbar3073.bluetoothcar.data.models
 
 import android.Manifest
@@ -6,21 +6,20 @@ import androidx.annotation.RequiresPermission
 import kotlinx.serialization.Serializable
 
 /**
- * ФАЙЛ: data/models/BluetoothDeviceData.kt (ПЕРЕИМЕНОВАН!)
- * МЕСТОНАХОЖДЕНИЕ: data/models/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Сериализуемая модель Bluetooth устройства для хранения в настройках приложения.
- * Используется ВЕЗДЕ в приложении вместо системного Android BluetoothDevice.
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - 2026.02.04 12:30 UTC: ПЕРЕИМЕНОВАНИЕ ДЛЯ ЯСНОСТИ
- *   1. Класс переименован: BluetoothDevice → BluetoothDeviceData
- *   2. Файл переименован: BluetoothDevice.kt → BluetoothDeviceData.kt
- *   3. Добавлены методы-геттеры для consistency с кодом
- *   4. Убрана путаница с системным BluetoothDevice
+ * ТЕГ: BLUETOOTH_DATA_MODEL
+ * НАЗНАЧЕНИЕ: Доменная модель Bluetooth устройства, независимая от Android SDK.
+ * ОТВЕТСТВЕННОСТЬ: 
+ * - Хранение метаданных устройства (имя, адрес, класс, состояние сопряжения).
+ * - Сериализация для сохранения в DataStore (настройки приложения).
+ * - Конвертация из системного [android.bluetooth.BluetoothDevice].
+ * - Классификация типов устройств (Car Audio, Phone, etc).
+ * 
+ * АРХИТЕКТУРА: Data Layer / Models.
+ * СВЯЗИ: 
+ * - Используется в [BluetoothDiscoveryManager] для передачи найденных устройств.
+ * - Используется в [DataStoreRepository] для хранения выбранного устройства.
+ * - Отображается в UI через [SharedViewModel].
  */
-
 @Serializable
 data class BluetoothDeviceData(
     val name: String = "",
