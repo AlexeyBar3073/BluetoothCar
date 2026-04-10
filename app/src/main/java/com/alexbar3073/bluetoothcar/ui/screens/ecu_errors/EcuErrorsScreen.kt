@@ -8,6 +8,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +24,7 @@ import androidx.navigation.NavController
 import com.alexbar3073.bluetoothcar.R
 import com.alexbar3073.bluetoothcar.data.database.entities.EcuErrorEntity
 import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
+import com.alexbar3073.bluetoothcar.ui.components.TopBarButton
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
@@ -69,7 +72,27 @@ fun EcuErrorsScreen(
                     titlePainterIcon = painterResource(id = R.drawable.ic_engine_48),
                     titleIconTint = AppColors.BluetoothDeviceConnected,
                     navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-                    onNavigationClick = { navController.popBackStack() }
+                    onNavigationClick = { navController.popBackStack() },
+                    rightContent = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            // Кнопка обновления списка ошибок (kl_get_dtc)
+                            TopBarButton(
+                                icon = Icons.Default.Refresh,
+                                onClick = { viewModel.sendJsonCommand("""{"command":"kl_get_dtc"}""") },
+                                contentDescription = "Обновить"
+                            )
+                            // Кнопка очистки ошибок в ЭБУ (kl_clear_dtc)
+                            TopBarButton(
+                                icon = Icons.Default.DeleteSweep,
+                                onClick = { viewModel.sendJsonCommand("""{"command":"kl_clear_dtc"}""") },
+                                contentDescription = "Очистить",
+                                tint = AppColors.Error
+                            )
+                        }
+                    }
                 )
             }
         ) { paddingValues ->
@@ -97,8 +120,6 @@ fun EcuErrorsScreen(
                     ) {
                         item {
                             Spacer(modifier = Modifier.height(16.dp))
-                            // Заголовок общей секции диагностики
-                            SectionHeader("РЕЗУЛЬТАТЫ ДИАГНОСТИКИ")
                             
                             // Единая карточка со всеми найденными элементами
                             Card(
@@ -139,23 +160,6 @@ fun EcuErrorsScreen(
             }
         }
     }
-}
-
-/**
- * Вспомогательный компонент для отрисовки заголовка секции.
- * Обеспечивает единообразие стиля с экраном настроек.
- *
- * @param title Текст заголовка.
- */
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = AppColors.PrimaryBlue,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-    )
 }
 
 /**

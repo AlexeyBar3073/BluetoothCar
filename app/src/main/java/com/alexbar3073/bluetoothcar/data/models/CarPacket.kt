@@ -54,7 +54,7 @@ data class CarPacket(
     @SerialName("avg_cur") val averageConsumptionCurrent: Float? = null,
     @SerialName("t_cool") val coolantTemp: Float? = null,
     @SerialName("t_atf") val transmissionTemp: Float? = null,
-    @SerialName("err") val ecuErrors: String? = null,
+    @SerialName("dtc") val ecuErrors: String? = null,
 
     @Serializable(with = BooleanAsIntSerializer::class)
     @SerialName("tire") val tirePressureLow: Boolean? = null,

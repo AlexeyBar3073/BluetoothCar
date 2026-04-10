@@ -63,9 +63,20 @@ class DataStreamHandler(
          * @param json Настроенный экземпляр Json.
          */
         fun getEnvelope(json: Json): String {
-            val element = json.parseToJsonElement(payload).jsonObject.toMutableMap()
-            // msg_id передается как число (Number)
-            element["msg_id"] = JsonPrimitive(id)
+            val element = try {
+                // Создаем новую изменяемую карту из JsonObject, чтобы избежать проблем с проекцией типов
+                json.parseToJsonElement(payload).jsonObject.toMutableMap()
+            } catch (e: Exception) {
+                // Если payload не является JSON-объектом (например, просто строка команды),
+                // оборачиваем её в объект с ключом "cmd"
+                mutableMapOf<String, JsonElement>("cmd" to JsonPrimitive(payload))
+            }
+            
+            // Явно указываем тип для msg_id и добавляем в карту
+            val msgIdKey = "msg_id"
+            val msgIdValue: JsonElement = JsonPrimitive(id)
+            element[msgIdKey] = msgIdValue
+
             return json.encodeToString(JsonObject(element))
         }
     }

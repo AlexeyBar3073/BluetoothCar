@@ -46,7 +46,7 @@ data class CarData(
     @SerialName("avg_cur") val averageConsumptionCurrent: Float = 0f,
     @SerialName("t_cool") val coolantTemp: Float = 0f,
     @SerialName("t_atf") val transmissionTemp: Float = 0f,
-    @SerialName("err") val ecuErrors: String = "",
+    @SerialName("dtc") val ecuErrors: String = "",
     @SerialName("tire") val tirePressureLow: Boolean = false,
     @SerialName("wash") val washerFluidLow: Boolean = false,
 
