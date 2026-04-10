@@ -2,7 +2,6 @@ package com.alexbar3073.bluetoothcar.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ===== Базовые цвета (Material 3) =====
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)
@@ -11,7 +10,6 @@ val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
-// ===== Синяя палитра =====
 val Blue10 = Color(0xFF000F1A)
 val Blue20 = Color(0xFF001F33)
 val Blue30 = Color(0xFF002E4D)
@@ -20,25 +18,19 @@ val Blue80 = Color(0xFF00D4FF)
 val Blue90 = Color(0xFF9CEAFF)
 val Blue95 = Color(0xFFCFF4FF)
 
-// ===== Цвета для темной темы (Dashboard 4 Spec) =====
 val DarkBackground = Color(0xFF0A0A0F)
 val DarkSurface = Color(0xFF1A1A24)
 val DarkSurfaceVariant = Color(0xFF2A2A34)
-val DarkTransitionGray = Color(0xFF12121A) // Промежуточный цвет для градиента фона
-
-// ===== Цвета текста и поверхностей =====
-val DarkTextPrimary = Color(0xFFE0E0FF)   // Светло-голубоватый белый из спецификации
-val DarkBlueGrey80 = Color(0xFFCCC2DC)    // TextSecondary для темной темы
-val DarkBlueGrey40 = Color(0xFF625b71)    // TextTertiary для темной темы
+val DarkTransitionGray = Color(0xFF12121A)
+val DarkTextPrimary = Color(0xFFE0E0FF)
+val DarkBlueGrey80 = Color(0xFFCCC2DC)
+val DarkBlueGrey40 = Color(0xFF625b71)
 
 val LightBackground = Color(0xFFF5F5FF)
 val LightSurface = Color(0xFFFFFFFF)
 val LightSurfaceVariant = Color(0xFFEEEEFF)
 
-// ===== Успех/Ошибка/Предупреждение =====
-/** Цвет для состояния LISTENING_DATA в темной теме */
 val ListeningGreenBright = Color(0xFF32D74B)
-/** Цвет для состояния LISTENING_DATA в светлой теме */
 val ListeningGreenDim = Color(0xFF2E7D32)
 
 val Green10 = Color(0xFF00210A)
