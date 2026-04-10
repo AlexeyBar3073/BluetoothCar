@@ -99,10 +99,10 @@ data class AppSettings(
      */
     fun mergeWithRemote(remoteJson: JsonObject): AppSettings {
         // Извлекаем значения из JSON с проверкой типов
-        val newCapacity = remoteJson["tank"]?.jsonPrimitive?.floatOrNull ?: fuelTankCapacity
-        val newInjPerf = remoteJson["inj_perf"]?.jsonPrimitive?.floatOrNull ?: injectorPerformance
-        val newInjCount = remoteJson["inj_cnt"]?.jsonPrimitive?.intOrNull ?: injectorCount
-        val newSpeedSignals = remoteJson["spd_sig"]?.jsonPrimitive?.intOrNull ?: speedSensorSignalsPerMeter
+        val newCapacity = remoteJson["tV"]?.jsonPrimitive?.floatOrNull ?: fuelTankCapacity
+        val newInjPerf = remoteJson["iPerf"]?.jsonPrimitive?.floatOrNull ?: injectorPerformance
+        val newInjCount = remoteJson["iCnt"]?.jsonPrimitive?.intOrNull ?: injectorCount
+        val newSpeedSignals = remoteJson["sSig"]?.jsonPrimitive?.intOrNull ?: speedSensorSignalsPerMeter
         val newFirmware = remoteJson["fw"]?.jsonPrimitive?.content ?: firmwareVersion
 
         // Проверяем, есть ли реальные изменения
