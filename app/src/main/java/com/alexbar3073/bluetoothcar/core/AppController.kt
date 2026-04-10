@@ -3,6 +3,7 @@ package com.alexbar3073.bluetoothcar.core
 
 import android.content.Context
 import android.net.Uri
+import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
 import com.alexbar3073.bluetoothcar.data.bluetooth.BluetoothConnectionManager
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionStatusInfo
 import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
@@ -369,6 +370,56 @@ class AppController(
      */
     fun getPairedDevices(): List<BluetoothDeviceData>? = 
         if (_isInitialized.value) bluetoothConnectionManager.getPairedDevices() else null
+
+    /** Поток найденных в эфире устройств (Discovery) */
+    val discoveryFlow: Flow<BluetoothDeviceData>
+        get() = AppBluetoothService.getInstance()?.discoveryFlow ?: emptyFlow()
+
+    /** Поток состояния процесса поиска */
+    val isDiscovering: StateFlow<Boolean>
+        get() = AppBluetoothService.getInstance()?.isDiscovering ?: MutableStateFlow(false).asStateFlow()
+
+    /**
+     * Начать поиск новых устройств.
+     * Результаты транслируются в discoveryFlow.
+     */
+    fun startDiscovery(): Boolean {
+        return AppBluetoothService.getInstance()?.startDiscovery() ?: false
+    }
+
+    /**
+     * Остановить поиск устройств.
+     */
+    fun stopDiscovery() {
+        AppBluetoothService.getInstance()?.stopDiscovery()
+    }
+
+    /**
+     * Поток изменений состояния сопряжения из системы.
+     */
+    val bondStateFlow: Flow<BluetoothDeviceData> = flow {
+        AppBluetoothService.getInstance()?.bondStateFlow?.let { emitAll(it) }
+    }.flowOn(Dispatchers.Main)
+
+    /**
+     * Выполнить сопряжение с устройством.
+     * 
+     * @param address MAC-адрес устройства.
+     * @return true если процесс запущен.
+     */
+    fun pairDevice(address: String): Boolean {
+        return AppBluetoothService.getInstance()?.pairDevice(address) ?: false
+    }
+
+    /**
+     * Подписаться на изменения состояния сопряжения.
+     */
+    @Deprecated("Используйте bondStateFlow", ReplaceWith("bondStateFlow"))
+    fun monitorBondState(callback: (BluetoothDeviceData) -> Unit) {
+        appScope.launch {
+            bondStateFlow.collect { callback(it) }
+        }
+    }
 
     /**
      * Проверяет статус Bluetooth-адаптера.

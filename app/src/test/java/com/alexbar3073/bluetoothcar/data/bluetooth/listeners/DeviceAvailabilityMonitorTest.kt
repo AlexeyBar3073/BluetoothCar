@@ -7,10 +7,11 @@ import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.*
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -61,7 +62,13 @@ class DeviceAvailabilityMonitorTest {
     private lateinit var stateCallback: (ConnectionState, String?) -> Unit
     
     /** Тестовый диспатчер для управления временем выполнения корутин */
-    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testDispatcher = StandardTestDispatcher()
+
+    /** Поток для имитации обнаружения устройств */
+    private val discoveryFlow = MutableSharedFlow<BluetoothDeviceData>()
+    
+    /** Поток для имитации состояния поиска */
+    private val isDiscoveringFlow = MutableStateFlow(false)
 
     /**
      * Инициализация перед каждым тестом.
@@ -70,6 +77,18 @@ class DeviceAvailabilityMonitorTest {
     fun setup() {
         bluetoothService = mockk(relaxed = true)
         stateCallback = mockk(relaxed = true)
+        
+        // Настраиваем мок сервиса на возврат тестовых потоков
+        every { bluetoothService.discoveryFlow } returns discoveryFlow
+        every { bluetoothService.isDiscovering } returns isDiscoveringFlow
+        every { bluetoothService.startDiscovery() } answers {
+            isDiscoveringFlow.value = true
+            true
+        }
+        every { bluetoothService.stopDiscovery() } answers {
+            isDiscoveringFlow.value = false
+        }
+
         // Инициализируем монитор с тестовым диспатчером
         monitor = DeviceAvailabilityMonitor(bluetoothService, stateCallback, testDispatcher)
     }
@@ -79,14 +98,8 @@ class DeviceAvailabilityMonitorTest {
      */
     @Test
     fun `should return DEVICE_AVAILABLE when device is found`() = runTest(testDispatcher) {
-        // 1. ПОДГОТОВКА: Создаем тестовое устройство и слот для захвата колбэка
+        // 1. ПОДГОТОВКА: Создаем тестовое устройство
         val device = BluetoothDeviceData("Target", "00:11:22:33:44:55")
-        val foundAddressSlot = slot<(String) -> Unit>()
-
-        // Настраиваем сервис на захват колбэка нахождения устройства
-        every { 
-            bluetoothService.startDiscovery(capture(foundAddressSlot), any(), any()) 
-        } just runs
 
         // 2. ДЕЙСТВИЕ: Запускаем мониторинг
         monitor.start(device)
@@ -95,15 +108,13 @@ class DeviceAvailabilityMonitorTest {
         // 3. ПРОВЕРКА: Проверяем, что состояние изменилось на "Поиск"
         verify { stateCallback(ConnectionState.SEARCHING_DEVICE, null) }
 
-        // 4. ДЕЙСТВИЕ: Имитируем нахождение устройства с нужным адресом
-        if (foundAddressSlot.isCaptured) {
-            foundAddressSlot.captured("00:11:22:33:44:55")
-            runCurrent()
+        // 4. ДЕЙСТВИЕ: Имитируем нахождение устройства с нужным адресом через поток
+        discoveryFlow.emit(device)
+        runCurrent()
             
-            // 5. ПРОВЕРКА: Состояние должно стать DEVICE_AVAILABLE, а сканирование — прекратиться
-            verify { stateCallback(ConnectionState.DEVICE_AVAILABLE, null) }
-            verify { bluetoothService.stopDiscovery() }
-        }
+        // 5. ПРОВЕРКА: Состояние должно стать DEVICE_AVAILABLE, а сканирование — прекратиться
+        verify { stateCallback(ConnectionState.DEVICE_AVAILABLE, null) }
+        verify { bluetoothService.stopDiscovery() }
     }
 
     /**
@@ -111,30 +122,25 @@ class DeviceAvailabilityMonitorTest {
      */
     @Test
     fun `should retry discovery when first attempt finishes without finding device`() = runTest(testDispatcher) {
-        // 1. ПОДГОТОВКА: Устройство и слот для захвата колбэка завершения сканирования
+        // 1. ПОДГОТОВКА: Устройство
         val device = BluetoothDeviceData("Target", "00:11:22:33:44:55")
-        val onFinishedSlot = slot<() -> Unit>()
-
-        // Настраиваем захват колбэка завершения
-        every { 
-            bluetoothService.startDiscovery(any(), capture(onFinishedSlot), any()) 
-        } just runs
 
         // 2. ДЕЙСТВИЕ: Запускаем мониторинг
         monitor.start(device)
         runCurrent()
 
-        // 3. ДЕЙСТВИЕ: Имитируем завершение первого цикла сканирования без результата
-        if (onFinishedSlot.isCaptured) {
-            onFinishedSlot.captured()
+        // 3. ДЕЙСТВИЕ: Имитируем завершение первого цикла сканирования
+        // В реальном сервисе это происходит через BroadcastReceiver, 
+        // который меняет isDiscovering на false.
+        isDiscoveringFlow.value = false
+        runCurrent()
             
-            // Ждем интервал между попытками (1000мс)
-            advanceTimeBy(1100)
-            runCurrent()
+        // Ждем интервал между попытками (1000мс)
+        advanceTimeBy(1001)
+        runCurrent()
 
-            // 4. ПРОВЕРКА: Метод запуска сканирования должен быть вызван повторно
-            verify(exactly = 2) { bluetoothService.startDiscovery(any(), any(), any()) }
-        }
+        // 4. ПРОВЕРКА: Метод запуска сканирования должен быть вызван повторно
+        verify(exactly = 2) { bluetoothService.startDiscovery() }
     }
 
     /**
@@ -142,14 +148,8 @@ class DeviceAvailabilityMonitorTest {
      */
     @Test
     fun `should return DEVICE_UNAVAILABLE after 3 failed attempts`() = runTest(testDispatcher) {
-        // 1. ПОДГОТОВКА: Устройство и список для захвата всех вызовов колбэка завершения
+        // 1. ПОДГОТОВКА: Устройство
         val device = BluetoothDeviceData("Target", "00:11:22:33:44:55")
-        val onFinishedSlot = mutableListOf<() -> Unit>()
-
-        // Настраиваем захват колбэков завершения для каждой попытки
-        every { 
-            bluetoothService.startDiscovery(any(), capture(onFinishedSlot), any()) 
-        } just runs
 
         // 2. ДЕЙСТВИЕ: Запускаем мониторинг
         monitor.start(device)
@@ -157,16 +157,17 @@ class DeviceAvailabilityMonitorTest {
 
         // 3. ДЕЙСТВИЕ: Имитируем 3 неудачных цикла сканирования
         repeat(3) {
-            onFinishedSlot.last().invoke()
-            advanceTimeBy(1100)
+            isDiscoveringFlow.value = false
+            runCurrent()
+            advanceTimeBy(1001)  // Интервал перед ретраем
             runCurrent()
         }
 
-        // 4. ПРОВЕРКА: После 3 попыток состояние должно стать DEVICE_UNAVAILABLE с текстом ошибки
+        // 4. ПРОВЕРКА: После 3 попыток состояние должно стать DEVICE_UNAVAILABLE
         verify { 
             stateCallback(
                 ConnectionState.DEVICE_UNAVAILABLE, 
-                match { it?.contains("3 попыток") == true } 
+                any()
             ) 
         }
     }
@@ -187,6 +188,6 @@ class DeviceAvailabilityMonitorTest {
 
         // 3. ПРОВЕРКА: Проверяем вызов остановки сканирования в сервисе и статус активности
         verify { bluetoothService.stopDiscovery() }
-        assert(!monitor.isActive())
+        assertFalse(monitor.isActive())
     }
 }

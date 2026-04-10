@@ -30,8 +30,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.*
 
 /**
  * ТЕГ: Низкоуровневый Bluetooth сервис (Android Foreground Service)
@@ -190,16 +189,20 @@ class AppBluetoothService : Service() {
     /** BroadcastReceiver для мониторинга включения/выключения Bluetooth адаптера */
     private var bluetoothStateReceiver: BroadcastReceiver? = null
 
-    // ========== ПОИСК УСТРОЙСТВ ==========
+    /** Поток событий изменения состояния сопряжения (Bonding) */
+    private val _bondStateFlow = MutableSharedFlow<BluetoothDeviceData>(extraBufferCapacity = 1)
+    val bondStateFlow: Flow<BluetoothDeviceData> = _bondStateFlow.asSharedFlow()
 
-    /** Callback для уведомления о найденном устройстве */
-    private var deviceFoundCallback: ((String) -> Unit)? = null
+    /** BroadcastReceiver для мониторинга изменения состояния сопряжения (Bonding) */
+    private var bondStateReceiver: BroadcastReceiver? = null
 
-    /** Callback для уведомления о завершении поиска */
-    private var discoveryFinishedCallback: (() -> Unit)? = null
+    /** Поток найденных в эфире устройств */
+    private val _discoveryFlow = MutableSharedFlow<BluetoothDeviceData>(extraBufferCapacity = 16)
+    val discoveryFlow: Flow<BluetoothDeviceData> = _discoveryFlow.asSharedFlow()
 
-    /** Callback для уведомления об ошибке поиска */
-    private var discoveryErrorCallback: ((String) -> Unit)? = null
+    /** Поток состояния процесса поиска */
+    private val _isDiscovering = MutableStateFlow(false)
+    val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
 
     /** BroadcastReceiver для событий системного поиска (Discovery) */
     private var discoveryReceiver: BroadcastReceiver? = null
@@ -229,6 +232,7 @@ class AppBluetoothService : Service() {
         
         initializeBluetoothAdapter()
         startBluetoothStateMonitoring()
+        registerBondStateReceiver() // Глобальный мониторинг сопряжения
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -243,6 +247,7 @@ class AppBluetoothService : Service() {
         unregisterBluetoothStateReceiver()
         unregisterConnectionBroadcastReceiver()
         unregisterDiscoveryReceiver()
+        unregisterBondStateReceiver()
         serviceScope.cancel()
         instance = null
         super.onDestroy()
@@ -400,78 +405,129 @@ class AppBluetoothService : Service() {
         return getAndroidDeviceByAddress(address) != null
     }
 
-    // ========== МЕТОДЫ ДЛЯ ПОИСКА УСТРОЙСТВ ==========
+    /**
+     * Попытаться выполнить сопряжение (Bonding) с устройством.
+     * 
+     * @param address MAC-адрес устройства.
+     * @return true если процесс сопряжения запущен успешно.
+     */
+    @SuppressLint("MissingPermission")
+    fun pairDevice(address: String): Boolean {
+        if (!hasBluetoothConnectPermission()) return false
+        
+        val device = bluetoothAdapter?.getRemoteDevice(address) ?: return false
+        return try {
+            // Запуск стандартного системного процесса сопряжения
+            device.createBond()
+        } catch (e: Exception) {
+            AppLogger.logError("Ошибка при запуске сопряжения: ${e.message}", TAG)
+            false
+        }
+    }
+
+    /**
+     * Зарегистрировать Receiver для отслеживания изменений состояния сопряжения (BOND_STATE).
+     * События транслируются в bondStateFlow для всех подписчиков.
+     */
+    private fun registerBondStateReceiver() {
+        if (bondStateReceiver != null) return
+
+        bondStateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == AndroidBluetoothDevice.ACTION_BOND_STATE_CHANGED) {
+                    @Suppress("DEPRECATION")
+                    val device: AndroidBluetoothDevice? = intent.getParcelableExtra(AndroidBluetoothDevice.EXTRA_DEVICE)
+                    val bondState = intent.getIntExtra(AndroidBluetoothDevice.EXTRA_BOND_STATE, AndroidBluetoothDevice.BOND_NONE)
+                    val prevBondState = intent.getIntExtra(AndroidBluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, AndroidBluetoothDevice.BOND_NONE)
+
+                    device?.let {
+                        val deviceData = androidDeviceToDomain(it)
+                        
+                        // Логируем важные переходы состояний
+                        if (bondState == AndroidBluetoothDevice.BOND_NONE && prevBondState == AndroidBluetoothDevice.BOND_BONDED) {
+                            AppLogger.logInfo("Устройство ${deviceData.name} было отвязано (unpaired)", TAG)
+                            startInForeground("Устройство отвязано: ${deviceData.name}")
+                        } else if (bondState == AndroidBluetoothDevice.BOND_BONDED) {
+                            AppLogger.logInfo("Устройство ${deviceData.name} успешно сопряжено", TAG)
+                            startInForeground("Сопряжение успешно: ${deviceData.name}")
+                        }
+
+                        // Эмиттируем событие в поток
+                        serviceScope.launch {
+                            _bondStateFlow.emit(deviceData)
+                        }
+                    }
+                }
+            }
+        }
+        registerReceiver(bondStateReceiver, IntentFilter(AndroidBluetoothDevice.ACTION_BOND_STATE_CHANGED))
+    }
+
+    /**
+     * Отменить регистрацию Receiver-а состояния сопряжения.
+     */
+    private fun unregisterBondStateReceiver() {
+        bondStateReceiver?.let { unregisterReceiver(it) }
+        bondStateReceiver = null
+    }
 
     /**
      * Начать системный поиск устройств (Discovery).
-     * Вызывается из: DeviceAvailabilityMonitor.kt.
+     * Результаты транслируются в discoveryFlow.
      * 
-     * @param onDeviceFound Callback при нахождении устройства.
-     * @param onDiscoveryFinished Callback при завершении поиска.
-     * @param onDiscoveryError Callback при возникновении ошибки.
+     * @return true если поиск успешно запущен.
      */
     @SuppressLint("MissingPermission")
-    fun startDiscovery(
-        onDeviceFound: (String) -> Unit,
-        onDiscoveryFinished: () -> Unit,
-        onDiscoveryError: (String) -> Unit
-    ) {
-        // Инициализируем колбеки
-        this.deviceFoundCallback = onDeviceFound
-        this.discoveryFinishedCallback = onDiscoveryFinished
-        this.discoveryErrorCallback = onDiscoveryError
-
+    fun startDiscovery(): Boolean {
         // Проверяем комплекс разрешений (Location для API < 31, Scan для API 31+)
         if (!hasDiscoveryPermissions()) {
-            onDiscoveryError("Отсутствуют разрешения для поиска устройств")
-            return
+            AppLogger.logError("Отсутствуют разрешения для поиска устройств", TAG)
+            return false
         }
 
-        val adapter = bluetoothAdapter ?: run {
-            onDiscoveryError("Bluetooth адаптер недоступен")
-            return
-        }
+        val adapter = bluetoothAdapter ?: return false
 
         if (!adapter.isEnabled) {
-            onDiscoveryError("Bluetooth выключен")
-            return
+            AppLogger.logError("Bluetooth выключен, поиск невозможен", TAG)
+            return false
         }
+
+        // Если поиск уже идет, ничего не делаем
+        if (_isDiscovering.value) return true
 
         // Регистрируем Receiver для получения результатов поиска из системы
         registerDiscoveryReceiver()
 
         // Запускаем системный процесс Discovery
-        val started = try {
-            adapter.startDiscovery()
-        } catch (e: SecurityException) {
-            onDiscoveryError("Ошибка безопасности при запуске поиска: ${e.message}")
-            false
+        return try {
+            val success = adapter.startDiscovery()
+            if (success) {
+                _isDiscovering.value = true
+                // Отправляем сигнал очистки списка в поток
+                _discoveryFlow.tryEmit(BluetoothDeviceData("CLEAR", "CLEAR"))
+                AppLogger.logInfo("Системный поиск устройств запущен", TAG)
+            }
+            success
         } catch (e: Exception) {
-            onDiscoveryError("Сбой при запуске поиска: ${e.message}")
+            AppLogger.logError("Сбой при запуске поиска: ${e.message}", TAG)
             false
-        }
-
-        if (!started) {
-            cleanupDiscoveryCallbacks()
-            unregisterDiscoveryReceiver()
         }
     }
 
     /**
      * Остановить системный поиск устройств.
-     * Вызывается из: DeviceAvailabilityMonitor.kt.
      */
     @SuppressLint("MissingPermission")
     fun stopDiscovery() {
         try {
-            // Отменяем поиск в системе для высвобождения ресурсов адаптера
-            bluetoothAdapter?.cancelDiscovery()
+            if (_isDiscovering.value) {
+                bluetoothAdapter?.cancelDiscovery()
+                _isDiscovering.value = false
+                AppLogger.logInfo("Системный поиск устройств остановлен", TAG)
+            }
         } catch (e: SecurityException) {
             AppLogger.logError("Ошибка безопасности при остановке поиска: ${e.message}", TAG)
         }
-        
-        // Очищаем ресурсы поиска и отменяем регистрацию Receiver
-        cleanupDiscoveryCallbacks()
         unregisterDiscoveryReceiver()
     }
 
@@ -484,31 +540,26 @@ class AppBluetoothService : Service() {
         discoveryReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
-                    // Обработка найденного устройства в эфире
                     AndroidBluetoothDevice.ACTION_FOUND -> {
                         @Suppress("DEPRECATION")
                         val device: AndroidBluetoothDevice? = intent.getParcelableExtra(AndroidBluetoothDevice.EXTRA_DEVICE)
                         device?.let {
-                            val address = it.address
-                            if (!address.isNullOrBlank()) {
-                                deviceFoundCallback?.invoke(address)
+                            val deviceData = androidDeviceToDomain(it)
+                            serviceScope.launch {
+                                _discoveryFlow.emit(deviceData)
                             }
                         }
                     }
-                    // Обработка завершения процесса поиска системой
                     BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                        discoveryFinishedCallback?.invoke()
-                        cleanupDiscoveryCallbacks()
+                        _isDiscovering.value = false
                         unregisterDiscoveryReceiver()
                     }
                 }
             }
         }
 
-        // Настраиваем фильтр для получения событий поиска
         val filter = IntentFilter().apply {
             addAction(AndroidBluetoothDevice.ACTION_FOUND)
-            addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
         }
         registerReceiver(discoveryReceiver, filter)
@@ -520,15 +571,6 @@ class AppBluetoothService : Service() {
     private fun unregisterDiscoveryReceiver() {
         discoveryReceiver?.let { unregisterReceiver(it) }
         discoveryReceiver = null
-    }
-
-    /**
-     * Очистить временные колбеки поиска.
-     */
-    private fun cleanupDiscoveryCallbacks() {
-        deviceFoundCallback = null
-        discoveryFinishedCallback = null
-        discoveryErrorCallback = null
     }
 
     // ========== МЕТОДЫ ПОДКЛЮЧЕНИЯ ==========

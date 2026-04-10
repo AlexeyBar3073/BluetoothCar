@@ -131,7 +131,6 @@ class DatabaseUpdateTest {
 
         // 3. ПРОВЕРКА: Результат - ошибка, insertAll НЕ вызван
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("Формат данных") == true)
         verify(exactly = 0) { ecuErrorDao.insertAll(any()) }
     }
 

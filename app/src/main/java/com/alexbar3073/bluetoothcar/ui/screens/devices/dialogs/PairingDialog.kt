@@ -41,39 +41,26 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.alexbar3073.bluetoothcar.data.repository.BluetoothRepositoryImpl
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import kotlinx.coroutines.delay
 
 /**
- * ФАЙЛ: PairingDialog.kt
- * МЕСТОНАХОЖДЕНИЕ: ui/screens/devices/dialogs/
- *
- * НАЗНАЧЕНИЕ ФАЙЛА:
- * Диалоговое окно для отображения процесса сопряжения Bluetooth устройств.
- * Показывает анимацию, состояние процесса и ошибки при сопряжении.
- *
- * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ ПРОЕКТА:
- * 1. Использует:
- *    - BluetoothRepositoryImpl.PairingState - состояния сопряжения из репозитория
- *    - BluetoothCarTheme - тему приложения
- *    - AppColors - цвета приложения
- *
- * 2. Используется в:
- *    - DevicesScreen.kt - отображает диалог при сопряжении устройств
- *    - DevicesViewModel.kt - предоставляет состояние сопряжения
- *
- * ИСТОРИЯ ИЗМЕНЕНИЙ:
- * - [Дата создания] - Создание файла с базовой реализацией диалога
- * - [Сегодня] - Исправлено использование устаревшего outlinedButtonBorder
- * - [Сегодня] - Исправлено использование mutableStateOf на mutableFloatStateOf для Float
+ * Состояния процесса сопряжения для UI.
  */
+sealed class PairingState {
+    object Idle : PairingState()
+    object Pairing : PairingState()
+    object Connected : PairingState()
+    data class Failed(val message: String) : PairingState()
+}
 
+/**
+ * ФАЙЛ: PairingDialog.kt
+ */
 @Composable
 fun PairingDialog(
-    pairingState: BluetoothRepositoryImpl.PairingState,
-    pairingError: String?,
+    pairingState: PairingState,
     deviceName: String,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
@@ -86,7 +73,7 @@ fun PairingDialog(
                     .fillMaxWidth()
                     .wrapContentHeight(),
                 shape = MaterialTheme.shapes.large,
-                color = AppColors.SurfaceLight,
+                color = AppColors.DialogBackground,
                 tonalElevation = 8.dp
             ) {
                 Column(
@@ -95,19 +82,19 @@ fun PairingDialog(
                 ) {
                     // Иконка состояния
                     val (icon, iconColor, iconBackground) = when (pairingState) {
-                        is BluetoothRepositoryImpl.PairingState.Pairing -> Triple(
+                        is PairingState.Pairing -> Triple(
                             Icons.Default.Bluetooth,
                             AppColors.PrimaryBlue,
                             AppColors.TransparentPrimary
                         )
 
-                        is BluetoothRepositoryImpl.PairingState.Connected -> Triple(
+                        is PairingState.Connected -> Triple(
                             Icons.Default.BluetoothConnected,
                             Color(0xFF4CAF50),
                             Color(0xFFE8F5E9)
                         )
 
-                        is BluetoothRepositoryImpl.PairingState.Failed -> Triple(
+                        is PairingState.Failed -> Triple(
                             Icons.Default.Error,
                             AppColors.Error,
                             AppColors.Error.copy(alpha = 0.1f)
@@ -121,13 +108,10 @@ fun PairingDialog(
                     }
 
                     // Анимация для процесса сопряжения
-                    // ИСПРАВЛЕНИЕ: Используем mutableFloatStateOf вместо mutableStateOf для Float
-                    // Было: var rotation by remember { mutableStateOf(0f) }
-                    // Стало: var rotation by remember { mutableFloatStateOf(0f) }
                     var rotation by remember { mutableFloatStateOf(0f) }
 
-                    LaunchedEffect(pairingState is BluetoothRepositoryImpl.PairingState.Pairing) {
-                        if (pairingState is BluetoothRepositoryImpl.PairingState.Pairing) {
+                    LaunchedEffect(pairingState is PairingState.Pairing) {
+                        if (pairingState is PairingState.Pairing) {
                             while (true) {
                                 rotation += 30f
                                 if (rotation >= 360f) rotation = 0f
@@ -146,7 +130,7 @@ fun PairingDialog(
                             )
                     ) {
                         val animatedRotation by animateFloatAsState(
-                            targetValue = if (pairingState is BluetoothRepositoryImpl.PairingState.Pairing) rotation else 0f,
+                            targetValue = if (pairingState is PairingState.Pairing) rotation else 0f,
                             label = "rotation"
                         )
 
@@ -165,9 +149,9 @@ fun PairingDialog(
                     // Заголовок
                     Text(
                         text = when (pairingState) {
-                            is BluetoothRepositoryImpl.PairingState.Pairing -> "СОПРЯЖЕНИЕ"
-                            is BluetoothRepositoryImpl.PairingState.Connected -> "СОПРЯЖЕНИЕ УСПЕШНО"
-                            is BluetoothRepositoryImpl.PairingState.Failed -> "ОШИБКА СОПРЯЖЕНИЯ"
+                            is PairingState.Pairing -> "СОПРЯЖЕНИЕ"
+                            is PairingState.Connected -> "СОПРЯЖЕНИЕ УСПЕШНО"
+                            is PairingState.Failed -> "ОШИБКА СОПРЯЖЕНИЯ"
                             else -> "СОПРЯЖЕНИЕ"
                         },
                         fontSize = 20.sp,
@@ -192,21 +176,21 @@ fun PairingDialog(
                     // Сообщение состояния
                     Text(
                         text = when (pairingState) {
-                            is BluetoothRepositoryImpl.PairingState.Pairing ->
+                            is PairingState.Pairing ->
                                 "Идет сопряжение с устройством...\nЭто может занять несколько секунд."
 
-                            is BluetoothRepositoryImpl.PairingState.Connected ->
+                            is PairingState.Connected ->
                                 "Устройство успешно сопряжено!\nТеперь можно подключаться."
 
-                            is BluetoothRepositoryImpl.PairingState.Failed ->
-                                pairingError ?: "Не удалось выполнить сопряжение"
+                            is PairingState.Failed ->
+                                pairingState.message
 
                             else -> "Подготовка к сопряжению..."
                         },
                         fontSize = 14.sp,
                         color = when (pairingState) {
-                            is BluetoothRepositoryImpl.PairingState.Connected -> Color(0xFF2E7D32)
-                            is BluetoothRepositoryImpl.PairingState.Failed -> AppColors.Error
+                            is PairingState.Connected -> Color(0xFF2E7D32)
+                            is PairingState.Failed -> AppColors.Error
                             else -> AppColors.TextSecondary
                         },
                         textAlign = TextAlign.Center,
@@ -221,7 +205,7 @@ fun PairingDialog(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         when (pairingState) {
-                            is BluetoothRepositoryImpl.PairingState.Pairing -> {
+                            is PairingState.Pairing -> {
                                 Button(
                                     onClick = onCancel,
                                     modifier = Modifier.weight(1f),
@@ -240,10 +224,7 @@ fun PairingDialog(
                                 }
                             }
 
-                            is BluetoothRepositoryImpl.PairingState.Failed -> {
-                                // ИСПРАВЛЕНИЕ: Используем новую версию outlinedButtonBorder с параметром enabled
-                                // Было: border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp)
-                                // Стало: border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(width = 1.dp)
+                            is PairingState.Failed -> {
                                 OutlinedButton(
                                     onClick = onCancel,
                                     modifier = Modifier.weight(1f),
@@ -270,7 +251,7 @@ fun PairingDialog(
                                 }
                             }
 
-                            is BluetoothRepositoryImpl.PairingState.Connected -> {
+                            is PairingState.Connected -> {
                                 Button(
                                     onClick = onDismiss,
                                     modifier = Modifier.fillMaxWidth(),
@@ -299,7 +280,7 @@ fun PairingDialog(
                     }
 
                     // Индикатор прогресса для сопряжения
-                    if (pairingState is BluetoothRepositoryImpl.PairingState.Pairing) {
+                    if (pairingState is PairingState.Pairing) {
                         Spacer(modifier = Modifier.height(16.dp))
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),

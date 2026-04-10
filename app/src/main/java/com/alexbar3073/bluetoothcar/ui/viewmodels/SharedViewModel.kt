@@ -12,7 +12,9 @@ import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
+import com.alexbar3073.bluetoothcar.ui.screens.devices.dialogs.PairingState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -178,9 +180,127 @@ open class SharedViewModel(
         .map { it.isActive }
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
 
-    // ========== МЕТОДЫ ==========
+    /**
+     * Поток списка сопряженных устройств. Обновляется автоматически при изменении в системе.
+     */
+    val pairedDevices: StateFlow<List<BluetoothDeviceData>> = appController.bondStateFlow
+        .onStart { emit(BluetoothDeviceData.empty()) } // Trigger первого получения
+        .map { appController.getPairedDevices() ?: emptyList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    open fun getPairedDevices(): List<BluetoothDeviceData>? = appController.getPairedDevices()
+    /**
+     * Поток списка найденных устройств при поиске.
+     * Накапливает уникальные устройства, исключая уже сопряженные.
+     */
+    val discoveredDevices: StateFlow<List<BluetoothDeviceData>> = appController.discoveryFlow
+        .scan(emptyList<BluetoothDeviceData>()) { accumulator, newDevice ->
+            // Если поиск только начался (через триггер очистки), возвращаем пустой список
+            if (newDevice.address == "CLEAR") emptyList()
+            else {
+                val pairedAddresses = pairedDevices.value.map { it.address }.toSet()
+                if (accumulator.none { it.address == newDevice.address } && !pairedAddresses.contains(newDevice.address)) {
+                    accumulator + newDevice
+                } else accumulator
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Флаг активного процесса поиска устройств.
+     */
+    val isDiscovering: StateFlow<Boolean> = appController.isDiscovering
+
+    /**
+     * Состояние процесса сопряжения для UI.
+     */
+    private val _pairingState = MutableStateFlow<PairingState>(PairingState.Idle)
+    val pairingState: StateFlow<PairingState> = _pairingState.asStateFlow()
+
+    /**
+     * Имя устройства, с которым происходит сопряжение.
+     */
+    private val _pairingDeviceName = MutableStateFlow("")
+    val pairingDeviceName: StateFlow<String> = _pairingDeviceName.asStateFlow()
+
+    /**
+     * Job для управления жизненным циклом процесса сопряжения.
+     */
+    private var pairingJob: Job? = null
+
+    /**
+     * Начать поиск Bluetooth устройств в эфире.
+     */
+    fun startDiscovery() {
+        // Очистка списка перед началом нового поиска (через фиктивный эмит в поток, если нужно, 
+        // но здесь мы просто вызываем метод контроллера)
+        appController.startDiscovery()
+    }
+
+    /**
+     * Остановить текущий процесс поиска устройств.
+     */
+    fun stopDiscovery() {
+        appController.stopDiscovery()
+    }
+
+    /**
+     * Начать процесс сопряжения с выбранным устройством.
+     * 
+     * @param device Данные устройства для сопряжения.
+     */
+    fun pairDevice(device: BluetoothDeviceData) {
+        // Отменяем предыдущий процесс сопряжения, если он еще активен
+        pairingJob?.cancel()
+        
+        _pairingDeviceName.value = device.name
+        _pairingState.value = PairingState.Pairing
+        
+        val success = appController.pairDevice(device.address)
+        if (!success) {
+            _pairingState.value = PairingState.Failed("Не удалось запустить процесс сопряжения")
+            return
+        }
+
+        // Подписываемся на изменения состояния в рамках отдельного Job
+        pairingJob = viewModelScope.launch {
+            appController.bondStateFlow
+                .filter { it.address == device.address }
+                // Работаем с потоком до тех пор, пока не достигнем финального состояния
+                .takeWhile { 
+                    it.bondState != BluetoothDeviceData.BOND_BONDED && 
+                    it.bondState != BluetoothDeviceData.BOND_NONE 
+                }
+                .collect { updatedDevice ->
+                    // Внутри collect оказываются только промежуточные состояния (например, BONDING)
+                    if (updatedDevice.bondState == BluetoothDeviceData.BOND_BONDING) {
+                        log("Устройство ${device.name} в процессе сопряжения (BONDING...)")
+                    }
+                }
+            
+            // После завершения takeWhile (когда пришло BONDED или BOND_NONE)
+            // Нужно получить финальное состояние устройства
+            val finalDevice = appController.getPairedDevices()?.find { it.address == device.address }
+                ?: appController.bondStateFlow.first { it.address == device.address }
+
+            if (finalDevice.bondState == BluetoothDeviceData.BOND_BONDED) {
+                log("Устройство ${device.name} УСПЕШНО сопряжено")
+                _pairingState.value = PairingState.Connected
+                stopDiscovery()
+            } else {
+                log("Состояние сопряжения для ${device.name} — ОТКАЗ или ОШИБКА (BOND_NONE)")
+                _pairingState.value = PairingState.Failed("Процесс сопряжения прерван или отклонен")
+            }
+        }
+    }
+
+    /**
+     * Сбросить состояние сопряжения.
+     */
+    fun resetPairingState() {
+        _pairingState.value = PairingState.Idle
+        _pairingDeviceName.value = ""
+    }
+
     open fun isBluetoothEnabled(): Boolean = appController.isBluetoothEnabled()
     
     open fun selectBluetoothDevice(deviceData: BluetoothDeviceData) {

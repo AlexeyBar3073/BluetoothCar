@@ -26,14 +26,20 @@ data class BluetoothDeviceData(
     val name: String = "",
     val address: String = "",
     val isPaired: Boolean = false,
+    val bondState: Int = 10, // Default to BOND_NONE (10)
     val deviceClass: Int = 0, // Bluetooth class code
     val majorDeviceClass: Int = 0 // Major device class
 ) {
     /**
-     * Константы для Bluetooth классов устройств.
+     * Константы для Bluetooth классов устройств и состояний сопряжения.
      * Определяют основные и второстепенные классы Bluetooth устройств.
      */
     companion object {
+        // Состояния сопряжения (Bond States)
+        const val BOND_NONE = 10
+        const val BOND_BONDING = 11
+        const val BOND_BONDED = 12
+
         // Основные классы устройств (Major Device Classes)
         const val MAJOR_AUDIO_VIDEO = 0x0400
         const val MAJOR_COMPUTER = 0x0100
@@ -63,10 +69,13 @@ data class BluetoothDeviceData(
             }
 
             val bluetoothClass = device.bluetoothClass
+            val bondState = device.bondState
+            
             return BluetoothDeviceData(
                 name = deviceName,
                 address = device.address,
-                isPaired = device.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED,
+                isPaired = bondState == android.bluetooth.BluetoothDevice.BOND_BONDED,
+                bondState = bondState,
                 deviceClass = bluetoothClass?.deviceClass ?: 0,
                 majorDeviceClass = bluetoothClass?.majorDeviceClass ?: 0
             )

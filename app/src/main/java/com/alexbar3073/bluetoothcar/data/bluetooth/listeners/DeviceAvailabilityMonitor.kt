@@ -6,6 +6,7 @@ import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 
 /**
  * ФАЙЛ: data/bluetooth/listeners/DeviceAvailabilityMonitor.kt
@@ -70,83 +71,11 @@ class DeviceAvailabilityMonitor(
     /** Корутин скоуп для управления поиском */
     private var searchScope: CoroutineScope? = null
 
-    // ========== CALLBACK-ФУНКЦИИ ДЛЯ BLUETOOTH SERVICE ==========
+    /** Job для прослушивания потока обнаруженных устройств */
+    private var discoveryJob: Job? = null
 
-    /**
-     * Callback-функция для обработки найденных устройств.
-     * Передается в AppBluetoothService.startDiscovery()
-     * Вызывается AppBluetoothService при обнаружении любого устройства в эфире.
-     *
-     * @param address MAC-адрес найденного устройства
-     */
-    private val onDeviceFound: (String) -> Unit = { address ->
-        // Хирургическая правка: проверка isActive предотвращает обработку событий после остановки монитора (защита от дребезга)
-        if (isActive && address == targetAddress) {
-            log("✓ Найдено целевое устройство с адресом: $address")
-
-            // Останавливаем поиск
-            bluetoothService.stopDiscovery()
-
-            // Уведомляем о доступности устройства
-            stateChangeCallback(ConnectionState.DEVICE_AVAILABLE, null)
-
-            // Останавливаем монитор
-            stop()
-        }
-    }
-
-    /**
-     * Callback-функция для обработки завершения поиска.
-     * Передается в AppBluetoothService.startDiscovery()
-     * Вызывается AppBluetoothService при завершении системного поиска.
-     */
-    private val onDiscoveryFinished: () -> Unit = {
-        log("Системный поиск завершен (попытка $currentAttempt/$MAX_SEARCH_ATTEMPTS)")
-
-        // Хирургическая правка: двойная проверка isActive для исключения запуска новых итераций после вызова stop()
-        if (isActive) {
-            currentAttempt++
-
-            if (currentAttempt < MAX_SEARCH_ATTEMPTS) {
-                log("Ждем $RETRY_INTERVAL_MS мс перед следующей попыткой...")
-
-                // Запускаем следующую попытку через интервал
-                searchScope?.launch {
-                    delay(RETRY_INTERVAL_MS)
-
-                    if (isActive) {
-                        log("Запуск попытки поиска ${currentAttempt + 1}/$MAX_SEARCH_ATTEMPTS")
-                        startDiscovery()
-                    }
-                }
-            } else {
-                log("✗ Все $MAX_SEARCH_ATTEMPTS попыток поиска исчерпаны")
-
-                // Уведомляем о недоступности устройства
-                stateChangeCallback(ConnectionState.DEVICE_UNAVAILABLE, "Устройство не найдено после $MAX_SEARCH_ATTEMPTS попыток поиска")
-
-                // Останавливаем монитор
-                stop()
-            }
-        }
-    }
-
-    /**
-     * Callback-функция для обработки ошибок поиска.
-     * Передается в AppBluetoothService.startDiscovery()
-     * Вызывается AppBluetoothService при ошибке запуска или выполнения поиска.
-     *
-     * @param error Сообщение об ошибке
-     */
-    private val onDiscoveryError: (String) -> Unit = { error ->
-        log("Ошибка поиска: $error")
-
-        // Уведомляем об ошибке
-        stateChangeCallback(ConnectionState.ERROR, error)
-
-        // Останавливаем монитор
-        stop()
-    }
+    /** Job для отслеживания состояния поиска (запущен/остановлен) */
+    private var stateMonitoringJob: Job? = null
 
     /**
      * Начать поиск устройства в Bluetooth эфире.
@@ -180,18 +109,71 @@ class DeviceAvailabilityMonitor(
 
     /**
      * Запустить системный поиск устройств через AppBluetoothService.
-     * Внутренний метод, передает callback-функции в AppBluetoothService.
+     * Внутренний метод, подписывается на discoveryFlow из AppBluetoothService.
      * Вызывается при старте и при перезапуске попыток.
      */
     private fun startDiscovery() {
         log("Запуск системного поиска (попытка ${currentAttempt + 1}/$MAX_SEARCH_ATTEMPTS)")
 
-        // Передаем наши callback-функции в AppBluetoothService
-        bluetoothService.startDiscovery(
-            onDeviceFound = onDeviceFound,
-            onDiscoveryFinished = onDiscoveryFinished,
-            onDiscoveryError = onDiscoveryError
-        )
+        // Отменяем предыдущие подписки
+        discoveryJob?.cancel()
+        stateMonitoringJob?.cancel()
+
+        // 1. Подписываемся на поток обнаруженных устройств
+        discoveryJob = searchScope?.launch {
+            bluetoothService.discoveryFlow.collect { device ->
+                if (isActive && device.address == targetAddress) {
+                    log("✓ Найдено целевое устройство: ${device.name} (${device.address})")
+                    bluetoothService.stopDiscovery()
+                    stateChangeCallback(ConnectionState.DEVICE_AVAILABLE, null)
+                    stop()
+                }
+            }
+        }
+
+        // 2. Подписываемся на состояние поиска для управления ретраями
+        stateMonitoringJob = searchScope?.launch {
+            bluetoothService.isDiscovering
+                .drop(1) // Пропускаем начальное состояние StateFlow
+                .collect { isNowDiscovering ->
+                    // Если поиск перешел в состояние false — значит итерация завершена
+                    if (!isNowDiscovering) {
+                        log("Система сообщила о завершении сканирования")
+                        handleIterationFinished()
+                    }
+                }
+        }
+
+        // 3. Запускаем сам поиск в сервисе
+        val started = bluetoothService.startDiscovery()
+        if (!started) {
+            log("Ошибка: Не удалось запустить поиск в BluetoothService")
+            stateChangeCallback(ConnectionState.ERROR, "Не удалось запустить поиск")
+            stop()
+            return
+        }
+    }
+
+    /**
+     * Обработка завершения итерации поиска.
+     */
+    private fun handleIterationFinished() {
+        if (!isActive) return
+        
+        currentAttempt++
+        log("Итерация поиска завершена ($currentAttempt/$MAX_SEARCH_ATTEMPTS)")
+
+        if (currentAttempt < MAX_SEARCH_ATTEMPTS) {
+            log("Ждем $RETRY_INTERVAL_MS мс перед следующей попыткой...")
+            searchScope?.launch {
+                delay(RETRY_INTERVAL_MS)
+                if (isActive) startDiscovery()
+            }
+        } else {
+            log("✗ Все $MAX_SEARCH_ATTEMPTS попыток поиска исчерпаны")
+            stateChangeCallback(ConnectionState.DEVICE_UNAVAILABLE, "Устройство не найдено")
+            stop()
+        }
     }
 
     /**
@@ -200,10 +182,14 @@ class DeviceAvailabilityMonitor(
      */
     fun stop() {
         if (isActive) {
-            log("Остановка поиска")
+            log("Остановка монитора доступности")
 
             isActive = false
             bluetoothService.stopDiscovery()
+            discoveryJob?.cancel()
+            discoveryJob = null
+            stateMonitoringJob?.cancel()
+            stateMonitoringJob = null
             searchScope?.cancel()
             cleanup()
         }
