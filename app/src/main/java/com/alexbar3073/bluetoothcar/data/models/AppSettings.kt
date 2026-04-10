@@ -81,10 +81,11 @@ data class AppSettings(
      */
     fun toDeviceSettingsJson(): String {
         val jsonObject = buildJsonObject {
-            put("tank", fuelTankCapacity.toDouble())
-            put("inj_perf", injectorPerformance.toDouble())
-            put("inj_cnt", injectorCount)
-            put("spd_sig", speedSensorSignalsPerMeter)
+            put("tV", fuelTankCapacity.toDouble())
+            put("iPerf", injectorPerformance.toDouble())
+            put("iCnt", injectorCount)
+            put("sSig", speedSensorSignalsPerMeter)
+            put("kPrt", 1)
         }
         return jsonObject.toString()
     }
