@@ -85,5 +85,8 @@ data class CarPacket(
     @SerialName("k_shaft_rpm") val kShaftRpm: Float? = null,
     
     /** Позиция селектора с ЭБУ (P/R/N/D) */
-    @SerialName("k_sel") val kSelector: String? = null
+    @SerialName("k_sel") val kSelector: String? = null,
+
+    /** НОВОЕ: Номер подтвержденного БК пакета OTA */
+    @SerialName("ota_read") val otaRead: Int? = null
 )

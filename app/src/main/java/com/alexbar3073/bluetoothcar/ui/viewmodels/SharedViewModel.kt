@@ -13,6 +13,7 @@ import com.alexbar3073.bluetoothcar.data.models.AppSettings
 import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.data.models.CarData
 import com.alexbar3073.bluetoothcar.ui.screens.devices.dialogs.PairingState
+import com.alexbar3073.bluetoothcar.data.bluetooth.OtaManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -356,6 +357,45 @@ open class SharedViewModel(
             }
         }
     }
+
+    /** Состояние процесса OTA для UI */
+    open val otaState: StateFlow<OtaManager.OtaState> = appController.otaState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OtaManager.OtaState.Idle)
+
+    /**
+     * Запустить процедуру OTA обновления.
+     * 
+     * @param uri URI выбранного файла прошивки.
+     * @param fileName Имя файла для валидации.
+     * @param onResult Callback для уведомления пользователя.
+     */
+    fun startOtaUpdate(uri: Uri, fileName: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                // Получаем контекст через AppController (у него он есть в конструкторе)
+                // Или напрямую через системный сервис, если нужно. 
+                // Но в данной архитектуре мы можем добавить метод в AppController для получения байтов.
+                
+                val context = appController.getApplicationContext()
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.use { it.readBytes() }
+                
+                if (bytes == null) {
+                    onResult("Ошибка: Не удалось прочитать файл")
+                    return@launch
+                }
+                
+                appController.startOtaUpdate(bytes, fileName)
+            } catch (e: Exception) {
+                onResult("Ошибка при подготовке OTA: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Сбросить состояние OTA.
+     */
+    fun resetOtaState() = appController.resetOtaState()
 
     override fun onCleared() {
         super.onCleared()

@@ -251,6 +251,15 @@ class BluetoothConnectionManager(
         dataStreamHandler.sendJsonCommand(jsonCommand)
     }
 
+    /**
+     * Принудительно очистить очередь исходящих команд.
+     * Используется для остановки передачи данных при критических ошибках (например, OTA error).
+     */
+    fun clearCommandQueue() {
+        log("Запрос на очистку очереди команд")
+        dataStreamHandler.clearQueue()
+    }
+
     // ========== УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ ==========
 
     /** Очистить ресурсы */

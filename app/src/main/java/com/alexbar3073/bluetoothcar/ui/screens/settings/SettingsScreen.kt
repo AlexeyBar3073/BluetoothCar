@@ -21,6 +21,8 @@ import com.alexbar3073.bluetoothcar.data.models.BluetoothDeviceData
 import com.alexbar3073.bluetoothcar.ui.components.CompactTopBar
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditDialogData
 import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.EditValueDialog
+import com.alexbar3073.bluetoothcar.ui.screens.settings.dialogs.OtaDialog
+import com.alexbar3073.bluetoothcar.data.bluetooth.OtaManager
 import com.alexbar3073.bluetoothcar.ui.theme.BluetoothCarTheme
 import com.alexbar3073.bluetoothcar.ui.theme.verticalGradientBackground
 import com.alexbar3073.bluetoothcar.ui.viewmodels.SharedViewModel
@@ -74,14 +76,35 @@ fun SettingsScreen(
         }
     }
 
+    // --- LAUNCHER ДЛЯ OTA (ВЫБОР ФАЙЛА ПРОШИВКИ) ---
+
+    val otaFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            // Пытаемся получить имя файла из URI (через DocumentFile или ContentResolver)
+            // Для упрощения передаем URI и просим ViewModel запустить процесс
+            // Валидация имени файла произойдет внутри OtaManager
+            val fileName = it.lastPathSegment ?: "firmware.bin"
+            viewModel.startOtaUpdate(it, fileName) { message ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val otaState by viewModel.otaState.collectAsStateWithLifecycle()
+
     SettingsScreenContent(
         appSettings = appSettings,
         selectedDevice = selectedDevice,
         navController = navController,
+        otaState = otaState,
         onUpdateSettings = { viewModel.updateSettings(it) },
         onClearSelectedDevice = { viewModel.clearSelectedDevice() },
         onImportErrors = { errorFileLauncher.launch("*/*") },
-        onExportErrors = { exportErrorLauncher.launch("ecu_errors_backup.json") }
+        onExportErrors = { exportErrorLauncher.launch("ecu_errors_backup.json") },
+        onStartOta = { otaFileLauncher.launch(arrayOf("application/octet-stream", "application/x-binary", "application/bin")) },
+        onResetOta = { viewModel.resetOtaState() }
     )
 }
 
@@ -94,10 +117,13 @@ fun SettingsScreenContent(
     appSettings: AppSettings,
     selectedDevice: BluetoothDeviceData?,
     navController: NavController,
+    otaState: OtaManager.OtaState = OtaManager.OtaState.Idle,
     onUpdateSettings: (AppSettings) -> Unit,
     onClearSelectedDevice: () -> Unit,
     onImportErrors: () -> Unit = {},
-    onExportErrors: () -> Unit = {}
+    onExportErrors: () -> Unit = {},
+    onStartOta: () -> Unit = {},
+    onResetOta: () -> Unit = {}
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var editDialogData by remember { mutableStateOf(EditDialogData()) }
@@ -140,9 +166,17 @@ fun SettingsScreenContent(
                     onDeviceClear = onClearSelectedDevice,
                     onUpdateSetting = onUpdateSettings,
                     onImportErrors = onImportErrors,
-                    onExportErrors = onExportErrors
+                    onExportErrors = onExportErrors,
+                    onStartOta = onStartOta
                 )
             }
+        }
+
+        if (otaState !is OtaManager.OtaState.Idle) {
+            OtaDialog(
+                state = otaState,
+                onDismiss = onResetOta
+            )
         }
 
         if (showEditDialog) {

@@ -66,6 +66,9 @@ data class CarData(
     @SerialName("k_shaft_rpm") val kShaftRpm: Float = 0f,      // Обороты выходного вала АКПП
     @SerialName("k_sel") val kSelector: String = "",           // Позиция селектора с ЭБУ (P/R/N/D)
 
+    /** НОВОЕ: Номер подтвержденного БК пакета OTA */
+    @SerialName("ota_read") val otaRead: Int = 0,
+
     @Transient val isFuelLow: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
 ) {
@@ -120,6 +123,7 @@ data class CarData(
             kDtcCount = packet.kDtcCount ?: this.kDtcCount,
             kShaftRpm = packet.kShaftRpm ?: this.kShaftRpm,
             kSelector = packet.kSelector ?: this.kSelector,
+            otaRead = packet.otaRead ?: this.otaRead,
             timestamp = System.currentTimeMillis()
         )
     }
