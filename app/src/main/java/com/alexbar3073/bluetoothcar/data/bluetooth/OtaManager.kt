@@ -3,6 +3,7 @@ package com.alexbar3073.bluetoothcar.data.bluetooth
 
 import android.util.Base64
 import com.alexbar3073.bluetoothcar.data.logging.AppLogger
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,16 +47,53 @@ class OtaManager {
 
     /** Состояния процесса обновления */
     sealed class OtaState {
+        /** Простой, ожидание запуска */
         object Idle : OtaState()
+        
+        /** Валидация выбранного файла */
         object Validating : OtaState()
+        
+        /** Ожидание ответа ota_init от БК после отправки команды ota_update */
+        object WaitingForInit : OtaState()
+        
+        /** Процесс передачи чанков данных */
         data class Sending(val progress: Float, val currentPacket: Int, val totalPackets: Int) : OtaState()
-        object Success : OtaState()
+        
+        /** Ожидание перезагрузки БК после отправки ota_end */
+        object WaitingForReboot : OtaState()
+        
+        /** Успешное завершение обновления с указанием новой версии */
+        data class Success(val newVersion: String) : OtaState()
+        
+        /** Ошибка в процессе обновления */
         data class Error(val message: String) : OtaState()
     }
 
     /** Текущее состояние процесса для UI */
     private val _state = MutableStateFlow<OtaState>(OtaState.Idle)
     val state: StateFlow<OtaState> = _state.asStateFlow()
+
+    /** Хранилище байтов прошивки для нарезки на чанки */
+    private var firmwareData: ByteArray? = null
+    
+    /** Размер чанка, определенный БК в ota_init */
+    private var currentChunkSize: Int = 0
+    
+    /** Общее количество чанков (пакетов) */
+    var totalChunks: Int = 0
+        private set
+
+    /** Номер текущего отправляемого пакета */
+    private var currentPacketIndex: Int = 0
+
+    /** Область видимости для корутин таймаутов */
+    private val otaScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    /** Задача для отслеживания таймаута перезагрузки */
+    private var rebootTimeoutJob: Job? = null
+
+    /** Константа таймаута перезагрузки (15 секунд) */
+    private val REBOOT_TIMEOUT_MS = 15_000L
 
     /**
      * Валидация файла прошивки.
@@ -87,77 +125,141 @@ class OtaManager {
     }
 
     /**
-     * Подготовка списка JSON-команд для передачи прошивки.
-     * 
-     * @param fileBytes Содержимое файла прошивки.
-     * @return Список строк JSON готовых к отправке через DataStreamHandler.
+     * Инициализация данных для OTA. 
+     * Сохраняет байты прошивки и переводит состояние в WaitingForInit.
      */
-    fun prepareOtaCommands(fileBytes: ByteArray): List<String> {
-        val commands = mutableListOf<String>()
-        val totalSize = fileBytes.size
-        
-        // 1. Команда начала OTA
-        commands.add("{\"command\":\"ota_start\", \"data\":{\"size\":$totalSize}}")
-        
-        // 2. Нарезка на чанки и формирование ota_data
-        var packetNumber = 1
-        var offset = 0
-        
-        while (offset < totalSize) {
-            // Рассчитываем размер текущего чанка (последний может быть меньше 512)
-            val currentChunkSize = minOf(CHUNK_SIZE, totalSize - offset)
-            val chunk = ByteArray(currentChunkSize)
-            System.arraycopy(fileBytes, offset, chunk, 0, currentChunkSize)
-            
-            // Кодируем в Base64 (NO_WRAP убирает переносы строк)
-            val base64Data = Base64.encodeToString(chunk, Base64.NO_WRAP)
-            
-            // Формируем команду чанка
-            commands.add("{\"command\":\"ota_data\", \"data\":{\"pack\":$packetNumber, \"bin\":\"$base64Data\"}}")
-            
-            offset += currentChunkSize
-            packetNumber++
-        }
-        
-        // 3. Команда завершения OTA
-        commands.add("{\"command\":\"ota_end\"}")
-        
-        AppLogger.logInfo("OTA: Подготовлено ${commands.size} пакетов для прошивки размером $totalSize байт", TAG)
-        return commands
+    fun initUpdate(fileBytes: ByteArray) {
+        firmwareData = fileBytes
+        currentPacketIndex = 0
+        _state.value = OtaState.WaitingForInit
+        AppLogger.logInfo("OTA: Инициализация обновления, ожидание ota_init от БК", TAG)
     }
 
     /**
-     * Обновить текущее состояние прогресса на основе подтверждения от БК.
-     * Вызывается при получении пакета с полем ota_read.
+     * Обработка команды ota_init от БК.
+     * Инициализирует параметры сессии и возвращает ПЕРВЫЙ пакет данных.
      * 
-     * @param confirmedPacket Номер пакета, который БК успешно прочитал и подтвердил.
-     * @param total Общее количество пакетов в текущей сессии обновления.
+     * @param chunkSize Размер чанка, который готов принимать БК.
+     * @param expectedCount Количество чанков, которое ожидает БК.
+     * @return JSON-строка первого пакета ota_data или null.
      */
-    fun updateProgress(confirmedPacket: Int, total: Int) {
-        // Логика определения завершения: если подтвержден последний пакет
-        if (confirmedPacket >= total && total > 0) {
-            // Устанавливаем состояние успеха
-            _state.value = OtaState.Success
-            AppLogger.logInfo("OTA: Получено подтверждение финального пакета ($confirmedPacket/$total). Успех.", TAG)
-        } else if (total > 0) {
-            // Рассчитываем процент прогресса (от 0.0 до 1.0)
-            val progress = confirmedPacket.toFloat() / total.toFloat()
-            // Обновляем состояние для UI
-            _state.value = OtaState.Sending(progress, confirmedPacket, total)
+    fun onOtaInitReceived(chunkSize: Int, expectedCount: Int): String? {
+        val data = firmwareData ?: return null
+        currentChunkSize = chunkSize
+        
+        val totalSize = data.size
+        // Рассчитываем общее кол-во пакетов
+        totalChunks = (totalSize + chunkSize - 1) / chunkSize
+        
+        AppLogger.logInfo("OTA: Сессия начата. Чанк: $chunkSize, Всего пакетов: $totalChunks", TAG)
+        
+        // Возвращаем первый пакет для старта цепочки подтверждений
+        return getOtaDataCommand(1)
+    }
+
+    /**
+     * Формирует JSON команду для конкретного пакета данных.
+     * 
+     * @param packetNum Номер пакета (начиная с 1).
+     * @return JSON строка с командой ota_data.
+     */
+    fun getOtaDataCommand(packetNum: Int): String? {
+        val data = firmwareData ?: return null
+        if (packetNum < 1 || packetNum > totalChunks) return null
+        
+        // Вычисляем смещение в массиве байтов
+        val offset = (packetNum - 1) * currentChunkSize
+        val actualChunkSize = minOf(currentChunkSize, data.size - offset)
+        
+        // Копируем нужный участок данных
+        val chunk = ByteArray(actualChunkSize)
+        System.arraycopy(data, offset, chunk, 0, actualChunkSize)
+        
+        // Кодируем в Base64 без переносов строк
+        val base64Data = Base64.encodeToString(chunk, Base64.NO_WRAP)
+        
+        return "{\"command\":\"ota_data\", \"data\":{\"pack\":$packetNum, \"bin\":\"$base64Data\"}}"
+    }
+
+    /**
+     * Формирует финальную команду завершения передачи.
+     */
+    fun getOtaEndCommand(): String {
+        return "{\"command\":\"ota_end\"}"
+    }
+
+    /**
+     * Обновить прогресс на основе подтверждения от БК.
+     * Вызывается из AppController при получении ключа "ota_read".
+     * 
+     * @param confirmedPackets Номер последнего пакета, который БК успешно прочитал.
+     */
+    fun updateProgress(confirmedPackets: Int) {
+        if (totalChunks > 0) {
+            // Рассчитываем прогресс на основе реально полученных БК данных
+            val progress = confirmedPackets.toFloat() / totalChunks.toFloat()
+            _state.value = OtaState.Sending(progress, confirmedPackets, totalChunks)
+            
+            if (confirmedPackets >= totalChunks) {
+                AppLogger.logInfo("OTA: Все пакеты подтверждены БК. Ожидание команды ota_restart для смены индикации.", TAG)
+            }
         }
+    }
+
+    /**
+     * Обработка подтверждения перезагрузки от БК.
+     * Переводит диалог в режим ожидания физической перезагрузки (круговой индикатор).
+     * Вызывается при получении {"ota_restart": 1} в ответ на ota_end.
+     */
+    fun onOtaRestartReceived() {
+        _state.value = OtaState.WaitingForReboot
+        AppLogger.logInfo("OTA: Получено подтверждение ota_restart. БК уходит в перезагрузку.", TAG)
+        
+        // ЗАПУСК ТАЙМАУТА: Если БК не пришлет новую версию в течение 15 секунд — считаем это ошибкой
+        rebootTimeoutJob?.cancel()
+        rebootTimeoutJob = otaScope.launch {
+            delay(REBOOT_TIMEOUT_MS)
+            if (_state.value is OtaState.WaitingForReboot) {
+                AppLogger.logError("OTA: Превышено время ожидания перезагрузки БК (15 сек)", TAG)
+                setError("Таймаут перезагрузки БК. Проверьте устройство.")
+            }
+        }
+    }
+
+    /**
+     * Обработка сообщения об успешном обновлении после перезагрузки БК.
+     */
+    fun onUpdateSuccess(newVersion: String) {
+        // Отменяем таймаут, так как БК успешно вышел на связь
+        rebootTimeoutJob?.cancel()
+        rebootTimeoutJob = null
+        
+        _state.value = OtaState.Success(newVersion)
+        AppLogger.logInfo("OTA: Обновление успешно завершено. Новая версия: $newVersion", TAG)
+        firmwareData = null
     }
 
     /**
      * Сброс состояния менеджера.
      */
     fun reset() {
+        rebootTimeoutJob?.cancel()
+        rebootTimeoutJob = null
+        
         _state.value = OtaState.Idle
+        firmwareData = null
+        currentPacketIndex = 0
+        totalChunks = 0
     }
 
     /**
      * Установка состояния ошибки.
      */
     fun setError(message: String) {
+        rebootTimeoutJob?.cancel()
+        rebootTimeoutJob = null
+
         _state.value = OtaState.Error(message)
+        firmwareData = null
     }
 }

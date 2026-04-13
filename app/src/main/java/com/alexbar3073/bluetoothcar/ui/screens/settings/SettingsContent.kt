@@ -50,7 +50,8 @@ fun SettingsContent(
     onUpdateSetting: (AppSettings) -> Unit,
     onImportErrors: () -> Unit,
     onExportErrors: () -> Unit,
-    onStartOta: () -> Unit
+    onStartOta: () -> Unit,
+    isEngineRunning: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -95,6 +96,7 @@ fun SettingsContent(
         // ОБНОВЛЕНИЕ ПРОТОКОЛА: Передаем версию прошивки БК из настроек и коллбэк для OTA
         InfoSection(
             firmwareVersion = appSettings.firmwareVersion,
+            isEngineRunning = isEngineRunning,
             onUpdateClick = onStartOta
         )
 

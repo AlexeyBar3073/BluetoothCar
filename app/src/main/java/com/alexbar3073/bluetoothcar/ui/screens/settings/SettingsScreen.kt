@@ -93,6 +93,7 @@ fun SettingsScreen(
     }
 
     val otaState by viewModel.otaState.collectAsStateWithLifecycle()
+    val carData by viewModel.carData.collectAsStateWithLifecycle()
 
     SettingsScreenContent(
         appSettings = appSettings,
@@ -103,7 +104,13 @@ fun SettingsScreen(
         onClearSelectedDevice = { viewModel.clearSelectedDevice() },
         onImportErrors = { errorFileLauncher.launch("*/*") },
         onExportErrors = { exportErrorLauncher.launch("ecu_errors_backup.json") },
-        onStartOta = { otaFileLauncher.launch(arrayOf("application/octet-stream", "application/x-binary", "application/bin")) },
+        onStartOta = { 
+            if (carData.engineStatus) {
+                Toast.makeText(context, "Ошибка: Остановите двигатель перед обновлением!", Toast.LENGTH_SHORT).show()
+            } else {
+                otaFileLauncher.launch(arrayOf("application/octet-stream", "application/x-binary", "application/bin"))
+            }
+        },
         onResetOta = { viewModel.resetOtaState() }
     )
 }
@@ -118,6 +125,7 @@ fun SettingsScreenContent(
     selectedDevice: BluetoothDeviceData?,
     navController: NavController,
     otaState: OtaManager.OtaState = OtaManager.OtaState.Idle,
+    carData: com.alexbar3073.bluetoothcar.data.models.CarData = com.alexbar3073.bluetoothcar.data.models.CarData(),
     onUpdateSettings: (AppSettings) -> Unit,
     onClearSelectedDevice: () -> Unit,
     onImportErrors: () -> Unit = {},
@@ -167,7 +175,8 @@ fun SettingsScreenContent(
                     onUpdateSetting = onUpdateSettings,
                     onImportErrors = onImportErrors,
                     onExportErrors = onExportErrors,
-                    onStartOta = onStartOta
+                    onStartOta = onStartOta,
+                    isEngineRunning = carData.engineStatus
                 )
             }
         }

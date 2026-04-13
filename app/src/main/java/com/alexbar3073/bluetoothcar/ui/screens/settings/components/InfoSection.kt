@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alexbar3073.bluetoothcar.ui.theme.AppColors
@@ -42,13 +43,14 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 @Composable
 fun InfoSection(
     firmwareVersion: String = "v1.0",
+    isEngineRunning: Boolean = false,
     onUpdateClick: () -> Unit = {}
 ) {
     Card(
+        onClick = onUpdateClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clickable { onUpdateClick() },
+            .padding(horizontal = 20.dp),
         colors = CardDefaults.cardColors(
             containerColor = AppColors.SurfaceLight
         ),
@@ -56,7 +58,9 @@ fun InfoSection(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier
+                .padding(20.dp)
+                .graphicsLayer(alpha = if (isEngineRunning) 0.6f else 1.0f) // Визуальный эффект недоступности
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

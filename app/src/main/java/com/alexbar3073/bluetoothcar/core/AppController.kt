@@ -310,31 +310,78 @@ class AppController(
                 AppLogger.logInfo("БК подтвердил получение сообщения: $ackId", TAG)
             }
 
-            // КЕЙС 0: Проверка на подтверждение OTA пакета (ota_read)
-            jsonObject["ota_read"]?.jsonPrimitive?.intOrNull?.let { confirmedPacket ->
-                if (confirmedPacket > 0) {
-                    // Извлекаем общее количество пакетов из текущего состояния OTA
-                    val currentState = otaManager.state.value
-                    if (currentState is OtaManager.OtaState.Sending) {
-                        otaManager.updateProgress(confirmedPacket, currentState.totalPackets)
-                    }
+            // КЕЙС 0: Проверка на инициализацию OTA (ota_init)
+            // БК подтвердил готовность к OTA и прислал параметры: {"ota_init": {"size": 256, "count": 100}}
+            jsonObject["ota_init"]?.jsonObject?.let { initData ->
+                val chunkSize = initData["size"]?.jsonPrimitive?.intOrNull ?: 256
+                val count = initData["count"]?.jsonPrimitive?.intOrNull ?: 0
+                
+                AppLogger.logInfo("OTA: Получен ota_init. Начинаем пошаговую отправку.", TAG)
+                
+                // Получаем ПЕРВЫЙ пакет данных от менеджера
+                otaManager.onOtaInitReceived(chunkSize, count)?.let { firstPacketCommand ->
+                    sendJsonCommand(firstPacketCommand)
                 }
+                return
             }
 
-            // КЕЙС 0.1: Проверка на ошибку OTA от БК
-            jsonObject["ota"]?.jsonPrimitive?.content?.let { otaStatus ->
-                if (otaStatus == "error") {
-                    AppLogger.logError("БК вернул критическую ошибку OTA! Прерывание процесса.", TAG)
-                    
-                    // 1. Очищаем очередь команд, чтобы остановить отправку пакетов
-                    bluetoothConnectionManager.clearCommandQueue()
-                    
-                    // 2. Устанавливаем состояние ошибки в менеджере OTA для UI
-                    otaManager.setError("Критическая ошибка БК при обновлении")
-                    
-                    // 3. Сбрасываем флаги (если есть)
-                    // ... в данной реализации всё управляется состоянием otaManager.state
+            // КЕЙС 0.0.1: Подтверждение получения пакета данных от БК (ota_read)
+            // БК прислал: {"ota_read": N}. Отправляем пакет N + 1
+            jsonObject["ota_read"]?.jsonPrimitive?.intOrNull?.let { confirmedPacketNum ->
+                AppLogger.logInfo("OTA: БК подтвердил пакет №$confirmedPacketNum", TAG)
+                
+                // Обновляем визуальный прогресс
+                otaManager.updateProgress(confirmedPacketNum)
+                
+                // РЕАЛИЗАЦИЯ LOCK-STEP: Отправляем следующий пакет ТОЛЬКО после подтверждения предыдущего
+                val nextPacketNum = confirmedPacketNum + 1
+                
+                if (nextPacketNum <= otaManager.totalChunks) {
+                    // Есть еще данные — шлем следующий пакет
+                    otaManager.getOtaDataCommand(nextPacketNum)?.let { nextCmd ->
+                        sendJsonCommand(nextCmd)
+                    }
+                } else {
+                    // Все данные переданы — шлем команду завершения
+                    AppLogger.logInfo("OTA: Все пакеты подтверждены. Отправляем ota_end.", TAG)
+                    sendJsonCommand(otaManager.getOtaEndCommand())
                 }
+                return
+            }
+
+            // КЕЙС 0.0.2: Подтверждение команды завершения (ota_restart)
+            // БК сообщает, что принял ota_end и готов перезагрузиться: {"ota_restart": 1}
+            jsonObject["ota_restart"]?.jsonPrimitive?.intOrNull?.let { restartStatus ->
+                if (restartStatus == 1) {
+                    AppLogger.logInfo("OTA: БК подтвердил готовность к перезагрузке", TAG)
+                    otaManager.onOtaRestartReceived()
+                }
+                return
+            }
+
+            // КЕЙС 0.1: Проверка на ошибку OTA от БК (ota_error)
+            if (jsonObject.containsKey("ota_error")) {
+                val errorMsg = jsonObject["ota_error"]?.jsonPrimitive?.content ?: "Неизвестная ошибка OTA"
+                AppLogger.logError("БК вернул ошибку OTA: $errorMsg", TAG)
+                
+                // 1. Очищаем очередь команд, чтобы остановить отправку оставшихся чанков
+                bluetoothConnectionManager.clearCommandQueue()
+                
+                // 2. Устанавливаем состояние ошибки в менеджере OTA для UI
+                otaManager.setError(errorMsg)
+                return
+            }
+
+            // КЕЙС 0.2: Успешное завершение OTA после перезагрузки БК (ota_update с версией)
+            jsonObject["ota_update"]?.jsonPrimitive?.content?.let { newVersion ->
+                AppLogger.logInfo("OTA: БК сообщил о новой версии прошивки: $newVersion", TAG)
+                
+                // 1. Уведомляем менеджер об успехе
+                otaManager.onUpdateSuccess(newVersion)
+                
+                // 2. Перезапускаем протокол подключения (горячая перезагрузка)
+                reload()
+                return
             }
 
             // КЕЙС 1: Пакет содержит оперативные данные автомобиля (tel)
@@ -561,7 +608,7 @@ class AppController(
     }
 
     /**
-     * Сценарий: Запуск OTA обновления прошивки БК.
+     * Сценарий: Запуск процесса OTA обновления прошивки БК по новому протоколу.
      * 
      * @param fileBytes Бинарные данные файла прошивки.
      * @param fileName Имя файла для валидации.
@@ -574,32 +621,31 @@ class AppController(
                 return@launch
             }
 
-            // 2. Валидация файла
+            // 2. Валидация файла (имя/расширение)
             if (!otaManager.validateFile(fileName)) {
-                otaManager.setError("Ошибка: Недопустимый файл прошивки (проверьте имя и расширение).")
+                otaManager.setError("Ошибка: Недопустимый файл прошивки.")
                 return@launch
             }
 
-            // 3. Подготовка пакетов
-            val commands = otaManager.prepareOtaCommands(fileBytes)
+            // 3. Инициализация данных в менеджере (переход в WaitingForInit)
+            otaManager.initUpdate(fileBytes)
             
-            // 4. Остановка телеметрии (режим "тишины" в канале для OTA)
+            // 4. Остановка телеметрии
             stopTelemetry()
-            delay(500) // Пауза для очистки канала от остаточных пакетов БК
+            delay(300) 
             
-            val totalPackets = commands.size
-            AppLogger.logInfo("OTA: Начало процесса передачи ${totalPackets} пакетов", TAG)
+            // 5. Отправка команды о наличии обновления и его размере
+            val totalSize = fileBytes.size
+            AppLogger.logInfo("OTA: Отправка команды ota_update, размер: $totalSize", TAG)
+            sendJsonCommand("""{"command":"ota_update","size":$totalSize}""")
             
-            // 5. Установка начального состояния в менеджере
-            otaManager.updateProgress(0, totalPackets)
-
-            // 6. Последовательная постановка команд в очередь. 
-            // Благодаря DataStreamHandler, каждая команда будет ждать Ack прежде чем уйдет следующая.
-            commands.forEach { command ->
-                sendJsonCommand(command)
+            // 6. Ожидание ответа ota_init от БК с тайм-аутом (5 секунд)
+            // Если БК не ответит за это время, переводим процесс в состояние ошибки
+            delay(5000)
+            if (otaManager.state.value is OtaManager.OtaState.WaitingForInit) {
+                AppLogger.logError("OTA: Тайм-аут ожидания ota_init. БК не ответил на запрос.", TAG)
+                otaManager.setError("Ошибка: БК не отвечает на запрос обновления (тайм-аут).")
             }
-            
-            AppLogger.logInfo("OTA: Все пакеты переданы в очередь транспорта", TAG)
         }
     }
 

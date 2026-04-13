@@ -289,7 +289,11 @@ class DataStreamHandler(
             }
 
         } catch (e: Exception) {
-            log("Receiver: Ошибка разбора пакета: ${e.message}")
+            if (data.contains("}{")) {
+                log("КРИТИЧЕСКАЯ ОШИБКА ПРОТОКОЛА: БК прислал склеенные JSON-объекты без разделителя \\n. Данные: $data")
+            } else {
+                log("Receiver: Ошибка разбора пакета: ${e.message}")
+            }
         }
     }
 

@@ -170,7 +170,7 @@ class DeviceAvailabilityMonitor(
         log("Итерация поиска завершена ($currentAttempt/$MAX_SEARCH_ATTEMPTS)")
 
         // Если лимит попыток не исчерпан — планируем следующую через 1 секунду
-        if (currentAttempt <= MAX_SEARCH_ATTEMPTS) {
+        if (currentAttempt < MAX_SEARCH_ATTEMPTS) {
             log("Ждем $RETRY_INTERVAL_MS мс перед следующей попыткой...")
             searchScope?.launch {
                 delay(RETRY_INTERVAL_MS)
