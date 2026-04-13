@@ -817,6 +817,8 @@ class AppBluetoothService : Service() {
                     val line = reader.readLine()
                     if (line != null) {
                         if (line.isNotBlank()) {
+                            // Логирование сырых данных на уровне сервиса (ABS)
+                            AppLogger.logInfo("ABS: Получена сырая строка: $line", TAG)
                             send(line)
                         }
                     } else {

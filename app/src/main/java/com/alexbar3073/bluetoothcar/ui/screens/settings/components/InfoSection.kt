@@ -2,6 +2,7 @@
 package com.alexbar3073.bluetoothcar.ui.screens.settings.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,12 +41,14 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
  */
 @Composable
 fun InfoSection(
-    firmwareVersion: String = "v1.0"
+    firmwareVersion: String = "v1.0",
+    onUpdateClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 20.dp)
+            .clickable { onUpdateClick() },
         colors = CardDefaults.cardColors(
             containerColor = AppColors.SurfaceLight
         ),

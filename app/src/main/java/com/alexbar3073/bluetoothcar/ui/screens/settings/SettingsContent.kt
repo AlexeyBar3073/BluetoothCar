@@ -49,7 +49,8 @@ fun SettingsContent(
     onDeviceClear: () -> Unit,
     onUpdateSetting: (AppSettings) -> Unit,
     onImportErrors: () -> Unit,
-    onExportErrors: () -> Unit
+    onExportErrors: () -> Unit,
+    onStartOta: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -91,8 +92,11 @@ fun SettingsContent(
 
         // 4. Секция информации о приложении
         SectionHeader("О ПРИЛОЖЕНИИ")
-        // ОБНОВЛЕНИЕ ПРОТОКОЛА: Передаем версию прошивки БК из настроек
-        InfoSection(firmwareVersion = appSettings.firmwareVersion)
+        // ОБНОВЛЕНИЕ ПРОТОКОЛА: Передаем версию прошивки БК из настроек и коллбэк для OTA
+        InfoSection(
+            firmwareVersion = appSettings.firmwareVersion,
+            onUpdateClick = onStartOta
+        )
 
         Spacer(modifier = Modifier.height(40.dp))
 

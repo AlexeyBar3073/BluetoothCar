@@ -147,10 +147,10 @@ class DataStreamHandler(
     }
 
     /**
-     * Очищает очередь исходящих команд, удаляя все необработанные сообщения.
-     * Гарантирует, что команды из предыдущей сессии не будут отправлены при новом подключении.
+     * Публичный метод для принудительной очистки очереди команд.
+     * Используется для немедленной остановки потока данных, например, при ошибке OTA.
      */
-    private fun clearQueue() {
+    fun clearQueue() {
         var count = 0
         // Извлекаем все сообщения из канала до тех пор, пока он не станет пустым
         while (true) {
@@ -277,7 +277,9 @@ class DataStreamHandler(
             }?.let { ackId ->
                 log("Receiver: Получен AckID=$ackId")
                 lastAckId.set(ackId)
-                coroutineScope.launch { acknowledgmentsFlow.emit(ackId) }
+                coroutineScope.launch {
+                    acknowledgmentsFlow.emit(ackId)
+                }
                 // Убран return, так как пакет может быть комбинированным (Ack + Данные)
             }
 
