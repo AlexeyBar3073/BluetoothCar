@@ -345,6 +345,22 @@ class AppController(
                     // Все данные переданы — шлем команду завершения
                     AppLogger.logInfo("OTA: Все пакеты подтверждены. Отправляем ota_end.", TAG)
                     sendJsonCommand(otaManager.getOtaEndCommand())
+                    
+                    // ЗАПУСК ТАЙМАУТА: Ждем ota_restart от БК в течение 5 секунд
+                    otaManager.startEndTimeout()
+                }
+                return
+            }
+
+            // КЕЙС 0.0.1.5: Запрос на переотправку пакета от БК (ota_replay)
+            // БК обнаружил ошибку в пакете N: {"ota_replay": {"pack": N}}
+            jsonObject["ota_replay"]?.jsonObject?.let { replayData ->
+                val packetToReplay = replayData["pack"]?.jsonPrimitive?.intOrNull
+                if (packetToReplay != null) {
+                    AppLogger.logInfo("OTA: БК запросил переотправку пакета №$packetToReplay", TAG)
+                    otaManager.onOtaReplayReceived(packetToReplay)?.let { replayCmd ->
+                        sendJsonCommand(replayCmd)
+                    }
                 }
                 return
             }

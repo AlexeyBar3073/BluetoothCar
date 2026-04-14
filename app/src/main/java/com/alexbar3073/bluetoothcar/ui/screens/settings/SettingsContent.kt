@@ -51,7 +51,8 @@ fun SettingsContent(
     onImportErrors: () -> Unit,
     onExportErrors: () -> Unit,
     onStartOta: () -> Unit,
-    isEngineRunning: Boolean = false
+    isEngineRunning: Boolean = false,
+    isConnected: Boolean = true // Флаг наличия активного соединения с БК
 ) {
     Column(
         modifier = Modifier
@@ -94,9 +95,11 @@ fun SettingsContent(
         // 4. Секция информации о приложении
         SectionHeader("О ПРИЛОЖЕНИИ")
         // ОБНОВЛЕНИЕ ПРОТОКОЛА: Передаем версию прошивки БК из настроек и коллбэк для OTA
+        // ДОБАВЛЕНО: Передача флага наличия соединения для визуальной индикации
         InfoSection(
             firmwareVersion = appSettings.firmwareVersion,
             isEngineRunning = isEngineRunning,
+            isConnected = isConnected,
             onUpdateClick = onStartOta
         )
 

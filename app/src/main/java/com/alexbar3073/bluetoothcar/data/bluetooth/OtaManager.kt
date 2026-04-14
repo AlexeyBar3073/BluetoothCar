@@ -22,9 +22,9 @@ import java.io.File
  * 
  * ОТВЕТСТВЕННОСТЬ:
  * 1. Валидация файлов прошивки (имя, расширение).
- * 2. Чтение бинарных данных и конвертация в Base64.
+ * 2. Чтение бинарных данных, расчет CRC16 и конвертация в Base64.
  * 3. Сегментация данных на пакеты заданного размера (256 байт).
- * 4. Формирование протокольных JSON-команд: ota_start, ota_data, ota_end.
+ * 4. Формирование протокольных JSON-команд: ota_start, ota_data (с CRC16), ota_end.
  * 5. Отслеживание прогресса передачи.
  * 
  * АРХИТЕКТУРНЫЙ ПРИНЦИП:
@@ -41,9 +41,6 @@ import java.io.File
  */
 class OtaManager {
     private val TAG = "OtaManager"
-
-    /** Размер чанка данных в байтах (согласно спецификации) */
-    private val CHUNK_SIZE = 256
 
     /** Состояния процесса обновления */
     sealed class OtaState {
@@ -92,8 +89,14 @@ class OtaManager {
     /** Задача для отслеживания таймаута перезагрузки */
     private var rebootTimeoutJob: Job? = null
 
-    /** Константа таймаута перезагрузки (15 секунд) */
-    private val REBOOT_TIMEOUT_MS = 15_000L
+    /** Задача для отслеживания таймаута после отправки ota_end */
+    private var endTimeoutJob: Job? = null
+
+    /** Константа таймаута перезагрузки (30 секунд) */
+    private val REBOOT_TIMEOUT_MS = 30_000L
+
+    /** Константа таймаута ожидания подтверждения ota_end (5 секунд) */
+    private val END_TIMEOUT_MS = 5_000L
 
     /**
      * Валидация файла прошивки.
@@ -145,13 +148,20 @@ class OtaManager {
      */
     fun onOtaInitReceived(chunkSize: Int, expectedCount: Int): String? {
         val data = firmwareData ?: return null
+        
+        // УСТАНОВКА ПАРАМЕТРОВ ИЗ БК: Используем значения, присланные устройством
         currentChunkSize = chunkSize
+        totalChunks = expectedCount
         
-        val totalSize = data.size
-        // Рассчитываем общее кол-во пакетов
-        totalChunks = (totalSize + chunkSize - 1) / chunkSize
+        val localTotalSize = data.size
+        val calculatedChunks = (localTotalSize + chunkSize - 1) / chunkSize
         
-        AppLogger.logInfo("OTA: Сессия начата. Чанк: $chunkSize, Всего пакетов: $totalChunks", TAG)
+        // Логирование для контроля синхронизации
+        if (calculatedChunks != expectedCount) {
+            AppLogger.logInfo("OTA: Внимание! Расхождение в расчете пакетов. БК ожидает: $expectedCount, Расчет приложения: $calculatedChunks. Используем значение БК.", TAG)
+        }
+        
+        AppLogger.logInfo("OTA: Сессия начата. Чанк: $chunkSize, Всего пакетов (по данным БК): $totalChunks", TAG)
         
         // Возвращаем первый пакет для старта цепочки подтверждений
         return getOtaDataCommand(1)
@@ -159,6 +169,7 @@ class OtaManager {
 
     /**
      * Формирует JSON команду для конкретного пакета данных.
+     * Включает в себя номер пакета, данные в Base64 и контрольную сумму CRC16.
      * 
      * @param packetNum Номер пакета (начиная с 1).
      * @return JSON строка с командой ota_data.
@@ -175,10 +186,50 @@ class OtaManager {
         val chunk = ByteArray(actualChunkSize)
         System.arraycopy(data, offset, chunk, 0, actualChunkSize)
         
+        // РАСЧЕТ CRC16: Вычисляем контрольную сумму для сырых байтов чанка перед кодированием
+        val crc = calculateCrc16(chunk)
+        
         // Кодируем в Base64 без переносов строк
         val base64Data = Base64.encodeToString(chunk, Base64.NO_WRAP)
         
-        return "{\"command\":\"ota_data\", \"data\":{\"pack\":$packetNum, \"bin\":\"$base64Data\"}}"
+        // Формирование JSON пакета с включением номера, данных и CRC16
+        return "{\"command\":\"ota_data\", \"data\":{\"pack\":$packetNum, \"bin\":\"$base64Data\", \"crc\":$crc}}"
+    }
+
+    /**
+     * Вычисляет контрольную сумму CRC16-CCITT (полином 0x1021).
+     * Используется для проверки целостности каждого переданного чанка на стороне устройства.
+     * 
+     * @param data Массив байтов для расчета.
+     * @return 16-битное целое число (CRC16).
+     */
+    private fun calculateCrc16(data: ByteArray): Int {
+        var crc = 0xFFFF
+        val polynomial = 0x1021
+
+        for (b in data) {
+            for (i in 0..7) {
+                val bit = b.toInt() shr (7 - i) and 1 == 1
+                val c15 = crc shr 15 and 1 == 1
+                crc = crc shl 1
+                if (c15 xor bit) {
+                    crc = crc xor polynomial
+                }
+            }
+        }
+        return crc and 0xFFFF
+    }
+
+    /**
+     * Обработка запроса на повторную отправку пакета (ota_replay).
+     * Вызывается, если БК обнаружил ошибку CRC или потерю данных.
+     * 
+     * @param packetNum Номер пакета, который нужно отправить повторно.
+     * @return JSON строка с командой ota_data для этого пакета.
+     */
+    fun onOtaReplayReceived(packetNum: Int): String? {
+        AppLogger.logInfo("OTA: Запрос на переотправку пакета №$packetNum (REPLAY)", TAG)
+        return getOtaDataCommand(packetNum)
     }
 
     /**
@@ -207,11 +258,37 @@ class OtaManager {
     }
 
     /**
+     * Запускает таймер ожидания подтверждения команды ota_end.
+     * Если БК не пришлет ota_restart в течение 5 секунд, фиксируется ошибка.
+     */
+    fun startEndTimeout() {
+        // 1. Отменяем предыдущую задачу, если она была (защита от дублирования)
+        endTimeoutJob?.cancel()
+        
+        // 2. Запускаем корутину ожидания в области видимости OTA
+        endTimeoutJob = otaScope.launch {
+            // 3. Задержка на указанное время (5 сек)
+            delay(END_TIMEOUT_MS)
+            
+            // 4. Проверяем, не изменилось ли состояние. 
+            // Если мы все еще в процессе Sending (или Idle), значит подтверждение не получено.
+            if (_state.value is OtaState.Sending) {
+                AppLogger.logError("OTA: Превышено время ожидания подтверждения ota_end (5 сек)", TAG)
+                setError("Таймаут подтверждения завершения. БК не ответил на ota_end.")
+            }
+        }
+    }
+
+    /**
      * Обработка подтверждения перезагрузки от БК.
      * Переводит диалог в режим ожидания физической перезагрузки (круговой индикатор).
      * Вызывается при получении {"ota_restart": 1} в ответ на ota_end.
      */
     fun onOtaRestartReceived() {
+        // ОТМЕНА ТАЙМАУТА ОЖИДАНИЯ END: БК ответил, таймер больше не нужен
+        endTimeoutJob?.cancel()
+        endTimeoutJob = null
+
         _state.value = OtaState.WaitingForReboot
         AppLogger.logInfo("OTA: Получено подтверждение ota_restart. БК уходит в перезагрузку.", TAG)
         
@@ -246,6 +323,9 @@ class OtaManager {
         rebootTimeoutJob?.cancel()
         rebootTimeoutJob = null
         
+        endTimeoutJob?.cancel()
+        endTimeoutJob = null
+        
         _state.value = OtaState.Idle
         firmwareData = null
         currentPacketIndex = 0
@@ -258,6 +338,9 @@ class OtaManager {
     fun setError(message: String) {
         rebootTimeoutJob?.cancel()
         rebootTimeoutJob = null
+        
+        endTimeoutJob?.cancel()
+        endTimeoutJob = null
 
         _state.value = OtaState.Error(message)
         firmwareData = null

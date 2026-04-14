@@ -44,6 +44,7 @@ import com.alexbar3073.bluetoothcar.ui.theme.AppColors
 fun InfoSection(
     firmwareVersion: String = "v1.0",
     isEngineRunning: Boolean = false,
+    isConnected: Boolean = true, // Новый параметр: наличие активного соединения с БК
     onUpdateClick: () -> Unit = {}
 ) {
     Card(
@@ -60,7 +61,8 @@ fun InfoSection(
         Column(
             modifier = Modifier
                 .padding(20.dp)
-                .graphicsLayer(alpha = if (isEngineRunning) 0.6f else 1.0f) // Визуальный эффект недоступности
+                // ВИЗУАЛЬНЫЙ ЭФФЕКТ: Секция становится полупрозрачной, если двигатель заведен ИЛИ отсутствует связь
+                .graphicsLayer(alpha = if (isEngineRunning || !isConnected) 0.6f else 1.0f)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
