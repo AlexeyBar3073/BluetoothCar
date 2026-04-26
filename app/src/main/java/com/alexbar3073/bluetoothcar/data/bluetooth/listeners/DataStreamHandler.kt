@@ -1,4 +1,4 @@
-// data/bluetooth/listeners/DataStreamHandler.kt
+// Файл: data/bluetooth/listeners/DataStreamHandler.kt
 package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
 
 import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
@@ -14,21 +14,32 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * ТЕГ: BLUETOOTH_TRANSPORT_LAYER
+ * ТЕГ: BLUETOOTH_TRANSPORT_LAYER / DATA_STREAM_HANDLER
+ *
  * ФАЙЛ: data/bluetooth/listeners/DataStreamHandler.kt
- * МЕСТОНАХОЖДЕНИЕ: Data Layer / Bluetooth Helpers
- * НАЗНАЧЕНИЕ: Реализация транспортного протокола обмена данными через RFCOMM.
- * ОТВЕТСТВЕННОСТЬ: 
- * - Гарантированная доставка исходящих JSON-пакетов (механизм msg_id / ack_id).
- * - Очередизация команд и циклическая переотправка до подтверждения.
- * - Десериализация входящего байтового потока в [JsonObject].
- * - Проброс распарсенных данных в [BluetoothConnectionManager].
- * 
- * АРХИТЕКТУРНЫЙ ПРИНЦИП: Инкапсуляция логики подтверждения доставки на транспортном уровне.
- * КЛЮЧЕВОЙ ПРИНЦИП: Гарантированная доставка сообщений (Reliable Messaging).
- * СВЯЗИ: 
- * - Активируется в [BluetoothConnectionManager] на финальном шаге (CONNECTED).
- * - Использует [AppBluetoothService] для операций чтения/записи в сокет.
+ *
+ * МЕСТОНАХОЖДЕНИЕ: data/bluetooth/listeners/
+ *
+ * НАЗНАЧЕНИЕ ФАЙЛА И ПРИНЦИП РАБОТЫ:
+ * Реализация надежного транспортного уровня поверх Bluetooth RFCOMM. 
+ * Использует механизм подтверждений (msg_id/ack_id) для гарантированной доставки JSON-пакетов.
+ * Включает в себя очередизацию команд, автоматическую переотправку при потере пакетов 
+ * и десериализацию входящего потока данных.
+ *
+ * ОТВЕТСТВЕННОСТЬ:
+ * 1. Генерация уникальных ID для исходящих сообщений.
+ * 2. Обеспечение циклической переотправки до получения подтверждения (Reliable Messaging).
+ * 3. Фильтрация и обработка технических подтверждений (ack_id).
+ * 4. Трансляция полезных данных во внешние слои приложения.
+ *
+ * АРХИТЕКТУРНЫЙ ПРИНЦИП: Transport Layer (OSI Layer 4 equivalent for custom protocol).
+ *
+ * КЛЮЧЕВОЙ ПРИНЦИП: Чистый транспорт — не содержит бизнес-логики управления автомобилем.
+ *
+ * СВЯЗИ С ДРУГИМИ ФАЙЛАМИ: 
+ * - Использует: [AppBluetoothService] (низкоуровневый ввод-вывод).
+ * - Вызывается из: [BluetoothConnectionManager] (управление сессией).
+ * - Взаимодействует: [OtaManager] (через проброс входящих данных).
  */
 class DataStreamHandler(
     private val bluetoothService: AppBluetoothService,
@@ -57,18 +68,15 @@ class DataStreamHandler(
          */
         fun getEnvelope(json: Json): String {
             val element = try {
-                // Создаем новую изменяемую карту из JsonObject, чтобы избежать проблем с проекцией типов
+                // Пытаемся распарсить payload как объект
                 json.parseToJsonElement(payload).jsonObject.toMutableMap()
             } catch (e: Exception) {
-                // Если payload не является JSON-объектом (например, просто строка команды),
-                // оборачиваем её в объект с ключом "cmd"
+                // Если не JSON, оборачиваем в структуру {cmd: payload}
                 mutableMapOf<String, JsonElement>("cmd" to JsonPrimitive(payload))
             }
             
-            // Явно указываем тип для msg_id и добавляем в карту
-            val msgIdKey = "msg_id"
-            val msgIdValue: JsonElement = JsonPrimitive(id)
-            element[msgIdKey] = msgIdValue
+            // Внедряем идентификатор сообщения для транспортного уровня
+            element["msg_id"] = JsonPrimitive(id)
 
             return json.encodeToString(JsonObject(element))
         }
@@ -76,233 +84,206 @@ class DataStreamHandler(
 
     // ========== ПОТОКИ И ОЧЕРЕДИ ==========
 
-    /** Внутренний поток входящих сообщений */
+    /** Поток входящих сообщений для вышестоящих слоев */
     private val _incomingMessagesFlow = MutableSharedFlow<JsonObject>()
     
-    /** Публичный поток входящих сообщений (распарсенный JsonObject) для трансляции наверх */
+    /** Публичный интерфейс потока входящих данных */
     val incomingMessagesFlow: SharedFlow<JsonObject> = _incomingMessagesFlow.asSharedFlow()
 
-    /** Очередь исходящих команд (Unlimited для предотвращения блокировки отправителей) */
+    /** Очередь исходящих команд. UNLIMITED гарантирует отсутствие блокировок UI-потока при отправке. */
     private val commandQueue = Channel<QueuedCommand>(Channel.UNLIMITED)
 
-    /** Поток входящих AckID для пробуждения воркера. Используем replay=1 для исключения гонок. */
-    private val acknowledgmentsFlow = MutableSharedFlow<Long>(replay = 1)
+    /** 
+     * Поток подтверждений. 
+     * ВНИМАНИЕ: replay=0 обязателен! Использование replay=1 приводит к ложным подтверждениям
+     * первой команды (ID=1) после переподключения из-за кэширования старого AckID.
+     */
+    private val acknowledgmentsFlow = MutableSharedFlow<Long>(replay = 0)
 
     // ========== СОСТОЯНИЕ И СИНХРОНИЗАЦИЯ ==========
 
-    /** JSON сериализатор */
+    /** Настройки JSON-сериализатора */
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     
-    /** Генератор уникальных ID сообщений */
+    /** Атомарный счетчик ID сообщений. Сбрасывается при каждом start(). */
     private val msgIdGenerator = AtomicLong(1)
 
-    /** Последний полученный ID подтверждения для проверки в цикле */
+    /** Хранилище последнего полученного ID подтверждения */
     private val lastAckId = AtomicLong(-1L)
 
     /** Флаг активности обработчика */
     private val isHandlerActive = AtomicBoolean(false)
-    /** Флаг готовности приемника к приему подтверждений */
+    
+    /** Флаг готовности приемника данных */
     private val isReceiverReady = AtomicBoolean(false)
 
-    /** Job для цикла обработки очереди */
+    /** Задача воркера очереди */
     private var workerJob: Job? = null
-    /** Job для приема входящих данных */
+    
+    /** Задача приемника данных */
     private var receiverJob: Job? = null
 
     // ========== ПАРАМЕТРЫ ПРОТОКОЛА ==========
 
-    /** Интервал между попытками переотправки при отсутствии Ack (мс) */
+    /** Таймаут ожидания подтверждения перед переотправкой (мс) */
     private val SEND_INTERVAL_MS = 1500L
 
     /**
-     * Запустить процессы приема и передачи.
-     * Инициализирует воркеры и открывает транспортный канал.
-     * 
-     * ПРИ ПЕРЕЗАПУСКЕ: Очищает очередь сообщений и сбрасывает идентификаторы для новой сессии.
+     * Инициализирует и запускает транспортные процессы.
+     * При вызове происходит сброс всех счетчиков и очистка очередей.
      */
     fun start() {
-        log("=== ЗАПУСК ТРАНСПОРТНОГО ШЛЮЗА DataStreamHandler ===")
+        log("=== ЗАПУСК ТРАНСПОРТНОГО ШЛЮЗА ===")
 
         if (isHandlerActive.get()) {
-            log("DataStreamHandler уже активен")
+            log("Транспорт уже запущен")
             return
         }
 
         isHandlerActive.set(true)
 
-        // СБРОС СОСТОЯНИЯ ТРАНСПОРТА: при новом подключении начинаем с чистого листа
+        // Инициализация состояния новой сессии
         lastAckId.set(-1L)
         msgIdGenerator.set(1L)
         
-        // Очищаем очередь от команд, которые могли остаться от предыдущей (неудачной) сессии
+        // Очистка "хвостов" от предыдущих сессий
         clearQueue()
 
-        // 1. Запускаем приемник (должен слушать Ack до начала отправки)
+        // Сначала запускаем приемник, чтобы не пропустить Ack на первую же команду
         startReceiver()
 
-        // 2. Запускаем воркер очереди
+        // Запуск передатчика
         startWorker()
 
-        log("Транспортные воркеры запущены. Ожидание внешних команд.")
+        log("Воркеры транспорта инициализированы")
     }
 
     /**
-     * Публичный метод для принудительной очистки очереди команд.
-     * Используется для немедленной остановки потока данных, например, при ошибке OTA.
+     * Очищает очередь исходящих команд.
+     * Публичный доступ необходим для экстренной остановки потока данных (например, BluetoothConnectionManager).
      */
     fun clearQueue() {
         var count = 0
-        // Извлекаем все сообщения из канала до тех пор, пока он не станет пустым
         while (true) {
             val result = commandQueue.tryReceive()
-            if (result.isSuccess) {
-                count++
-            } else {
-                // Очередь пуста или закрыта
-                break
-            }
+            if (result.isSuccess) count++ else break
         }
-        
-        if (count > 0) {
-            log("Очередь сообщений очищена. Удалено пакетов: $count")
-        }
+        if (count > 0) log("Очередь очищена: удалено $count сообщений")
     }
 
     /**
-     * Поместить команду в очередь на отправку.
-     * Генерирует уникальный ID для команды.
-     * 
-     * @param jsonPayload JSON строка команды.
-     */
-    private suspend fun queueCommand(jsonPayload: String) {
-        val id = msgIdGenerator.getAndIncrement()
-        log("Добавление в очередь: ID=$id, Payload=${jsonPayload.take(50)}...")
-        commandQueue.send(QueuedCommand(id, jsonPayload))
-    }
-
-    /**
-     * Публичный метод для отправки JSON команды в очередь.
-     * 
-     * @param jsonCommand Строка JSON.
+     * Публичный метод для отправки команды.
+     * @param jsonCommand JSON-строка команды.
      */
     fun sendJsonCommand(jsonCommand: String) {
         if (!isHandlerActive.get()) {
-            log("ПРЕДУПРЕЖДЕНИЕ: Попытка отправить команду в неактивный транспорт: $jsonCommand")
+            log("ОШИБКА: Попытка отправки в неактивный транспорт: $jsonCommand")
             return
         }
         coroutineScope.launch {
-            queueCommand(jsonCommand)
+            val id = msgIdGenerator.getAndIncrement()
+            log("Команда поставлена в очередь: ID=$id")
+            commandQueue.send(QueuedCommand(id, jsonCommand))
         }
     }
 
     /**
-     * Запуск основного воркера обработки очереди команд.
-     * Реализует цикл гарантированной доставки с ожиданием подтверждения.
+     * Основной воркер передачи данных.
+     * Реализует логику ожидания подтверждения и переотправки.
      */
     private fun startWorker() {
         workerJob = coroutineScope.launch(ioDispatcher) {
-            log("Worker: Ожидание готовности приемника...")
+            // Ждем готовности приемника для синхронизации
             while (!isReceiverReady.get()) delay(50)
-            log("Worker: Приемник готов, начинаем обработку очереди")
+            log("Воркер передачи готов")
 
-            // Обрабатываем команды из канала по одной
             for (command in commandQueue) {
                 if (!isHandlerActive.get()) break
                 
                 val envelope = command.getEnvelope(json)
-                log("Worker: Берем команду ID=${command.id}")
+                log("Обработка команды ID=${command.id}")
 
-                // Цикл гарантированной доставки: отправляем пока lastAckId не станет равен нашему id
+                // Цикл гарантированной доставки пакета
                 while (isHandlerActive.get()) {
-                    // 1. Проверяем, может подтверждение уже получено до начала цикла
-                    if (lastAckId.get() == command.id) {
-                        log("Worker: Команда ID=${command.id} уже подтверждена")
-                        break
-                    }
+                    // Проверка на случай, если подтверждение пришло мгновенно
+                    if (lastAckId.get() == command.id) break
 
-                    log("Worker: Отправка пакета ID=${command.id}")
+                    log("Отправка пакета ID=${command.id} (попытка)")
                     bluetoothService.sendData(envelope)
 
-                    // 2. "Умное ожидание": ждем подтверждения в потоке, но не дольше интервала
+                    // Ждем подтверждения из потока или срабатывания таймаута
                     withTimeoutOrNull(SEND_INTERVAL_MS) {
                         acknowledgmentsFlow.first { it == command.id }
                     }
 
-                    // 3. После таймаута или получения ack проверяем еще раз
+                    // Повторная проверка после ожидания
                     if (lastAckId.get() == command.id) break
+                    
+                    log("Таймаут подтверждения ID=${command.id}, переотправка...")
                 }
-                log("Worker: Команда ID=${command.id} успешно завершена")
+                log("Команда ID=${command.id} ПОДТВЕРЖДЕНА")
             }
         }
     }
 
     /**
-     * Запуск приемника входящих данных.
-     * Транслирует входящий поток из BluetoothService в локальный incomingMessagesFlow.
+     * Воркер приема данных из Bluetooth-сервиса.
      */
     private fun startReceiver() {
         receiverJob = coroutineScope.launch(ioDispatcher) {
-            log("Receiver: Подписка на поток данных")
+            log("Приемник данных запущен")
             isReceiverReady.set(true)
 
             bluetoothService.startDataListening()
                 .catch { e -> 
-                    log("Receiver: Критическая ошибка потока: ${e.message}")
-                    stateChangeCallback(ConnectionState.ERROR, "Ошибка приема: ${e.message}")
+                    log("Критическая ошибка приема: ${e.message}")
+                    stateChangeCallback(ConnectionState.ERROR, "Ошибка потока данных")
                 }
-                .collect { data ->
-                    // ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ ПРИЕМА ДАННЫХ
-                    AppLogger.logReceive("Входящий пакет", data)
-                    handleIncomingData(data)
+                .collect { rawData ->
+                    // Логируем каждый входящий пакет для отладки
+                    AppLogger.logReceive("Bluetooth RAW", rawData)
+                    handleIncomingPacket(rawData)
                 }
         }
     }
 
     /**
-     * Обработать входящий JSON пакет.
-     * Распознает подтверждения (ack_id) для внутренней логики транспорта,
-     * все остальные сообщения пробрасывает наверх.
-     * 
-     * @param data Входящая строка JSON.
+     * Парсинг и маршрутизация входящего пакета.
      */
-    private fun handleIncomingData(data: String) {
+    private fun handleIncomingPacket(data: String) {
         if (data.isBlank()) return
         
         try {
             val jsonObject = json.parseToJsonElement(data).jsonObject
 
-            // 1. Техническая часть транспорта: Проверка на подтверждение (Ack)
+            // 1. Извлекаем подтверждение (ack_id), если оно есть
             jsonObject["ack_id"]?.jsonPrimitive?.let { primitive ->
                 primitive.longOrNull ?: primitive.content.toLongOrNull()
             }?.let { ackId ->
-                log("Receiver: Получен AckID=$ackId")
+                log("Получен AckID=$ackId")
                 lastAckId.set(ackId)
-                coroutineScope.launch {
-                    acknowledgmentsFlow.emit(ackId)
+                // Отправляем в поток для пробуждения воркера
+                coroutineScope.launch { 
+                    acknowledgmentsFlow.emit(ackId) 
                 }
-                // Убран return, так как пакет может быть комбинированным (Ack + Данные)
             }
 
-            // 2. Пробрасываем распарсенный объект наверх
+            // 2. Транслируем весь объект наверх (включая Ack и полезную нагрузку)
             coroutineScope.launch {
                 _incomingMessagesFlow.emit(jsonObject)
             }
 
         } catch (e: Exception) {
-            if (data.contains("}{")) {
-                log("КРИТИЧЕСКАЯ ОШИБКА ПРОТОКОЛА: БК прислал склеенные JSON-объекты без разделителя \\n. Данные: $data")
-            } else {
-                log("Receiver: Ошибка разбора пакета: ${e.message}")
-            }
+            log("Ошибка парсинга JSON: ${e.message}")
         }
     }
 
     /**
-     * Остановить все активные процессы обмена.
+     * Останавливает все воркеры и освобождает ресурсы.
      */
     fun stop() {
         if (!isHandlerActive.get()) return
-        log("Остановка DataStreamHandler")
+        log("Остановка DataStreamHandler...")
 
         isHandlerActive.set(false)
         isReceiverReady.set(false)
@@ -314,16 +295,15 @@ class DataStreamHandler(
     }
 
     /**
-     * Очистить ресурсы и сбросить состояние.
+     * Полная очистка компонента.
      */
     fun cleanup() {
         stop()
-        log("Ресурсы DataStreamHandler очищены")
+        log("DataStreamHandler полностью очищен")
     }
 
     /**
-     * Логирование с тегом компонента.
-     * @param message Текст сообщения.
+     * Внутренний метод логирования.
      */
     private fun log(message: String) {
         AppLogger.logInfo("[$TAG] $message", TAG)

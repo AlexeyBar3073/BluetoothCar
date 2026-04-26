@@ -291,9 +291,24 @@ class AppController(
      * Реализует последовательность команд начальной инициализации при подключении.
      */
     private suspend fun executeInitialSequence() {
+        // 1. Обнуляем данные телеметрии перед началом новой сессии
+        resetTelemetry()
+        
+        // 2. Устанавливаем статус запроса данных
         _internalConnectionState.value = ConnectionState.REQUESTING_DATA
+        
+        // 3. Запрашиваем конфигурацию и запускаем поток данных
         sendJsonCommand("""{"command":"get_cfg"}""")
         sendJsonCommand("""{"command":"start_telemetry"}""")
+    }
+
+    /**
+     * Обнуляет текущие данные телеметрии в потоке.
+     * Используется при переподключении, чтобы исключить отображение устаревших данных.
+     */
+    private fun resetTelemetry() {
+        AppLogger.logInfo("Обнуление данных телеметрии (Reset Telemetry)", TAG)
+        _rawCarDataFlow.value = CarData()
     }
 
     /**
@@ -680,9 +695,11 @@ class AppController(
         AppLogger.logInfo("Сброс активных процессов контроллера", TAG)
         // 1. Останавливаем стриминг телеметрии, чтобы не нагружать канал
         stopTelemetry()
-        // 2. Очищаем ресурсы менеджера соединений (отписка от Bluetooth-событий)
+        // 2. Обнуляем данные телеметрии
+        resetTelemetry()
+        // 3. Очищаем ресурсы менеджера соединений (отписка от Bluetooth-событий)
         _bluetoothConnectionManager?.cleanup()
-        // 3. Сбрасываем флаг инициализации для блокировки доступа к неактивным компонентам
+        // 4. Сбрасываем флаг инициализации для блокировки доступа к неактивным компонентам
         _isInitialized.value = false
     }
 

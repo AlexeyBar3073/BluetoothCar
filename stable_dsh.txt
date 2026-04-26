@@ -1,0 +1,325 @@
+﻿// data/bluetooth/listeners/DataStreamHandler.kt
+package com.alexbar3073.bluetoothcar.data.bluetooth.listeners
+
+import com.alexbar3073.bluetoothcar.data.bluetooth.AppBluetoothService
+import com.alexbar3073.bluetoothcar.data.bluetooth.ConnectionState
+import com.alexbar3073.bluetoothcar.data.logging.AppLogger
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.*
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
+
+/**
+ * ╨в╨Х╨У: BLUETOOTH_TRANSPORT_LAYER
+ * ╨д╨Р╨Щ╨Ы: data/bluetooth/listeners/DataStreamHandler.kt
+ * ╨Ь╨Х╨б╨в╨Ю╨Э╨Р╨е╨Ю╨Ц╨Ф╨Х╨Э╨Ш╨Х: Data Layer / Bluetooth Helpers
+ * ╨Э╨Р╨Ч╨Э╨Р╨з╨Х╨Э╨Ш╨Х: ╨а╨╡╨░╨╗╨╕╨╖╨░╤Ж╨╕╤П ╤В╤А╨░╨╜╤Б╨┐╨╛╤А╤В╨╜╨╛╨│╨╛ ╨┐╤А╨╛╤В╨╛╨║╨╛╨╗╨░ ╨╛╨▒╨╝╨╡╨╜╨░ ╨┤╨░╨╜╨╜╤Л╨╝╨╕ ╤З╨╡╤А╨╡╨╖ RFCOMM.
+ * ╨Ю╨в╨Т╨Х╨в╨б╨в╨Т╨Х╨Э╨Э╨Ю╨б╨в╨м: 
+ * - ╨У╨░╤А╨░╨╜╤В╨╕╤А╨╛╨▓╨░╨╜╨╜╨░╤П ╨┤╨╛╤Б╤В╨░╨▓╨║╨░ ╨╕╤Б╤Е╨╛╨┤╤П╤Й╨╕╤Е JSON-╨┐╨░╨║╨╡╤В╨╛╨▓ (╨╝╨╡╤Е╨░╨╜╨╕╨╖╨╝ msg_id / ack_id).
+ * - ╨Ю╤З╨╡╤А╨╡╨┤╨╕╨╖╨░╤Ж╨╕╤П ╨║╨╛╨╝╨░╨╜╨┤ ╨╕ ╤Ж╨╕╨║╨╗╨╕╤З╨╡╤Б╨║╨░╤П ╨┐╨╡╤А╨╡╨╛╤В╨┐╤А╨░╨▓╨║╨░ ╨┤╨╛ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П.
+ * - ╨Ф╨╡╤Б╨╡╤А╨╕╨░╨╗╨╕╨╖╨░╤Ж╨╕╤П ╨▓╤Е╨╛╨┤╤П╤Й╨╡╨│╨╛ ╨▒╨░╨╣╤В╨╛╨▓╨╛╨│╨╛ ╨┐╨╛╤В╨╛╨║╨░ ╨▓ [JsonObject].
+ * - ╨Я╤А╨╛╨▒╤А╨╛╤Б ╤А╨░╤Б╨┐╨░╤А╤Б╨╡╨╜╨╜╤Л╤Е ╨┤╨░╨╜╨╜╤Л╤Е ╨▓ [BluetoothConnectionManager].
+ * 
+ * ╨Р╨а╨е╨Ш╨в╨Х╨Ъ╨в╨г╨а╨Э╨л╨Щ ╨Я╨а╨Ш╨Э╨ж╨Ш╨Я: ╨Ш╨╜╨║╨░╨┐╤Б╤Г╨╗╤П╤Ж╨╕╤П ╨╗╨╛╨│╨╕╨║╨╕ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П ╨┤╨╛╤Б╤В╨░╨▓╨║╨╕ ╨╜╨░ ╤В╤А╨░╨╜╤Б╨┐╨╛╤А╤В╨╜╨╛╨╝ ╤Г╤А╨╛╨▓╨╜╨╡.
+ * ╨Ъ╨Ы╨о╨з╨Х╨Т╨Ю╨Щ ╨Я╨а╨Ш╨Э╨ж╨Ш╨Я: ╨У╨░╤А╨░╨╜╤В╨╕╤А╨╛╨▓╨░╨╜╨╜╨░╤П ╨┤╨╛╤Б╤В╨░╨▓╨║╨░ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ (Reliable Messaging).
+ * ╨б╨Т╨п╨Ч╨Ш: 
+ * - ╨Р╨║╤В╨╕╨▓╨╕╤А╤Г╨╡╤В╤Б╤П ╨▓ [BluetoothConnectionManager] ╨╜╨░ ╤Д╨╕╨╜╨░╨╗╤М╨╜╨╛╨╝ ╤И╨░╨│╨╡ (CONNECTED).
+ * - ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В [AppBluetoothService] ╨┤╨╗╤П ╨╛╨┐╨╡╤А╨░╤Ж╨╕╨╣ ╤З╤В╨╡╨╜╨╕╤П/╨╖╨░╨┐╨╕╤Б╨╕ ╨▓ ╤Б╨╛╨║╨╡╤В.
+ */
+class DataStreamHandler(
+    private val bluetoothService: AppBluetoothService,
+    private val coroutineScope: CoroutineScope,
+    private val stateChangeCallback: (ConnectionState, String?) -> Unit,
+    /** ╨Ф╨╕╤Б╨┐╨╡╤В╤З╨╡╤А ╨┤╨╗╤П ╨▓╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П ╨╛╨┐╨╡╤А╨░╤Ж╨╕╨╣ ╨▓╨▓╨╛╨┤╨░-╨▓╤Л╨▓╨╛╨┤╨░ (IO) */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) {
+    /** ╨в╨╡╨│ ╨┤╨╗╤П ╨╗╨╛╨│╨╕╤А╨╛╨▓╨░╨╜╨╕╤П ╨║╨╛╨╝╨┐╨╛╨╜╨╡╨╜╤В╨░ */
+    private val TAG = "DataStreamHandler"
+
+    // ========== ╨Ь╨Ю╨Ф╨Х╨Ы╨Ш ╨Ф╨Р╨Э╨Э╨л╨е ==========
+
+    /**
+     * ╨Т╨╜╤Г╤В╤А╨╡╨╜╨╜╤П╤П ╨╝╨╛╨┤╨╡╨╗╤М ╨║╨╛╨╝╨░╨╜╨┤╤Л ╨▓ ╨╛╤З╨╡╤А╨╡╨┤╨╕ ╨╜╨░ ╨╛╤В╨┐╤А╨░╨▓╨║╤Г.
+     * @property id ╨г╨╜╨╕╨║╨░╨╗╤М╨╜╤Л╨╣ ╨╜╨╛╨╝╨╡╤А ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П ╨┤╨╗╤П ╨╛╤В╤Б╨╗╨╡╨╢╨╕╨▓╨░╨╜╨╕╤П ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П.
+     * @property payload ╨Я╨╛╨╗╨╡╨╖╨╜╨░╤П ╨╜╨░╨│╤А╤Г╨╖╨║╨░ ╨║╨╛╨╝╨░╨╜╨┤╤Л ╨▓ ╤Д╨╛╤А╨╝╨░╤В╨╡ JSON.
+     */
+    private data class QueuedCommand(
+        val id: Long,
+        val payload: String
+    ) {
+        /**
+         * ╨д╨╛╤А╨╝╨╕╤А╤Г╨╡╤В ╨╕╤В╨╛╨│╨╛╨▓╤Л╨╣ JSON ╨┐╨░╨║╨╡╤В ╤Б ╨▓╨╜╨╡╨┤╤А╨╡╨╜╨╕╨╡╨╝ msg_id.
+         * @param json ╨Э╨░╤Б╤В╤А╨╛╨╡╨╜╨╜╤Л╨╣ ╤Н╨║╨╖╨╡╨╝╨┐╨╗╤П╤А Json.
+         */
+        fun getEnvelope(json: Json): String {
+            val element = try {
+                // ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨╜╨╛╨▓╤Г╤О ╨╕╨╖╨╝╨╡╨╜╤П╨╡╨╝╤Г╤О ╨║╨░╤А╤В╤Г ╨╕╨╖ JsonObject, ╤З╤В╨╛╨▒╤Л ╨╕╨╖╨▒╨╡╨╢╨░╤В╤М ╨┐╤А╨╛╨▒╨╗╨╡╨╝ ╤Б ╨┐╤А╨╛╨╡╨║╤Ж╨╕╨╡╨╣ ╤В╨╕╨┐╨╛╨▓
+                json.parseToJsonElement(payload).jsonObject.toMutableMap()
+            } catch (e: Exception) {
+                // ╨Х╤Б╨╗╨╕ payload ╨╜╨╡ ╤П╨▓╨╗╤П╨╡╤В╤Б╤П JSON-╨╛╨▒╤К╨╡╨║╤В╨╛╨╝ (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А, ╨┐╤А╨╛╤Б╤В╨╛ ╤Б╤В╤А╨╛╨║╨░ ╨║╨╛╨╝╨░╨╜╨┤╤Л),
+                // ╨╛╨▒╨╛╤А╨░╤З╨╕╨▓╨░╨╡╨╝ ╨╡╤С ╨▓ ╨╛╨▒╤К╨╡╨║╤В ╤Б ╨║╨╗╤О╤З╨╛╨╝ "cmd"
+                mutableMapOf<String, JsonElement>("cmd" to JsonPrimitive(payload))
+            }
+            
+            // ╨п╨▓╨╜╨╛ ╤Г╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╤В╨╕╨┐ ╨┤╨╗╤П msg_id ╨╕ ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╨╝ ╨▓ ╨║╨░╤А╤В╤Г
+            val msgIdKey = "msg_id"
+            val msgIdValue: JsonElement = JsonPrimitive(id)
+            element[msgIdKey] = msgIdValue
+
+            return json.encodeToString(JsonObject(element))
+        }
+    }
+
+    // ========== ╨Я╨Ю╨в╨Ю╨Ъ╨Ш ╨Ш ╨Ю╨з╨Х╨а╨Х╨Ф╨Ш ==========
+
+    /** ╨Т╨╜╤Г╤В╤А╨╡╨╜╨╜╨╕╨╣ ╨┐╨╛╤В╨╛╨║ ╨▓╤Е╨╛╨┤╤П╤Й╨╕╤Е ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ */
+    private val _incomingMessagesFlow = MutableSharedFlow<JsonObject>()
+    
+    /** ╨Я╤Г╨▒╨╗╨╕╤З╨╜╤Л╨╣ ╨┐╨╛╤В╨╛╨║ ╨▓╤Е╨╛╨┤╤П╤Й╨╕╤Е ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ (╤А╨░╤Б╨┐╨░╤А╤Б╨╡╨╜╨╜╤Л╨╣ JsonObject) ╨┤╨╗╤П ╤В╤А╨░╨╜╤Б╨╗╤П╤Ж╨╕╨╕ ╨╜╨░╨▓╨╡╤А╤Е */
+    val incomingMessagesFlow: SharedFlow<JsonObject> = _incomingMessagesFlow.asSharedFlow()
+
+    /** ╨Ю╤З╨╡╤А╨╡╨┤╤М ╨╕╤Б╤Е╨╛╨┤╤П╤Й╨╕╤Е ╨║╨╛╨╝╨░╨╜╨┤ (Unlimited ╨┤╨╗╤П ╨┐╤А╨╡╨┤╨╛╤В╨▓╤А╨░╤Й╨╡╨╜╨╕╤П ╨▒╨╗╨╛╨║╨╕╤А╨╛╨▓╨║╨╕ ╨╛╤В╨┐╤А╨░╨▓╨╕╤В╨╡╨╗╨╡╨╣) */
+    private val commandQueue = Channel<QueuedCommand>(Channel.UNLIMITED)
+
+    /** ╨Я╨╛╤В╨╛╨║ ╨▓╤Е╨╛╨┤╤П╤Й╨╕╤Е AckID ╨┤╨╗╤П ╨┐╤А╨╛╨▒╤Г╨╢╨┤╨╡╨╜╨╕╤П ╨▓╨╛╤А╨║╨╡╤А╨░. ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ replay=1 ╨┤╨╗╤П ╨╕╤Б╨║╨╗╤О╤З╨╡╨╜╨╕╤П ╨│╨╛╨╜╨╛╨║. */
+    private val acknowledgmentsFlow = MutableSharedFlow<Long>(replay = 1)
+
+    // ========== ╨б╨Ю╨б╨в╨Ю╨п╨Э╨Ш╨Х ╨Ш ╨б╨Ш╨Э╨е╨а╨Ю╨Э╨Ш╨Ч╨Р╨ж╨Ш╨п ==========
+
+    /** JSON ╤Б╨╡╤А╨╕╨░╨╗╨╕╨╖╨░╤В╨╛╤А */
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    
+    /** ╨У╨╡╨╜╨╡╤А╨░╤В╨╛╤А ╤Г╨╜╨╕╨║╨░╨╗╤М╨╜╤Л╤Е ID ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ */
+    private val msgIdGenerator = AtomicLong(1)
+
+    /** ╨Я╨╛╤Б╨╗╨╡╨┤╨╜╨╕╨╣ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╜╤Л╨╣ ID ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П ╨┤╨╗╤П ╨┐╤А╨╛╨▓╨╡╤А╨║╨╕ ╨▓ ╤Ж╨╕╨║╨╗╨╡ */
+    private val lastAckId = AtomicLong(-1L)
+
+    /** ╨д╨╗╨░╨│ ╨░╨║╤В╨╕╨▓╨╜╨╛╤Б╤В╨╕ ╨╛╨▒╤А╨░╨▒╨╛╤В╤З╨╕╨║╨░ */
+    private val isHandlerActive = AtomicBoolean(false)
+    /** ╨д╨╗╨░╨│ ╨│╨╛╤В╨╛╨▓╨╜╨╛╤Б╤В╨╕ ╨┐╤А╨╕╨╡╨╝╨╜╨╕╨║╨░ ╨║ ╨┐╤А╨╕╨╡╨╝╤Г ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╣ */
+    private val isReceiverReady = AtomicBoolean(false)
+
+    /** Job ╨┤╨╗╤П ╤Ж╨╕╨║╨╗╨░ ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨╕ ╨╛╤З╨╡╤А╨╡╨┤╨╕ */
+    private var workerJob: Job? = null
+    /** Job ╨┤╨╗╤П ╨┐╤А╨╕╨╡╨╝╨░ ╨▓╤Е╨╛╨┤╤П╤Й╨╕╤Е ╨┤╨░╨╜╨╜╤Л╤Е */
+    private var receiverJob: Job? = null
+
+    // ========== ╨Я╨Р╨а╨Р╨Ь╨Х╨в╨а╨л ╨Я╨а╨Ю╨в╨Ю╨Ъ╨Ю╨Ы╨Р ==========
+
+    /** ╨Ш╨╜╤В╨╡╤А╨▓╨░╨╗ ╨╝╨╡╨╢╨┤╤Г ╨┐╨╛╨┐╤Л╤В╨║╨░╨╝╨╕ ╨┐╨╡╤А╨╡╨╛╤В╨┐╤А╨░╨▓╨║╨╕ ╨┐╤А╨╕ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╨╕╨╕ Ack (╨╝╤Б) */
+    private val SEND_INTERVAL_MS = 1500L
+
+    /**
+     * ╨Ч╨░╨┐╤Г╤Б╤В╨╕╤В╤М ╨┐╤А╨╛╤Ж╨╡╤Б╤Б╤Л ╨┐╤А╨╕╨╡╨╝╨░ ╨╕ ╨┐╨╡╤А╨╡╨┤╨░╤З╨╕.
+     * ╨Ш╨╜╨╕╤Ж╨╕╨░╨╗╨╕╨╖╨╕╤А╤Г╨╡╤В ╨▓╨╛╤А╨║╨╡╤А╤Л ╨╕ ╨╛╤В╨║╤А╤Л╨▓╨░╨╡╤В ╤В╤А╨░╨╜╤Б╨┐╨╛╤А╤В╨╜╤Л╨╣ ╨║╨░╨╜╨░╨╗.
+     * 
+     * ╨Я╨а╨Ш ╨Я╨Х╨а╨Х╨Ч╨Р╨Я╨г╨б╨Ъ╨Х: ╨Ю╤З╨╕╤Й╨░╨╡╤В ╨╛╤З╨╡╤А╨╡╨┤╤М ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ ╨╕ ╤Б╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╤В ╨╕╨┤╨╡╨╜╤В╨╕╤Д╨╕╨║╨░╤В╨╛╤А╤Л ╨┤╨╗╤П ╨╜╨╛╨▓╨╛╨╣ ╤Б╨╡╤Б╤Б╨╕╨╕.
+     */
+    fun start() {
+        log("=== ╨Ч╨Р╨Я╨г╨б╨Ъ ╨в╨а╨Р╨Э╨б╨Я╨Ю╨а╨в╨Э╨Ю╨У╨Ю ╨и╨Ы╨о╨Ч╨Р DataStreamHandler ===")
+
+        if (isHandlerActive.get()) {
+            log("DataStreamHandler ╤Г╨╢╨╡ ╨░╨║╤В╨╕╨▓╨╡╨╜")
+            return
+        }
+
+        isHandlerActive.set(true)
+
+        // ╨б╨С╨а╨Ю╨б ╨б╨Ю╨б╨в╨Ю╨п╨Э╨Ш╨п ╨в╨а╨Р╨Э╨б╨Я╨Ю╨а╨в╨Р: ╨┐╤А╨╕ ╨╜╨╛╨▓╨╛╨╝ ╨┐╨╛╨┤╨║╨╗╤О╤З╨╡╨╜╨╕╨╕ ╨╜╨░╤З╨╕╨╜╨░╨╡╨╝ ╤Б ╤З╨╕╤Б╤В╨╛╨│╨╛ ╨╗╨╕╤Б╤В╨░
+        lastAckId.set(-1L)
+        msgIdGenerator.set(1L)
+        
+        // ╨Ю╤З╨╕╤Й╨░╨╡╨╝ ╨╛╤З╨╡╤А╨╡╨┤╤М ╨╛╤В ╨║╨╛╨╝╨░╨╜╨┤, ╨║╨╛╤В╨╛╤А╤Л╨╡ ╨╝╨╛╨│╨╗╨╕ ╨╛╤Б╤В╨░╤В╤М╤Б╤П ╨╛╤В ╨┐╤А╨╡╨┤╤Л╨┤╤Г╤Й╨╡╨╣ (╨╜╨╡╤Г╨┤╨░╤З╨╜╨╛╨╣) ╤Б╨╡╤Б╤Б╨╕╨╕
+        clearQueue()
+
+        // 1. ╨Ч╨░╨┐╤Г╤Б╨║╨░╨╡╨╝ ╨┐╤А╨╕╨╡╨╝╨╜╨╕╨║ (╨┤╨╛╨╗╨╢╨╡╨╜ ╤Б╨╗╤Г╤И╨░╤В╤М Ack ╨┤╨╛ ╨╜╨░╤З╨░╨╗╨░ ╨╛╤В╨┐╤А╨░╨▓╨║╨╕)
+        startReceiver()
+
+        // 2. ╨Ч╨░╨┐╤Г╤Б╨║╨░╨╡╨╝ ╨▓╨╛╤А╨║╨╡╤А ╨╛╤З╨╡╤А╨╡╨┤╨╕
+        startWorker()
+
+        log("╨в╤А╨░╨╜╤Б╨┐╨╛╤А╤В╨╜╤Л╨╡ ╨▓╨╛╤А╨║╨╡╤А╤Л ╨╖╨░╨┐╤Г╤Й╨╡╨╜╤Л. ╨Ю╨╢╨╕╨┤╨░╨╜╨╕╨╡ ╨▓╨╜╨╡╤И╨╜╨╕╤Е ╨║╨╛╨╝╨░╨╜╨┤.")
+    }
+
+    /**
+     * ╨Ю╤З╨╕╤Й╨░╨╡╤В ╨╛╤З╨╡╤А╨╡╨┤╤М ╨╕╤Б╤Е╨╛╨┤╤П╤Й╨╕╤Е ╨║╨╛╨╝╨░╨╜╨┤, ╤Г╨┤╨░╨╗╤П╤П ╨▓╤Б╨╡ ╨╜╨╡╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╜╤Л╨╡ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П.
+     * ╨У╨░╤А╨░╨╜╤В╨╕╤А╤Г╨╡╤В, ╤З╤В╨╛ ╨║╨╛╨╝╨░╨╜╨┤╤Л ╨╕╨╖ ╨┐╤А╨╡╨┤╤Л╨┤╤Г╤Й╨╡╨╣ ╤Б╨╡╤Б╤Б╨╕╨╕ ╨╜╨╡ ╨▒╤Г╨┤╤Г╤В ╨╛╤В╨┐╤А╨░╨▓╨╗╨╡╨╜╤Л ╨┐╤А╨╕ ╨╜╨╛╨▓╨╛╨╝ ╨┐╨╛╨┤╨║╨╗╤О╤З╨╡╨╜╨╕╨╕.
+     */
+    private fun clearQueue() {
+        var count = 0
+        // ╨Ш╨╖╨▓╨╗╨╡╨║╨░╨╡╨╝ ╨▓╤Б╨╡ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П ╨╕╨╖ ╨║╨░╨╜╨░╨╗╨░ ╨┤╨╛ ╤В╨╡╤Е ╨┐╨╛╤А, ╨┐╨╛╨║╨░ ╨╛╨╜ ╨╜╨╡ ╤Б╤В╨░╨╜╨╡╤В ╨┐╤Г╤Б╤В╤Л╨╝
+        while (true) {
+            val result = commandQueue.tryReceive()
+            if (result.isSuccess) {
+                count++
+            } else {
+                // ╨Ю╤З╨╡╤А╨╡╨┤╤М ╨┐╤Г╤Б╤В╨░ ╨╕╨╗╨╕ ╨╖╨░╨║╤А╤Л╤В╨░
+                break
+            }
+        }
+        
+        if (count > 0) {
+            log("╨Ю╤З╨╡╤А╨╡╨┤╤М ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ ╨╛╤З╨╕╤Й╨╡╨╜╨░. ╨г╨┤╨░╨╗╨╡╨╜╨╛ ╨┐╨░╨║╨╡╤В╨╛╨▓: $count")
+        }
+    }
+
+    /**
+     * ╨Я╨╛╨╝╨╡╤Б╤В╨╕╤В╤М ╨║╨╛╨╝╨░╨╜╨┤╤Г ╨▓ ╨╛╤З╨╡╤А╨╡╨┤╤М ╨╜╨░ ╨╛╤В╨┐╤А╨░╨▓╨║╤Г.
+     * ╨У╨╡╨╜╨╡╤А╨╕╤А╤Г╨╡╤В ╤Г╨╜╨╕╨║╨░╨╗╤М╨╜╤Л╨╣ ID ╨┤╨╗╤П ╨║╨╛╨╝╨░╨╜╨┤╤Л.
+     * 
+     * @param jsonPayload JSON ╤Б╤В╤А╨╛╨║╨░ ╨║╨╛╨╝╨░╨╜╨┤╤Л.
+     */
+    private suspend fun queueCommand(jsonPayload: String) {
+        val id = msgIdGenerator.getAndIncrement()
+        log("╨Ф╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╨╡ ╨▓ ╨╛╤З╨╡╤А╨╡╨┤╤М: ID=$id, Payload=${jsonPayload.take(50)}...")
+        commandQueue.send(QueuedCommand(id, jsonPayload))
+    }
+
+    /**
+     * ╨Я╤Г╨▒╨╗╨╕╤З╨╜╤Л╨╣ ╨╝╨╡╤В╨╛╨┤ ╨┤╨╗╤П ╨╛╤В╨┐╤А╨░╨▓╨║╨╕ JSON ╨║╨╛╨╝╨░╨╜╨┤╤Л ╨▓ ╨╛╤З╨╡╤А╨╡╨┤╤М.
+     * 
+     * @param jsonCommand ╨б╤В╤А╨╛╨║╨░ JSON.
+     */
+    fun sendJsonCommand(jsonCommand: String) {
+        if (!isHandlerActive.get()) {
+            log("╨Я╨а╨Х╨Ф╨г╨Я╨а╨Х╨Ц╨Ф╨Х╨Э╨Ш╨Х: ╨Я╨╛╨┐╤Л╤В╨║╨░ ╨╛╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨║╨╛╨╝╨░╨╜╨┤╤Г ╨▓ ╨╜╨╡╨░╨║╤В╨╕╨▓╨╜╤Л╨╣ ╤В╤А╨░╨╜╤Б╨┐╨╛╤А╤В: $jsonCommand")
+            return
+        }
+        coroutineScope.launch {
+            queueCommand(jsonCommand)
+        }
+    }
+
+    /**
+     * ╨Ч╨░╨┐╤Г╤Б╨║ ╨╛╤Б╨╜╨╛╨▓╨╜╨╛╨│╨╛ ╨▓╨╛╤А╨║╨╡╤А╨░ ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨╕ ╨╛╤З╨╡╤А╨╡╨┤╨╕ ╨║╨╛╨╝╨░╨╜╨┤.
+     * ╨а╨╡╨░╨╗╨╕╨╖╤Г╨╡╤В ╤Ж╨╕╨║╨╗ ╨│╨░╤А╨░╨╜╤В╨╕╤А╨╛╨▓╨░╨╜╨╜╨╛╨╣ ╨┤╨╛╤Б╤В╨░╨▓╨║╨╕ ╤Б ╨╛╨╢╨╕╨┤╨░╨╜╨╕╨╡╨╝ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П.
+     */
+    private fun startWorker() {
+        workerJob = coroutineScope.launch(ioDispatcher) {
+            log("Worker: ╨Ю╨╢╨╕╨┤╨░╨╜╨╕╨╡ ╨│╨╛╤В╨╛╨▓╨╜╨╛╤Б╤В╨╕ ╨┐╤А╨╕╨╡╨╝╨╜╨╕╨║╨░...")
+            while (!isReceiverReady.get()) delay(50)
+            log("Worker: ╨Я╤А╨╕╨╡╨╝╨╜╨╕╨║ ╨│╨╛╤В╨╛╨▓, ╨╜╨░╤З╨╕╨╜╨░╨╡╨╝ ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╤Г ╨╛╤З╨╡╤А╨╡╨┤╨╕")
+
+            // ╨Ю╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╡╨╝ ╨║╨╛╨╝╨░╨╜╨┤╤Л ╨╕╨╖ ╨║╨░╨╜╨░╨╗╨░ ╨┐╨╛ ╨╛╨┤╨╜╨╛╨╣
+            for (command in commandQueue) {
+                if (!isHandlerActive.get()) break
+                
+                val envelope = command.getEnvelope(json)
+                log("Worker: ╨С╨╡╤А╨╡╨╝ ╨║╨╛╨╝╨░╨╜╨┤╤Г ID=${command.id}")
+
+                // ╨ж╨╕╨║╨╗ ╨│╨░╤А╨░╨╜╤В╨╕╤А╨╛╨▓╨░╨╜╨╜╨╛╨╣ ╨┤╨╛╤Б╤В╨░╨▓╨║╨╕: ╨╛╤В╨┐╤А╨░╨▓╨╗╤П╨╡╨╝ ╨┐╨╛╨║╨░ lastAckId ╨╜╨╡ ╤Б╤В╨░╨╜╨╡╤В ╤А╨░╨▓╨╡╨╜ ╨╜╨░╤И╨╡╨╝╤Г id
+                while (isHandlerActive.get()) {
+                    // 1. ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╨╝╨╛╨╢╨╡╤В ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╡ ╤Г╨╢╨╡ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╛ ╨┤╨╛ ╨╜╨░╤З╨░╨╗╨░ ╤Ж╨╕╨║╨╗╨░
+                    if (lastAckId.get() == command.id) {
+                        log("Worker: ╨Ъ╨╛╨╝╨░╨╜╨┤╨░ ID=${command.id} ╤Г╨╢╨╡ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨░")
+                        break
+                    }
+
+                    log("Worker: ╨Ю╤В╨┐╤А╨░╨▓╨║╨░ ╨┐╨░╨║╨╡╤В╨░ ID=${command.id}")
+                    bluetoothService.sendData(envelope)
+
+                    // 2. "╨г╨╝╨╜╨╛╨╡ ╨╛╨╢╨╕╨┤╨░╨╜╨╕╨╡": ╨╢╨┤╨╡╨╝ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П ╨▓ ╨┐╨╛╤В╨╛╨║╨╡, ╨╜╨╛ ╨╜╨╡ ╨┤╨╛╨╗╤М╤И╨╡ ╨╕╨╜╤В╨╡╤А╨▓╨░╨╗╨░
+                    withTimeoutOrNull(SEND_INTERVAL_MS) {
+                        acknowledgmentsFlow.first { it == command.id }
+                    }
+
+                    // 3. ╨Я╨╛╤Б╨╗╨╡ ╤В╨░╨╣╨╝╨░╤Г╤В╨░ ╨╕╨╗╨╕ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╕╤П ack ╨┐╤А╨╛╨▓╨╡╤А╤П╨╡╨╝ ╨╡╤Й╨╡ ╤А╨░╨╖
+                    if (lastAckId.get() == command.id) break
+                }
+                log("Worker: ╨Ъ╨╛╨╝╨░╨╜╨┤╨░ ID=${command.id} ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░")
+            }
+        }
+    }
+
+    /**
+     * ╨Ч╨░╨┐╤Г╤Б╨║ ╨┐╤А╨╕╨╡╨╝╨╜╨╕╨║╨░ ╨▓╤Е╨╛╨┤╤П╤Й╨╕╤Е ╨┤╨░╨╜╨╜╤Л╤Е.
+     * ╨в╤А╨░╨╜╤Б╨╗╨╕╤А╤Г╨╡╤В ╨▓╤Е╨╛╨┤╤П╤Й╨╕╨╣ ╨┐╨╛╤В╨╛╨║ ╨╕╨╖ BluetoothService ╨▓ ╨╗╨╛╨║╨░╨╗╤М╨╜╤Л╨╣ incomingMessagesFlow.
+     */
+    private fun startReceiver() {
+        receiverJob = coroutineScope.launch(ioDispatcher) {
+            log("Receiver: ╨Я╨╛╨┤╨┐╨╕╤Б╨║╨░ ╨╜╨░ ╨┐╨╛╤В╨╛╨║ ╨┤╨░╨╜╨╜╤Л╤Е")
+            isReceiverReady.set(true)
+
+            bluetoothService.startDataListening()
+                .catch { e -> 
+                    log("Receiver: ╨Ъ╤А╨╕╤В╨╕╤З╨╡╤Б╨║╨░╤П ╨╛╤И╨╕╨▒╨║╨░ ╨┐╨╛╤В╨╛╨║╨░: ${e.message}")
+                    stateChangeCallback(ConnectionState.ERROR, "╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕╨╡╨╝╨░: ${e.message}")
+                }
+                .collect { data ->
+                    // ╨У╨Ы╨Ю╨С╨Р╨Ы╨м╨Э╨Ю╨Х ╨Ы╨Ю╨У╨Ш╨а╨Ю╨Т╨Р╨Э╨Ш╨Х ╨Я╨а╨Ш╨Х╨Ь╨Р ╨Ф╨Р╨Э╨Э╨л╨е
+                    AppLogger.logReceive("╨Т╤Е╨╛╨┤╤П╤Й╨╕╨╣ ╨┐╨░╨║╨╡╤В", data)
+                    handleIncomingData(data)
+                }
+        }
+    }
+
+    /**
+     * ╨Ю╨▒╤А╨░╨▒╨╛╤В╨░╤В╤М ╨▓╤Е╨╛╨┤╤П╤Й╨╕╨╣ JSON ╨┐╨░╨║╨╡╤В.
+     * ╨а╨░╤Б╨┐╨╛╨╖╨╜╨░╨╡╤В ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П (ack_id) ╨┤╨╗╤П ╨▓╨╜╤Г╤В╤А╨╡╨╜╨╜╨╡╨╣ ╨╗╨╛╨│╨╕╨║╨╕ ╤В╤А╨░╨╜╤Б╨┐╨╛╤А╤В╨░,
+     * ╨▓╤Б╨╡ ╨╛╤Б╤В╨░╨╗╤М╨╜╤Л╨╡ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П ╨┐╤А╨╛╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╤В ╨╜╨░╨▓╨╡╤А╤Е.
+     * 
+     * @param data ╨Т╤Е╨╛╨┤╤П╤Й╨░╤П ╤Б╤В╤А╨╛╨║╨░ JSON.
+     */
+    private fun handleIncomingData(data: String) {
+        if (data.isBlank()) return
+        
+        try {
+            val jsonObject = json.parseToJsonElement(data).jsonObject
+
+            // 1. ╨в╨╡╤Е╨╜╨╕╤З╨╡╤Б╨║╨░╤П ╤З╨░╤Б╤В╤М ╤В╤А╨░╨╜╤Б╨┐╨╛╤А╤В╨░: ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ ╨╜╨░ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╡ (Ack)
+            jsonObject["ack_id"]?.jsonPrimitive?.let { primitive ->
+                primitive.longOrNull ?: primitive.content.toLongOrNull()
+            }?.let { ackId ->
+                log("Receiver: ╨Я╨╛╨╗╤Г╤З╨╡╨╜ AckID=$ackId")
+                lastAckId.set(ackId)
+                coroutineScope.launch { acknowledgmentsFlow.emit(ackId) }
+                // ╨г╨▒╤А╨░╨╜ return, ╤В╨░╨║ ╨║╨░╨║ ╨┐╨░╨║╨╡╤В ╨╝╨╛╨╢╨╡╤В ╨▒╤Л╤В╤М ╨║╨╛╨╝╨▒╨╕╨╜╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╝ (Ack + ╨Ф╨░╨╜╨╜╤Л╨╡)
+            }
+
+            // 2. ╨Я╤А╨╛╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╨╝ ╤А╨░╤Б╨┐╨░╤А╤Б╨╡╨╜╨╜╤Л╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨╜╨░╨▓╨╡╤А╤Е
+            coroutineScope.launch {
+                _incomingMessagesFlow.emit(jsonObject)
+            }
+
+        } catch (e: Exception) {
+            log("Receiver: ╨Ю╤И╨╕╨▒╨║╨░ ╤А╨░╨╖╨▒╨╛╤А╨░ ╨┐╨░╨║╨╡╤В╨░: ${e.message}")
+        }
+    }
+
+    /**
+     * ╨Ю╤Б╤В╨░╨╜╨╛╨▓╨╕╤В╤М ╨▓╤Б╨╡ ╨░╨║╤В╨╕╨▓╨╜╤Л╨╡ ╨┐╤А╨╛╤Ж╨╡╤Б╤Б╤Л ╨╛╨▒╨╝╨╡╨╜╨░.
+     */
+    fun stop() {
+        if (!isHandlerActive.get()) return
+        log("╨Ю╤Б╤В╨░╨╜╨╛╨▓╨║╨░ DataStreamHandler")
+
+        isHandlerActive.set(false)
+        isReceiverReady.set(false)
+        
+        workerJob?.cancel()
+        receiverJob?.cancel()
+        
+        bluetoothService.stopDataListening()
+    }
+
+    /**
+     * ╨Ю╤З╨╕╤Б╤В╨╕╤В╤М ╤А╨╡╤Б╤Г╤А╤Б╤Л ╨╕ ╤Б╨▒╤А╨╛╤Б╨╕╤В╤М ╤Б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡.
+     */
+    fun cleanup() {
+        stop()
+        log("╨а╨╡╤Б╤Г╤А╤Б╤Л DataStreamHandler ╨╛╤З╨╕╤Й╨╡╨╜╤Л")
+    }
+
+    /**
+     * ╨Ы╨╛╨│╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╤Б ╤В╨╡╨│╨╛╨╝ ╨║╨╛╨╝╨┐╨╛╨╜╨╡╨╜╤В╨░.
+     * @param message ╨в╨╡╨║╤Б╤В ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П.
+     */
+    private fun log(message: String) {
+        AppLogger.logInfo("[$TAG] $message", TAG)
+    }
+}

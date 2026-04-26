@@ -1,6 +1,6 @@
 [versions]
-agp = "9.1.0"
-kotlin = "2.1.0"
+agp = "9.1.1"
+kotlin = "2.2.10"
 
 # Основные версии (без Compose)
 coreKtx = "1.17.0"
@@ -18,7 +18,7 @@ materialIconsExtended = "1.7.8"
 navigationCompose = "2.9.7"
 kotlinxSerialization = "1.10.0"
 room = "2.6.1"
-ksp = "2.1.0-1.0.29"
+ksp = "2.3.2"
 
 # Тестирование
 mockk = "1.14.9"
